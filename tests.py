@@ -51,7 +51,7 @@ class Puzzles(unittest.TestCase):
 					IsEvil(Tim) | IsEvil(Anna)
 				),
 				1: Savant.Ping(
-					EvilPairs(1), 
+					Chef.Ping(1), 
 					DrunkBetweenTownsfolk()
 				),
 				2: Savant.Ping(

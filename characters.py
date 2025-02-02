@@ -42,6 +42,8 @@ class Character:
 	night_actions: dict[int, Info] = field(default_factory=dict)
 	day_actions: dict[int, Info] = field(default_factory=dict)
 
+	effects_active: bool = False
+
 	@staticmethod
 	def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
 		"""
@@ -96,19 +98,30 @@ class Character:
 			return result is not info.TRUE         # TODO: Not how vortox works!
 		return result is not info.FALSE
 
-	def activate_effects(self, state: State, src: PlayerID) -> None:
+	def maybe_activate_effects(self, state: State, src: PlayerID) -> None:
 		"""
 		Effects that this character is having on other players. Needs to be 
-		triggerable under in one method so that e.g. a poisoner dying can
-		reactivate the poisoner's target.
+		triggerable under in one method so that e.g. a poisoner dying at night 
+		can reactivate that poisoner's current victim.
+		If a character doesn't want thsi wrapper logic, it can override this 
+		method rather than the _impl method.
 		"""
-		pass
+		if not self.effects_active and state.players[src].droison_count == 0:
+			self.effects_active = True
+			self._activate_effects_impl(state, src)
 
-	def deactivate_effects(self, state: State, src: PlayerID) -> None:
+	def maybe_deactivate_effects(self, state: State, src: PlayerID) -> None:
 		"""
 		Will be called on any character at the moment they are poisoned, killed,
 		or changed into another character.
 		"""
+		if self.effects_active:
+			self.effects_active = False
+			self._deactivate_effects_impl(state, src)
+
+	def _activate_effects_impl(self, state: State, src: PlayerID) -> None:
+		pass
+	def _deactivate_effects_impl(self, state: State, src: PlayerID) -> None:
 		pass
 
 	def _world_str(self, state: State) -> str:
@@ -197,6 +210,27 @@ class Baron(Character):
 		bounds = (min_tf - 2, max_tf - 2), (min_out + 2, max_out + 2), mn, dm
 		return bounds
 
+@dataclass
+class Chef(Character):
+	"""
+	You start knowing how many pairs of evil players there are.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+
+	@dataclass
+	class Ping:
+		count: int
+		def __call__(self, state: State, src: PlayerID) -> STBool:
+			N = len(state.players)
+			trues, maybes = 0, 0
+			evils = [info.IsEvil(i)(state, src) for i in range(N)]
+			evils += [evils[0]]  # So that the following zip wraps the circle
+			for a, b in zip(evils[:-1], evils[1:]):
+				pair = a & b
+				maybes += pair is info.MAYBE
+				trues += pair is info.TRUE
+			return info.STBool(trues <= self.count <= trues + maybes)
 
 @dataclass
 class Clockmaker(Character):
@@ -510,6 +544,57 @@ class Noble(Character):
 			))(state, src)
 
 @dataclass
+class NoDashii(Character):
+	"""
+	Each night*, choose a player: they die. 
+	Your 2 Townsfolk neighbors are poisoned.
+	"""
+	category: ClassVar[Categories] = DEMON
+	is_liar: ClassVar[bool] = True
+	tf_neighbour1: PlayerID | None = None
+	tf_neighbour2: PlayerID | None = None
+
+	def run_setup(self, state: State, src: PlayerID) -> StateGen:
+		N = len(state.players)
+		townsfolk = [
+			info.IsCategory((src + step) % N, TOWNSFOLK)(state, src) 
+			for step in range(1, N)
+		]
+		# I allow the No Dashii to poison misregistering characters (e.g. Spy),
+		# so there may be multiple possible combinations of neighbour pairs
+		# depending on ST choices. Find them alland create a world for each.
+		fwd_candidates, bkwd_candidates = [], []
+		for candidates, direction in (
+			(fwd_candidates, 1),
+			(bkwd_candidates, -1),
+		):
+			for step in range(1, N):
+				player = (src + direction * step) % N
+				is_tf = info.IsCategory(player, TOWNSFOLK)(state, src)
+				if is_tf is not info.FALSE:
+					candidates.append(player)
+				if is_tf is info.TRUE:
+					break
+		# Create a world or each combination of left and right poisoned player
+		for fwd in fwd_candidates:
+			for bkwd in bkwd_candidates:
+				new_state = deepcopy(state)
+				new_nodashii = new_state.players[src].character
+				new_nodashii.tf_neighbour1 = fwd
+				new_nodashii.tf_neighbour2 = bkwd
+				new_nodashii.maybe_activate_effects(new_state, src)
+				yield new_state
+
+	def _activate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.tf_neighbour1].droison(state, src)
+		state.players[self.tf_neighbour2].droison(state, src)
+
+	def _deactivate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.tf_neighbour1].undroison(state, src)
+		state.players[self.tf_neighbour2].undroison(state, src)
+
+
+@dataclass
 class Poisoner(Character):
 	"""
 	Each night, choose a player: they are poisoned tonight and tomorrow day.
@@ -518,30 +603,83 @@ class Poisoner(Character):
 	is_liar: ClassVar[bool] = True
 	target: PlayerID = None
 
+	# Keep history just for debug and pretty printing the history of a game.
+	target_history: list[PlayerID] = field(default_factory=list)
+
 	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
 		"""Override Reason: Create a world for every poisoning choice."""
 		poisoner = state.players[src]
-		if (poisoner.is_dead or poisoner.droison_count):
-			return
+		if poisoner.is_dead:
+			yield state; return
 		for target in range(len(state.players)):
 			new_state = deepcopy(state)
 			new_poisoner = new_state.players[src].character
+			# Even droisoned poisoners make a choice, because they might be 
+			# undroisoned before dusk.
 			new_poisoner.target = target
-			new_poisoner.activate_effects(new_state, src)
+			new_poisoner.target_history.append(target)
+			new_poisoner.maybe_activate_effects(new_state, src)
 			yield new_state
 
 	def end_day(self, state: State, day: int, src: PlayerID) -> None:
-		self.deactivate_effects(state, src)
+		self.maybe_deactivate_effects(state, src)
 		self.target = None
 
-	def activate_effects(self, state: State, src: PlayerID):
-		if self.target != src:
-			state.players[self.target].droison(state, src)
+	def _activate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.target].droison(state, src)
 
-	def deactivate_effects(self, state: State, src: PlayerID):
+	def _deactivate_effects_impl(self, state: State, src: PlayerID):
+		# Break a self-poisoning infinite recursion, whilst still leaving the 
+		# Poisoner marked as droisoned.
 		if self.target != src:
 			state.players[self.target].undroison(state, src)
 
+	def _world_str(self, state: State) -> str:
+		return f' (Poisoned {", ".join(
+			state.players[p].name for p in self.target_history
+		)})'
+
+
+@dataclass
+class Pukka(Character):
+	"""
+	Each night, choose a player: they are poisoned.
+	The previously poisoned player dies then becomes healthy.
+	"""
+	category: ClassVar[Categories] = DEMON
+	is_liar: ClassVar[bool] = True
+	target: PlayerID | None = None
+
+	def run_night(self, state: State, day: int, src: PlayerID) -> StateGen:
+		"""
+		Override Reason: Create a world for every poisoning choice. Even 
+		a droisoned pukka must make a choice.
+		"""
+		pukka = state.players[src]
+		if pukka.is_dead:
+			yield state; return
+		if target is not None and pukka.droison_count == 0:
+			# Kill the previously poisoned player
+			print("Pukka kills not implemented")
+		for target in range(len(state.players)):
+			new_state = deepcopy(state)
+			new_pukka = new_state.players[src].character
+			new_pukka.target = target
+			new_pukka.target_history.append(target)
+			new_pukka.maybe_activate_effects(new_state, src)
+			yield new_state
+
+	def end_day(self, state: State, day: int, src: PlayerID) -> None:
+		self.maybe_deactivate_effects(state, src)
+
+	def _activate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.target].droison(state, src)
+
+	def _deactivate_effects_impl(self, state: State, src: PlayerID):
+		# Break a self-poisoning infinite recursion, whilst still leaving the 
+		# Pukka marked as droisoned.
+		if self.target != src:
+			state.players[self.target].undroison(state, src)
 
 @dataclass
 class Ravenkeeper(Character):
@@ -798,7 +936,7 @@ class Zombuul(Character):
 
 
 GLOBAL_SETUP_ORDER = [
-	# NoDashii,
+	NoDashii,
 	FortuneTeller,
 	VillageIdiot,
 ]
@@ -807,12 +945,15 @@ GLOBAL_NIGHT_ORDER = [
 	Poisoner,
 	ScarletWoman,
 	Imp,
+	Pukka,
 	FangGu,
+	NoDashii,
 	Vortox,
 	Ravenkeeper,
 	WasherWoman,
 	Librarian,
 	Investigator,
+	Chef,
 	Empath,
 	FortuneTeller,
 	Clockmaker,

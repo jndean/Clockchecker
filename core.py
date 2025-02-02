@@ -23,45 +23,35 @@ type StateGen = Generator[State]
 @dataclass
 class Player:
 	"""
-	An instance of a player.
-
-	self.night_info: A fact that must not eval to FALSE at night for a world to
-		be plausible, but is manipulatable by e.g. Droison / Vortox.
-	self.facts: List of facts that must not be FALSE for a world to be valid, 
-		and are not affected by e.g. Droison / Vortox.
-	self.tokens: List of effects (reminder tokens) applied to this player by 
-		another player
+	An instance of a player. 
+	Character-specific info is stored in the character attribute, because
+	characters can change, but players are forever.
 	"""
 	name: str
 	character: Character
-	facts: Info | None = None
-	tokens: list[Token] = field(default_factory=list)
+	bluff: type[Character] | None = None
 	is_evil: bool = False
 	is_dead: bool = False
 	droison_count: int = 0
 
 	def droison(self, state: State, src: PlayerID) -> None:
 		self.droison_count += 1 
-		if self.droison_count == 1:
-			self.character.deactivate_effects(state, self.id)
+		self.character.maybe_deactivate_effects(state, self.id)
 
 	def undroison(self, state: State, src: PlayerID) -> None:
 		self.droison_count -= 1 
-		if self.droison_count == 0:
-			self.character.activate_effects(state, self.id)
+		self.character.maybe_activate_effects(state, self.id)
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
 		ret = type(self.character).__name__
-		# if self.droison_count:
-		# 	ret += ' (Droisoned)'
 		ret += self.character._world_str(state)
 		return ret
 
 
 @dataclass
 class State:
-	# The list of players starts with You as player 0 proceeds clockwise
+	# The list of players starts with You as player 0 and proceeds clockwise
 	players: list[Player]
 
 	def __post_init__(self):
@@ -109,10 +99,14 @@ class State:
 			case 'day':
 				substates = player.character.run_day(self, round_, player.id)
 			case 'setup':
-				substates = player.character.run_setup(self, round_, player.id)
+				substates = player.character.run_setup(self, player.id)
 		for substate in substates:
 			substate.order_position += 1
 			yield substate
+
+	def end_setup(self):
+		self.order_position = 0
+		return self
 
 	def end_night(self):
 		for player in self.players:
@@ -134,7 +128,7 @@ class State:
 		self.update_character_index()
 
 	def update_character_index(self):
-		# TODO: This should fn modify self.order_position to compensate for change?
+		# TODO: This fn should modify self.order_position to compensate for change?
 		self.vortox = False
 		self.setup_order, self.night_order, self.day_order = [], [], []
 		for character in characters.GLOBAL_SETUP_ORDER:
@@ -168,31 +162,15 @@ class State:
 		return '\n'.join(ret)
 
 
-def _setup_conditions_gen(states: StateGen) -> StateGen:
-	# For now, I'm assuming no character's setup ability can change the setup
-	# order, i.e., nobody's setup ability changes people's characters.
-	# E.g., we must model the Kazali as a ST choice, not a player action, which
-	# works fine tbh.
-	def do_setup(player, substates):
-		for ss in substates:
-			yield from ss.players[player].character.run_setup(ss, player)
-	for state in states:
-		if state.setup_order:
-			substates = [state]
-			for player in state.setup_order:
-				substates = do_setup(player, substates)
-			yield from substates
-		else:
-			yield state
-
-
 def _run_game_gen(states: StateGen, n_players: int, n_rounds: int) -> StateGen:
 
 	def run_phase_for_next_player(substates, phase, round_):
 		for ss in substates:
 			yield from ss.run_action_for_next_player(round_, phase)
 
-	# states = run_phase_for_next_player(states, 'setup', None)
+	for player in range(n_players):
+		states = run_phase_for_next_player(states, 'setup', None)
+	states = map(lambda state: state.end_setup(), states)
 	for round_ in range(n_rounds):
 		for player in range(n_players):
 			states = run_phase_for_next_player(states, 'night', round_)
@@ -205,9 +183,9 @@ def _run_game_gen(states: StateGen, n_players: int, n_rounds: int) -> StateGen:
 
 def _deduplicate_by_initial_characters(states: StateGen) -> StateGen:
 	"""
-	Deduplicate worlds that have the same starting characters, e.g. if 
-	you're only interested in what characters people started as, and don't care
-	to distinguish two worlds that only differ in e.g. the choice of the
+	Deduplicate worlds that have the same starting characters if you're only
+	interested in what characters people started as, and don't care to 
+	distinguish two worlds that only differ in e.g. the choice of the 
 	red_herring.
 	"""
 	seen = set()
@@ -282,7 +260,6 @@ def world_gen(
 					yield world
 
 	gen = _initial_characters_gen()
-	gen = _setup_conditions_gen(gen)
 	gen = _run_game_gen(gen, num_players, num_rounds)
 	if deduplicate_initial_characters:
 		gen = _deduplicate_by_initial_characters(gen)

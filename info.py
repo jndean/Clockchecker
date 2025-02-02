@@ -92,7 +92,7 @@ class InfoOp(Info):
 	b: Info | None
 	op: str
 
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		return getattr(self, f'_eval_{self.op}')(state, src)
 
 	def __repr__(self):
@@ -138,7 +138,7 @@ class IsEvil(Info):
 class IsDroisoned(Info):
 	player: PlayerID
 	by: int = None
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		return STBool(state.players[self.player].is_droisoned)
 
 
@@ -156,7 +156,7 @@ class IsAlive(Info):
 class IsCharacter(Info):
 	player: int
 	character: type[Character]
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		actual_character = type(state.players[self.player].character)
 		if self.character.category in actual_character.misregister_categories:
 			return MAYBE
@@ -166,7 +166,7 @@ class IsCharacter(Info):
 class IsCategory(Info): 
 	player: PlayerID
 	category: character.Categories
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		character = type(state.players[self.player].character)
 		if self.category in character.misregister_categories:
 			return MAYBE
@@ -177,8 +177,8 @@ class CharAttrEq(Info):
 	player: PlayerID
 	attr: str
 	value: Any
-	def __call__(self, state: State, src: PlayerID):
-		missing = []  # A unique object for pointer comparison
+	def __call__(self, state: State, src: PlayerID) -> STBool:
+		missing = []  # A unique object for pointer comparison using `is` 
 		val = getattr(state.players[self.player].character, self.attr, missing)
 		return STBool(val is not missing and val == self.value)
 
@@ -186,7 +186,7 @@ class CharAttrEq(Info):
 class ExactlyN(Info):
 	N: int
 	args: Iterator[Info]
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		results = [arg(state, src) for arg in self.args]
 		true_count = sum(r is TRUE for r in results)
 		maybe_count = sum(r is MAYBE for r in results)
@@ -199,7 +199,7 @@ class ExactlyN(Info):
 @dataclass
 class IsInPlay(Info):
 	character: type[Character]
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		result = FALSE
 		test = IsCharacter(player=0, character=self.character)
 		for player in range(len(state.players)):
@@ -210,57 +210,22 @@ class IsInPlay(Info):
 		return result		
 
 @dataclass
-class EvilPairs(Info):
-	count: int
-	def __call__(self, state: State, src: PlayerID):
-		trues, maybes = 0, 0
-		evils = [IsEvil(i)(state, src) for i in range(len(state.players))]
-		evils += [evils[0]]  # Wrap around
-		for a, b in zip(evils[:-1], evils[1:]):
-			pair = a & b
-			maybes += pair is MAYBE
-			trues += pair is TRUE
-		return STBool(trues <= self.count <= trues + maybes)
-
-@dataclass
 class SameCategory(Info): 
 	a: type[Character]
 	b: type[Character]
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		if self.a.category in self.b.misregister_categories:
 			return MAYBE
 		if self.b.category in self.a.misregister_categories:
 			return MAYBE
 		return STBool(self.a.category is self.b.category)
 
-# @dataclass
-# class Juggle(Info):
-# 	guesses: dict[int, Character]
-
-
 @dataclass
 class CustomInfo(Info):
 	method: Callable[State, STBool]
-	def __call__(self, state: State, src: PlayerID):
+	def __call__(self, state: State, src: PlayerID) -> STBool:
 		return self.method(state)
 
-
-
-# @dataclass
-# class Token:
-# 	src: int
-# 	target: int
-# 	is_active: bool = True
-
-# 	def target_droisoned(self, state: State):
-# 		pass
-# 	def target_died(self, state: State):
-# 		pass
-
-# class Droisoning(Token):
-# 	def src_died(self, state):
-# 		self.is_active = False
-# 		state.players[self.target].droison_count -= 1
 
 
 # ------------------- Some helper utilities -------------------- #
