@@ -20,7 +20,7 @@ import events
 import info
 
 
-_DEBUG = os.environ.get('DEBUG', True)  # Set True to enable debug mode
+_DEBUG = os.environ.get('DEBUG', False)  # Set True to enable debug mode
 _DEBUG_STATE_FORK_COUNTS = {}
 
 
@@ -54,9 +54,8 @@ class Player:
 		ret = type(self.character).__name__
 		ret += self.character._world_str(state)
 		if self.is_dead:
-			ret += ' ☠️'
+			ret += ' 💀'
 		return ret
-
 
 
 @dataclass
@@ -321,7 +320,7 @@ def world_gen(
 	possible_minions: list[Character],
 	possible_hidden_good: list[Character],
 	possible_hidden_self: list[Character],
-	category_counts: tuple[int, int, int, int] = (7, 0, 2, 1),
+	category_counts: tuple[int, int, int, int] | None = None,
 	world_init_check: Callable[State, bool] | None = None,
 	deduplicate_initial_characters: bool = True,
 ) -> StateGen:
@@ -353,10 +352,15 @@ def world_gen(
 		day: len(events) for day, events in public_state.day_events.items()
 	})
 
+	if category_counts is None:
+		category_counts = characters.DEFAULT_CATEGORY_COUNTS[num_players]
 	n_townsfolk, n_outsiders, n_minions, n_demons = category_counts
 	liar_combinations = it.product(
 		it.combinations(possible_demons, n_demons),
-		it.combinations(possible_minions, n_minions),
+		it.chain(*[
+			it.combinations(possible_minions, i)
+			for i in range(n_minions, len(possible_minions) + 1)
+		]),
 		it.chain(*[
 			it.combinations(possible_hidden_good, i)
 			for i in range(len(possible_hidden_good) + 1)

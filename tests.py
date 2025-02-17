@@ -82,7 +82,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[],
-			category_counts=(3, 1, 1, 1), # townsfolk outsiders minions demons
 		)
 
 		assert_solutions(self, worlds, solutions=(
@@ -138,7 +137,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk],
-			category_counts=(5, 1, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 
 		assert_solutions(self, worlds, solutions=(
@@ -182,7 +180,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk],
-			category_counts=(5, 0, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 		assert_solutions(self, worlds, solutions=(
 			(Slayer, Baron, Recluse, Investigator, Imp, Drunk, Empath),
@@ -223,7 +220,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk],
-			category_counts=(5, 1, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 		assert_solutions(self, worlds, solutions=(
 			(Slayer, Librarian, Imp, Spy, Chef, Recluse, WasherWoman, Empath),
@@ -262,7 +258,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[],
 			possible_hidden_self=[],
-			category_counts=(5, 0, 1, 1), # townsfolk outsiders minions demons
 		)
 
 		assert_solutions(self, worlds, solutions=(
@@ -304,7 +299,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[],
 			possible_hidden_self=[],
-			category_counts=(5, 0, 1, 1), # townsfolk outsiders minions demons
 		)
 
 		assert_solutions(self, worlds, solutions=(
@@ -363,7 +357,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Marionette],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk, Marionette],
-			category_counts=(5, 2, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 		assert_solutions(self, worlds, solutions=(
 			(Marionette, Saint, Noble, Seamstress, Investigator, Juggler, Drunk,
@@ -436,7 +429,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[Mutant],
 			possible_hidden_self=[],
-			category_counts=(5, 1, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 
 		assert_solutions(self, worlds, solutions=(
@@ -488,7 +480,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Baron, Spy, ScarletWoman, Poisoner],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk],
-			category_counts=(5, 0, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 		assert_solutions(self, worlds, solutions=((
 			Investigator, Clockmaker, Baron, Drunk, FortuneTeller, Imp, Recluse
@@ -540,7 +531,6 @@ class Puzzles(unittest.TestCase):
 			possible_minions=[Goblin],
 			possible_hidden_good=[Drunk],
 			possible_hidden_self=[Drunk],
-			category_counts=(5, 1, 1, 1), # townsfolk, outsiders, minions, demons
 		)
 
 		assert_solutions(self, worlds, solutions=(

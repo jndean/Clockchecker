@@ -32,6 +32,20 @@ type CategoryBounds = tuple[
 	tuple[int, int],  # Demons count min / max
 ]
 
+DEFAULT_CATEGORY_COUNTS = {
+	5: (3, 0, 1, 1),
+	6: (3, 1, 1, 1),
+	7: (5, 0, 1, 1),
+	8: (5, 1, 1, 1),
+	9: (5, 2, 1, 1),
+	10: (7, 0, 2, 1),
+	11: (7, 1, 2, 1),
+	12: (7, 2, 2, 1),
+	13: (9, 0, 3, 1),
+	14: (9, 1, 3, 1),
+	15: (9, 2, 3, 1),
+}
+
 
 @dataclass
 class Character:
@@ -588,6 +602,31 @@ class Librarian(Character):
 				)
 
 @dataclass
+class LordOfTyphon(GenericDemon):
+	"""
+	Each night*, choose a player: they die.[Evil characters are in a line. 
+	You are in the middle. +1 Minion. -? to +? Outsiders]
+	"""
+	@staticmethod
+	def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+		(tf_lo, tf_hi), (out_lo, out_hi), (min_lo, min_hi), dm = bounds
+		return (
+			(tf_lo - 99, tf_hi),
+			(out_lo - 99, out_hi + 99),
+			(min_lo + 1, min_hi + 1),
+			dm
+		)
+
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		"""Override Reason: Check evil in a row, Typhon in middle."""
+		evil = [player.is_evil for player in state.players]
+		N = len(state.players)
+		if not evil[(me - 1) % N] or not evil[(me + 1) % N]:
+			return
+		if 'e' * sum(evil) in ''.join('e' if e else 'g' for e in evil) * 2:
+			yield state
+
+@dataclass
 class Marionette(Character):
 	"""
 	You think you are a good character, but you are not. 
@@ -1031,6 +1070,32 @@ class Spy(Character):
 	)
 
 @dataclass
+class Undertaker(Character):
+	"""
+	Each night*, you learn which character died by execution today.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+
+	@dataclass
+	class Ping:
+		player: PlayerID
+		character: type[Character]
+
+		def __call__(self, state: State, src: PlayerID) -> STBool:
+			assert state.night > 1, "Undertaker acts from second night."
+			for event in state.day_events.get(state.night - 1, []):
+				if (
+					isinstance(event, events.Execution)
+					and event.player == self.player
+					and event.died
+				):
+					return info.IsCharacter(self.player, self.character)(
+						state, src
+					)
+			return info.FALSE
+
+@dataclass
 class WasherWoman(Character):
 	"""
 	You start knowing that 1 of 2 players is a particular Townsfolk.
@@ -1117,6 +1182,7 @@ GLOBAL_SETUP_ORDER = [
 	NoDashii,
 	FortuneTeller,
 	VillageIdiot,
+	LordOfTyphon,  # Goes last so that evils created in setup must be in a line
 ]
 
 GLOBAL_NIGHT_ORDER = [
@@ -1127,6 +1193,7 @@ GLOBAL_NIGHT_ORDER = [
 	FangGu,
 	NoDashii,
 	Vortox,
+	LordOfTyphon,
 	Ravenkeeper,
 	WasherWoman,
 	Librarian,
@@ -1134,6 +1201,7 @@ GLOBAL_NIGHT_ORDER = [
 	Chef,
 	Empath,
 	FortuneTeller,
+	Undertaker,
 	Clockmaker,
 	Dreamer,
 	Seamstress,
