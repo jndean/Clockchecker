@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import enum
 import itertools as it
 from multiprocessing import Pool
+import os
 from typing import Any, Callable, ClassVar, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ import events
 import info
 
 
-_DEBUG = False  # Set True to enable debug mode
+_DEBUG = os.environ.get('DEBUG', True)  # Set True to enable debug mode
 _DEBUG_STATE_FORK_COUNTS = {}
 
 
@@ -53,7 +54,7 @@ class Player:
 		ret = type(self.character).__name__
 		ret += self.character._world_str(state)
 		if self.is_dead:
-			ret += ' (Dead)'
+			ret += ' ☠️'
 		return ret
 
 
@@ -204,7 +205,8 @@ class State:
 	def end_day(self) -> StateGen:
 		for player in self.players:
 			player.done_action = False
-			player.character.end_day(self, self.day, player.id)
+			if not player.character.end_day(self, self.day, player.id):
+				return
 		self.previously_alive = [
 			info.IsAlive(player)(self, None) is info.TRUE
 			for player in range(len(self.players))
@@ -238,6 +240,7 @@ class State:
 		"""Trigger things that require global checks, e.g. Minstrel or SW."""
 		player = self.players[player_id]
 
+		# Game might end on Demon death
 		if player.character.category is characters.DEMON:
 			if not any(
 				not p.is_dead and p.character.category is characters.DEMON
@@ -267,7 +270,8 @@ class State:
 def _run_game_gen(
 	states: StateGen,
 	n_players: int,
-	max_round: int,
+	max_night: int,
+	max_day: int,
 	event_counts: Mapping[int, int],
 ) -> StateGen:
 	"""
@@ -283,15 +287,16 @@ def _run_game_gen(
 	for player in range(n_players):
 		states = apply_all(states, 'run_next_player', (None, 'setup'))
 	states = apply_all(states, 'end_setup', ())
-	for round_ in range(1, max_round + 1):
+	for round_ in range(1, max_night + 1):
 		for player in range(n_players):
 			states = apply_all(states, 'run_next_player', (round_, 'night'))
 		states = apply_all(states, 'end_night', ())
-		for player in range(n_players):
-			states = apply_all(states, 'run_next_player', (round_, 'day'))
-		for event in range(event_counts[round_]):
-			states = apply_all(states, 'run_event', (round_, event))
-		states = apply_all(states, 'end_day', ())
+		if round_ <= max_day:
+			for player in range(n_players):
+				states = apply_all(states, 'run_next_player', (round_, 'day'))
+			for event in range(event_counts[round_]):
+				states = apply_all(states, 'run_event', (round_, event))
+			states = apply_all(states, 'end_day', ())
 
 	yield from states
 
@@ -328,13 +333,22 @@ def world_gen(
 	)
 
 	num_players = len(public_state.players)
-	max_round = max(
-		max(it.chain(
-			player.character.night_info.keys(),
-			player.character.day_info.keys(),
-		), default=1)
-		for player in public_state.players
+	max_day = max(
+		max((
+			max(p.character.day_info, default=0) 
+			for p in public_state.players
+		)),
+		max(public_state.day_events, default=0),
 	)
+	max_night = max(
+		max_day,
+		max((
+			max(p.character.night_info, default=0)
+			for p in public_state.players
+		)),
+		max(public_state.night_deaths, default=0),
+	)
+	max_day = max(max_day, max_night - 1)
 	event_counts = defaultdict(int, {
 		day: len(events) for day, events in public_state.day_events.items()
 	})
@@ -382,7 +396,7 @@ def world_gen(
 		_DEBUG_STATE_FORK_COUNTS[()] = 0
 
 	gen = _initial_characters_gen()
-	gen = _run_game_gen(gen, num_players, max_round, event_counts)
+	gen = _run_game_gen(gen, num_players, max_night, max_day, event_counts)
 	if deduplicate_initial_characters:
 		gen = _deduplicate_by_initial_characters(gen)
 

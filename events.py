@@ -45,7 +45,6 @@ class Execution(Event):
 		yield from player.executed(state, self.player, self.died)
 
 
-
 class Death:
 	"""
 	Doesn't extend the Event interface, because not all deaths are publically 
@@ -68,6 +67,7 @@ class NightResurrection(Death):
 # 	A player is executed by the ST during the day. They might not die.
 # 	The reason for execution is not certain (e.g. broken madness, witch curse,
 #   nominated virgin).
+#   Inheriting from Execution lets things like Vortox easily check Executions.
 # 	"""
 # 	when_nominating: bool = False	
 # 	def __call__(self, state: State) -> StateGen:
