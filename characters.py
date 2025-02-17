@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import namedtuple
-from copy import deepcopy
 from dataclasses import dataclass, field
 import enum
 from typing import ClassVar, TYPE_CHECKING
@@ -11,6 +10,7 @@ if TYPE_CHECKING:
 	from info import PlayerID, Info
 
 import info
+import events
 
 
 class Categories(enum.Enum):
@@ -39,8 +39,8 @@ class Character:
 	# Characters like Recluse and Spy override here
 	misregister_categories: ClassVar[tuple[Categories, ...]] = ()
 	
-	night_actions: dict[int, Info] = field(default_factory=dict)
-	day_actions: dict[int, Info] = field(default_factory=dict)
+	night_info: dict[int, Info] = field(default_factory=dict)
+	day_info: dict[int, Info] = field(default_factory=dict)
 
 	effects_active: bool = False
 
@@ -64,11 +64,11 @@ class Character:
 		raise NotImplementedError()
 
 	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
-			if self.default_info_check(state, self.night_actions, night, src):
+			if self.default_info_check(state, self.night_info, night, src):
 				yield state
 
 	def run_day(self, state: State, day: int, src: PlayerID) -> StateGen:
-			if self.default_info_check(state, self.day_actions, day, src):
+			if self.default_info_check(state, self.day_info, day, src):
 				yield state
 
 	def end_day(self, state: State, day: int, src: PlayerID) -> None:
@@ -79,26 +79,25 @@ class Character:
 		state: State,
 		all_info: dict[int, Info],
 		info_index: int, 
-		src: PlayerID
+		src: PlayerID,
+		even_if_dead: bool = False,
 	) -> bool:
 		"""
-		Most info roles can reuse this pattern to run all their actions
+		Most info roles can reuse this pattern to run all their functions
 		"""
 		player = state.players[src]
-		if (
-			self.is_liar
-			or player.is_dead
-			or player.is_evil
-			or player.droison_count
-			or info_index not in all_info
-		):
+		if info_index not in all_info or player.is_evil or self.is_liar:
+			return True
+		if player.is_dead and not even_if_dead:
+			return False
+		if player.droison_count and not state.vortox:
 			return True
 		result = all_info[info_index](state, src)
 		if state.vortox and (self.category is TOWNSFOLK):
-			return result is not info.TRUE         # TODO: Not how vortox works!
+			return result is not info.TRUE
 		return result is not info.FALSE
 
-	def maybe_activate_effects(self, state: State, src: PlayerID) -> None:
+	def maybe_activate_effects(self, state: State, me: PlayerID) -> None:
 		"""
 		Effects that this character is having on other players. Needs to be 
 		triggerable under in one method so that e.g. a poisoner dying at night 
@@ -106,26 +105,64 @@ class Character:
 		If a character doesn't want thsi wrapper logic, it can override this 
 		method rather than the _impl method.
 		"""
-		if not self.effects_active and state.players[src].droison_count == 0:
+		if (
+			not self.effects_active
+			and state.players[me].droison_count == 0
+			and not state.players[me].is_dead
+		):
 			self.effects_active = True
-			self._activate_effects_impl(state, src)
+			self._activate_effects_impl(state, me)
 
-	def maybe_deactivate_effects(self, state: State, src: PlayerID) -> None:
+	def maybe_deactivate_effects(self, state: State, me: PlayerID) -> None:
 		"""
 		Will be called on any character at the moment they are poisoned, killed,
 		or changed into another character.
 		"""
 		if self.effects_active:
 			self.effects_active = False
-			self._deactivate_effects_impl(state, src)
+			self._deactivate_effects_impl(state, me)
 
-	def _activate_effects_impl(self, state: State, src: PlayerID) -> None:
+	def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
 		pass
-	def _deactivate_effects_impl(self, state: State, src: PlayerID) -> None:
+	def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
 		pass
+
+	def apply_death(self, state: State, me: PlayerID) -> StateGen:
+		state.players[me].is_dead = True
+		self.maybe_deactivate_effects(state, me)
+		yield from state.death_in_town(me)
+
+	def maybe_killed_at_night(
+		self,
+	 	state: State,
+	 	me: PlayerID,
+	 	src: PlayerID,
+	 ) -> StateGen:
+		"""Soldier etc override this method."""
+		if not state.players[me].is_dead and not self.cant_die(state, me):
+			yield from self.apply_death(state, me)
+		else:
+			yield state
+
+	def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
+		"""Goblin, psychopath etc override this method."""
+		if died:
+			if self.cant_die(state, me):
+				return
+			if not state.players[me].is_dead:
+				yield from self.apply_death(state, me)
+		elif self.cant_die(state, me):
+			yield state
+
+	def cant_die(self, state: State, me: PlayerID) -> bool:
+		"""Things like checking for innkeeper protection will go here :)"""
+		return False
 
 	def _world_str(self, state: State) -> str:
-		"""For printing nice output representations of worlds"""
+		"""
+		For printing nice output representations of worlds. E.g 
+		E.g. see Posoiner or Fortune Teller.
+		"""
 		return ''
 
 
@@ -165,11 +202,11 @@ class Balloonist(Character):
 		NOTE: THIS IMPLEMENTATION ONLY HAS 1 DAY OF MEMORY, BUT TECHNICALLY THE 
 		VALIDITY OF BALLOONIST PINGS CAN DEPEND ON ALL PREVIOUS PINGS. 
 		E.g. a ping on 'Goblin, Legion, Imp' is not valid because legion must 
-		have registered a one of minion or demon. I will fix this is it ever 
+		have registered as one of minion or demon. I will fix this is it ever 
 		actually comes up :)
 		"""
 		balloonist = state.players[src]
-		ping = self.night_actions.get(night, None)
+		ping = self.night_info.get(night, None)
 		if (balloonist.is_dead
 			or balloonist.is_evil
 			or ping is None
@@ -366,7 +403,7 @@ class FortuneTeller(Character):
 	def run_setup(self, state: State, src: PlayerID) -> StateGen:
 		# Any player could be chosen as the red herring
 		for red_herring in range(len(state.players)):
-			new_state = deepcopy(state)
+			new_state = state.fork()
 			new_state.players[src].character.red_herring = red_herring
 			yield new_state
 
@@ -376,14 +413,50 @@ class FortuneTeller(Character):
 
 
 @dataclass
+class GenericDemon(Character):
+	"""
+	Many demons just do one kill each night*, so implment that once here.
+	"""
+	category: ClassVar[Categories] = DEMON
+	is_liar: ClassVar[bool] = True
+
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+		"""Override Reason: Create a world for every kill choice."""
+		demon = state.players[me]
+		if night == 1 or demon.is_dead or demon.droison_count:
+			yield state; return
+		for target in range(len(state.players)):
+			new_state = state.fork()
+			new_demon = new_state.players[me].character
+			target_char = new_state.players[target].character
+			yield from target_char.maybe_killed_at_night(new_state, target, me)
+
+@dataclass
 class Goblin(Character):
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
 
 @dataclass
-class Imp(Character):
-	category: ClassVar[Categories] = DEMON
-	is_liar: ClassVar[bool] = True
+class Imp(GenericDemon):
+	"""
+	Each night*, choose a player: they die. 
+	If you kill yourself this way, a Minion becomes the Imp.
+	"""
+
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+		"""Override Reason: Add star pass to generic demon"""
+		demon = state.players[me]
+		if night == 1 or demon.is_dead or demon.droison_count:
+			yield state; return
+		for target in range(len(state.players)):
+			if target == me:
+				import sys  # TMP
+				if 'unittest' not in sys.modules:
+					print("Star pass not implemented yet")
+			new_state = state.fork()
+			new_demon = new_state.players[me].character
+			target_char = new_state.players[target].character
+			yield from target_char.maybe_killed_at_night(new_state, target, me)
 
 @dataclass
 class Investigator(Character):
@@ -415,17 +488,19 @@ class Juggler(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Juggle(info.Info):
+	class Juggle(events.Event):
 		juggle: dict[PlayerID, Character]
+		def __call__(self, state: State) -> StateGen:
+			pass
 
 	@dataclass
 	class Ping(info.Info):
 		count: int
 		def __call__(self, state: State, src: PlayerID) -> STBool:
-			assert state.night > 0, "Jugglers don't ping on night 0"
+			assert state.night > 1, "Jugglers don't ping on night 1"
 			juggle = getattr(state.players[src].character, 'juggle', None)
 			assert juggle is not None, (
-				"No Juggler.Juggle happened before the Juggler.Ping action")
+				"No Juggler.Juggle happened before the Juggler.Ping")
 			return info.ExactlyN(
 				N=self.count, 
 				args=(
@@ -438,10 +513,11 @@ class Juggler(Character):
 		"""
 		Overridden because: No vortox inversion, and the Juggler can make their
 		guess even if droisoned or dead during the day.
+		TODO!: juggle should be evaluated during the day, not the night!
 		"""
 		character = state.players[player].character
-		if state.day in character.day_actions:
-			character.juggle = character.day_actions[state.day].juggle
+		if state.day in character.day_info:
+			character.juggle = character.day_info[state.day].juggle
 		yield state
 
 @dataclass
@@ -578,7 +654,7 @@ class NoDashii(Character):
 		# Create a world or each combination of left and right poisoned player
 		for fwd in fwd_candidates:
 			for bkwd in bkwd_candidates:
-				new_state = deepcopy(state)
+				new_state = state.fork()
 				new_nodashii = new_state.players[src].character
 				new_nodashii.tf_neighbour1 = fwd
 				new_nodashii.tf_neighbour2 = bkwd
@@ -612,7 +688,7 @@ class Poisoner(Character):
 		if poisoner.is_dead:
 			yield state; return
 		for target in range(len(state.players)):
-			new_state = deepcopy(state)
+			new_state = state.fork()
 			new_poisoner = new_state.players[src].character
 			# Even droisoned poisoners make a choice, because they might be 
 			# undroisoned before dusk.
@@ -658,11 +734,11 @@ class Pukka(Character):
 		pukka = state.players[src]
 		if pukka.is_dead:
 			yield state; return
-		if target is not None and pukka.droison_count == 0:
+		if self.target is not None and pukka.droison_count == 0:
 			# Kill the previously poisoned player
 			print("Pukka kills not implemented")
 		for target in range(len(state.players)):
-			new_state = deepcopy(state)
+			new_state = state.fork()
 			new_pukka = new_state.players[src].character
 			new_pukka.target = target
 			new_pukka.target_history.append(target)
@@ -684,10 +760,13 @@ class Pukka(Character):
 @dataclass
 class Ravenkeeper(Character):
 	"""
-	If you die at night, you are woken to choose a player: you learn their character.
+	If you die at night, you are woken to choose a player:
+	you learn their character.
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+
+	death_night: int | None = None
 
 	@dataclass
 	class Ping:
@@ -695,8 +774,29 @@ class Ravenkeeper(Character):
 		character: type[Character]
 
 		def __call__(self, state: State, src: PlayerID) -> STBool:
-			print('Ravenkeeper death not implemented properly')
+			ravenkeeper = state.players[src].character
+			death_night = ravenkeeper.death_night
+			if death_night is None or death_night != state.night:
+				return info.FALSE
 			return info.IsCharacter(self.player, self.character)(state, src)
+
+	def apply_death(self, state: State, me: PlayerID) -> StateGen:
+		"""Override Reason: Record when death happened."""
+		if state.night is not None:
+			self.death_night = state.night
+		yield from super().apply_death(state, me)
+
+	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
+		"""
+		Override Reason: Even if dead.
+		The Ping checks the death was on the same night.
+		"""
+		if self.default_info_check(
+			state, self.night_info, night, src, even_if_dead=True
+		):
+			yield state
+
+
 
 @dataclass
 class Recluse(Character):
@@ -726,6 +826,22 @@ class Savant(Character):
 			if state.vortox:
 				return not (a | b)
 			return a ^ b
+
+	def run_day(self, state: State, day: int, src: PlayerID) -> StateGen:
+		""" Override Reason: Novel Vortox effect on Savant, see Savant.Ping."""
+		savant = state.players[src]
+		if (
+			savant.is_dead
+			or savant.is_evil
+			or savant.droison_count
+			or day not in savant.character.day_info
+		):
+			yield state; return
+		ping = savant.character.day_info[day]
+		result = ping(state, src)
+		if result is not info.FALSE:
+			yield state
+
 
 @dataclass
 class Seamstress(Character):
@@ -824,30 +940,32 @@ class Slayer(Character):
 	spent: bool = False
 
 	@dataclass
-	class Shot(info.Info):
-		player: PlayerID
+	class Shot(events.Event):
+		src: PlayerID
+		target: PlayerID
 		died: bool
 
-	def run_day(self, state: State, day: int, src: PlayerID) -> StateGen:
-		"""
-		Overridden Because: Not negated by Vortox, and still need to record 
-		spent shot if poisoned.
-		"""
-		slayer = state.players[src]
-		shot = slayer.character.day_actions.get(day, None)
-		if shot is None or slayer.is_dead or slayer.character.spent:
-			yield state; return
+		def __call__(self, state: State) -> StateGen:
+			shooter = state.players[self.src]
+			target = state.players[self.target]
+			if (
+				shooter.is_dead
+				or target.is_dead
+				or not isinstance(shooter.character, Slayer)
+				or shooter.droison_count
+				or shooter.character.spent
+			):
+				should_die = info.FALSE
+			else:
+				should_die = info.IsCategory(self.target, DEMON)
 
-		slayer.character.spent = True
-		if slayer.droison_count:
-			yield state; return
+			if isinstance(shooter.character, Slayer):
+				shooter.character.spent = True
 
-		is_demon = info.IsCategory(shot.player, DEMON)(state, src)
-		if (
-			(shot.died and is_demon is not info.FALSE) or
-			(not shot.died and is_demon is not info.TRUE)
-		):
-			yield state
+			if self.died and should_die is not info.FALSE:
+				yield from target.character.apply_death(state, self.target)
+			elif not self.died and should_die is not info.TRUE:
+				yield state
 
 @dataclass
 class Spy(Character):
@@ -909,7 +1027,7 @@ class VillageIdiot(Character):
 			return
 
 		for vi in VIs:
-			new_state = deepcopy(state)
+			new_state = state.fork()
 			new_state.players[vi].droison_count += 1
 			new_state.players[vi].character.is_drunk_VI = True
 			yield new_state

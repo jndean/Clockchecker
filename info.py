@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 import enum
 from typing import TYPE_CHECKING
@@ -66,7 +67,7 @@ FALSE = STBool.FALSE
 MAYBE = STBool.MAYBE
 
 
-class Info:
+class Info(ABC):
 	"""
 	An instance of Info (specialised by inheritence) stores a logical 
 	statement, and provides a '__call__' method to see if that statement could
@@ -75,6 +76,10 @@ class Info:
 	pinging FortuneTeller) will evaluate to MAYBE, allowing compound statements
 	to reason over variability in sub-statements.
 	"""
+	@abstractmethod
+	def __call__(self, state: State, src: PlayerID) -> STBool:
+		pass
+
 	def __or__(self, other: Info):
 		return InfoOp(self, other, 'or')
 	def __and__(self, other: Info):
@@ -130,7 +135,10 @@ class IsEvil(Info):
 	player: PlayerID
 	def __call__(self, state: State, src: PlayerID = None):
 		player = state.players[self.player]
-		if isinstance(player.character, (chars.Recluse, chars.Spy)):
+		if (
+			isinstance(player.character, (chars.Recluse, chars.Spy))
+			and not player.droison_count  # Misregistrations are part of ability
+		):
 			return MAYBE
 		return STBool(player.is_evil)
 
@@ -157,8 +165,12 @@ class IsCharacter(Info):
 	player: int
 	character: type[Character]
 	def __call__(self, state: State, src: PlayerID) -> STBool:
-		actual_character = type(state.players[self.player].character)
-		if self.character.category in actual_character.misregister_categories:
+		player = state.players[self.player]
+		actual_character = type(player.character)
+		if (
+			self.character.category in actual_character.misregister_categories
+			and not player.droison_count  # Misregistrations are part of ability
+		):
 			return MAYBE
 		return STBool(actual_character is self.character)
 
@@ -167,8 +179,12 @@ class IsCategory(Info):
 	player: PlayerID
 	category: character.Categories
 	def __call__(self, state: State, src: PlayerID) -> STBool:
-		character = type(state.players[self.player].character)
-		if self.category in character.misregister_categories:
+		player = state.players[self.player]
+		character = type(player.character)
+		if (
+			self.category in character.misregister_categories
+			and not player.droison_count  # Misregistrations are part of ability
+		):
 			return MAYBE
 		return STBool(character.category is self.category)
 
@@ -214,6 +230,9 @@ class SameCategory(Info):
 	a: type[Character]
 	b: type[Character]
 	def __call__(self, state: State, src: PlayerID) -> STBool:
+		# TODO: This is not correct. Doesn't account for poisoning of 
+		# misregistration, and doesn't account for both a & b misregistering as
+		# the same category.
 		if self.a.category in self.b.misregister_categories:
 			return MAYBE
 		if self.b.category in self.a.misregister_categories:

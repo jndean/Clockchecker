@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from collections import Counter
-from copy import deepcopy
+from collections.abc import Iterable, Mapping
+from collections import Counter, defaultdict
+from copy import copy, deepcopy
 from dataclasses import dataclass, field
 import enum
 import itertools as it
@@ -11,10 +11,16 @@ from typing import Any, Callable, ClassVar, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from characters import Character
+	from events import Event
 	from info import PlayerID, Info
 
 import characters
+import events
 import info
+
+
+_DEBUG = False  # Set True to enable debug mode
+_DEBUG_STATE_FORK_COUNTS = {}
 
 
 type StateGen = Generator[State]
@@ -46,19 +52,44 @@ class Player:
 		"""For printing nice output representations of worlds"""
 		ret = type(self.character).__name__
 		ret += self.character._world_str(state)
+		if self.is_dead:
+			ret += ' (Dead)'
 		return ret
+
 
 
 @dataclass
 class State:
 	# The list of players starts with You as player 0 and proceeds clockwise
 	players: list[Player]
+	day_events: dict[int, list[Event]] = field(default_factory=dict)
+	night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
 
 	def __post_init__(self):
-		"""Called before worlds are posited by overriding these characters"""
+		"""
+		Post-process the human-entered state representation for the machine.
+		Called before worlds are posited by overriding these characters.
+		"""
 		for i, player in enumerate(self.players):
 			player.id = i
 			player.bluff = type(player.character)
+		assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
+		# Make entering night deaths neater by accepting bare ints 
+		for night, deaths in self.night_deaths.items():
+			if not isinstance(deaths, Iterable):
+				deaths = [deaths]
+			for i, death in enumerate(deaths):
+				if not isinstance(death, events.Death):
+					assert isinstance(death, int), "Bad night_death value."
+					deaths[i] = events.NightDeath(death)
+			self.night_deaths[night] = deaths
+		for day, events_ in self.day_events.items():
+			if isinstance(events_, events.Event):
+				self.day_events[day] = [events_]
+
+		# The root debug key is the empty tuple
+		if _DEBUG:
+			self.debug_key = ()
 
 	def begin_game(self, default_counts: tuple[int, ...]) -> bool:
 		"""Called after player positions and characters have been chosen"""
@@ -77,51 +108,111 @@ class State:
 		# Initialise data structures for game
 		self.update_character_index()
 		self.initial_characters = tuple(type(p.character) for p in self.players)
-		self.night, self.day = 0, None
+		self.night, self.day = None, None
 		self.order_position = 0
+		self.previously_alive = [True for _ in range(len(self.players))]
 		return True
 
-	def run_action_for_next_player(self, round_: int, phase: str) -> StateGen:
+	def fork(self) -> State:
+		"""
+		Create a unique key for each set of possible branches in the state space
+		so that (mainly for debugging) we can trace an output world back through
+		the branches that created it. Thankfully the solver is deterministic.
+		"""
+		ret = deepcopy(self)
+		if _DEBUG:
+			fork_count = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
+			ret.debug_key = self.debug_key + (fork_count,)
+			_DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
+			_DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
+		return ret
+
+	def _is_world(self, key: tuple[int]) -> bool:
+		"""
+		Use debug keys generated during forks to determine if this state is an
+		upstream choice that leads to the keyed world.
+		"""
+		return (
+			len(self.debug_key) <= len(key)
+			and all(a == b for a, b in zip(self.debug_key, key))
+		)
+
+
+	def run_next_player(self, round_: int, phase: str) -> StateGen:
 		match phase:
-			case 'night':
-				order = self.night_order
-			case 'day':
-				order = self.day_order
 			case 'setup':
-				order = self.setup_order
-		if self.order_position >= len(order):
-			yield self  # Move this check to caller to reduce generator stack?
-			return
-		player = self.players[order[self.order_position]]
-		match phase:
+				if self.order_position >= len(self.setup_order):
+					yield self; return
+				player = self.players[self.setup_order[self.order_position]]
+				substates = player.character.run_setup(self, player.id)
 			case 'night':
+				if self.order_position >= len(self.night_order):
+					yield self; return
+				player = self.players[self.night_order[self.order_position]]
 				substates = player.character.run_night(self, round_, player.id)
 			case 'day':
+				if self.order_position >= len(self.day_order):
+					yield self; return
+				player = self.players[self.day_order[self.order_position]]
 				substates = player.character.run_day(self, round_, player.id)
-			case 'setup':
-				substates = player.character.run_setup(self, player.id)
+
 		for substate in substates:
 			substate.order_position += 1
 			yield substate
 
-	def end_setup(self):
-		self.order_position = 0
-		return self
+	def run_event(self, round_: int, event: int) -> StateGen:
+		events = self.day_events.get(round_, None)
+		if events is None:
+			yield self
+		else:
+			yield from events[event](self)
 
-	def end_night(self):
+
+	def end_setup(self) -> StateGen:
+		self.order_position = 0
+		self.night = 1
+		self.day = None
+		yield self
+
+	def end_night(self) -> StateGen:
 		for player in self.players:
 			player.done_action = False
 		self.order_position = 0
-		self.night, self.day = None, self.night
-		return self
 
-	def end_day(self):
+		# Check the right people have Died / Resurrected in the night
+		currently_alive = [
+			info.IsAlive(player)(self, None) is info.TRUE
+			for player in range(len(self.players))
+		]
+		currently_alive_gt = copy(self.previously_alive)
+		if self.night in self.night_deaths:
+			for death in self.night_deaths[self.night]:
+				# `death` can either be a NightDeath or a NightResurrection
+				# Deaths/Resurrections require players to be alive/dead resp.
+				previously_alive_gt = isinstance(death, events.NightDeath)
+				if self.previously_alive[death.player] != previously_alive_gt:
+					return False  
+				currently_alive_gt[death.player] = not previously_alive_gt
+		if currently_alive != currently_alive_gt:
+			return
+		del self.previously_alive
+
+		self.day = self.night
+		self.night = None
+		yield self
+
+	def end_day(self) -> StateGen:
 		for player in self.players:
 			player.done_action = False
 			player.character.end_day(self, self.day, player.id)
+		self.previously_alive = [
+			info.IsAlive(player)(self, None) is info.TRUE
+			for player in range(len(self.players))
+		]
 		self.order_position = 0
-		self.night, self.day = self.day + 1, None
-		return self
+		self.night = self.day + 1
+		self.day = None
+		yield self
 
 	def character_change(self, player: PlayerID, character: Character):
 		self.players[player].character = character
@@ -131,23 +222,34 @@ class State:
 		# TODO: This fn should modify self.order_position to compensate for change?
 		self.vortox = False
 		self.setup_order, self.night_order, self.day_order = [], [], []
-		for character in characters.GLOBAL_SETUP_ORDER:
-			for i, player in enumerate(self.players):
-				if type(player.character) is character:
-					self.setup_order.append(i)
-					if character is characters.Vortox:
-						self.vortox = True
-		for character in characters.GLOBAL_NIGHT_ORDER:
-			for i, player in enumerate(self.players):
-				if type(player.character) is character:
-					self.night_order.append(i)
-		for character in characters.GLOBAL_DAY_ORDER:
-			for i, player in enumerate(self.players):
-				if type(player.character) is character:
-					self.day_order.append(i)
+		for global_order, order in (
+			(characters.GLOBAL_SETUP_ORDER, self.setup_order),
+			(characters.GLOBAL_NIGHT_ORDER, self.night_order),
+			(characters.GLOBAL_DAY_ORDER, self.day_order),
+		):
+			for character in global_order:
+				for i, player in enumerate(self.players):
+					if type(player.character) is character:
+						order.append(i)
+						if character is characters.Vortox:
+							self.vortox = True
+
+	def death_in_town(self, player_id: PlayerID) -> StateGen:
+		"""Trigger things that require global checks, e.g. Minstrel or SW."""
+		player = self.players[player_id]
+
+		if player.character.category is characters.DEMON:
+			if not any(
+				not p.is_dead and p.character.category is characters.DEMON
+				for p in self.players
+			):
+				# Evil twin check would go here.
+				return
+
+		yield self
 
 	def __str__(self) -> str:
-		ret = ['World(']
+		ret = [f'World{self.debug_key if _DEBUG else ''}(']
 		pad = max(len(player.name) for player in self.players) + 1
 		for player in self.players:
 			char = type(player.character)
@@ -162,22 +264,35 @@ class State:
 		return '\n'.join(ret)
 
 
-def _run_game_gen(states: StateGen, n_players: int, n_rounds: int) -> StateGen:
-
-	def run_phase_for_next_player(substates, phase, round_):
+def _run_game_gen(
+	states: StateGen,
+	n_players: int,
+	max_round: int,
+	event_counts: Mapping[int, int],
+) -> StateGen:
+	"""
+	Chains together a big ol' stack of generators corresponding to each possible
+	action of each player, forming a pipeline through which possible world 
+	states flow. Only valid worlds are able to reach the end of the pipe.
+	"""	
+	def apply_all(substates: StateGen, method: str, args: tuple[Any]):
+		"""One stage in the validation pipeline."""
 		for ss in substates:
-			yield from ss.run_action_for_next_player(round_, phase)
+			yield from getattr(ss, method)(*args)
 
 	for player in range(n_players):
-		states = run_phase_for_next_player(states, 'setup', None)
-	states = map(lambda state: state.end_setup(), states)
-	for round_ in range(n_rounds):
+		states = apply_all(states, 'run_next_player', (None, 'setup'))
+	states = apply_all(states, 'end_setup', ())
+	for round_ in range(1, max_round + 1):
 		for player in range(n_players):
-			states = run_phase_for_next_player(states, 'night', round_)
-		states = map(lambda state: state.end_night(), states)
+			states = apply_all(states, 'run_next_player', (round_, 'night'))
+		states = apply_all(states, 'end_night', ())
 		for player in range(n_players):
-			states = run_phase_for_next_player(states, 'day', round_)
-		states = map(lambda state: state.end_day(), states)
+			states = apply_all(states, 'run_next_player', (round_, 'day'))
+		for event in range(event_counts[round_]):
+			states = apply_all(states, 'run_event', (round_, event))
+		states = apply_all(states, 'end_day', ())
+
 	yield from states
 
 
@@ -213,13 +328,16 @@ def world_gen(
 	)
 
 	num_players = len(public_state.players)
-	num_rounds = 1 + max(
+	max_round = max(
 		max(it.chain(
-			player.character.night_actions.keys(),
-			player.character.day_actions.keys(),
-		), default=0)
+			player.character.night_info.keys(),
+			player.character.day_info.keys(),
+		), default=1)
 		for player in public_state.players
 	)
+	event_counts = defaultdict(int, {
+		day: len(events) for day, events in public_state.day_events.items()
+	})
 
 	n_townsfolk, n_outsiders, n_minions, n_demons = category_counts
 	liar_combinations = it.product(
@@ -236,7 +354,7 @@ def world_gen(
 		positions: list[int]
 	) -> State | None:
 		"""Given a list of """
-		world = deepcopy(public_state)
+		world = public_state.fork()
 		for liar, position in zip(liars, positions):
 			if position == 0 and liar not in possible_hidden_self:
 				return None
@@ -259,8 +377,12 @@ def world_gen(
 				if world is not None:
 					yield world
 
+	if _DEBUG:
+		_DEBUG_STATE_FORK_COUNTS.clear()
+		_DEBUG_STATE_FORK_COUNTS[()] = 0
+
 	gen = _initial_characters_gen()
-	gen = _run_game_gen(gen, num_players, num_rounds)
+	gen = _run_game_gen(gen, num_players, max_round, event_counts)
 	if deduplicate_initial_characters:
 		gen = _deduplicate_by_initial_characters(gen)
 
