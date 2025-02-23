@@ -45,19 +45,36 @@ class Execution(Event):
 		yield from player.executed(state, self.player, self.died)
 
 
-class Death:
+@dataclass
+class DoomsayerCall(Event):
 	"""
-	Doesn't extend the Event interface, because not all deaths are publically 
-	visible event.
+	If 4 or more players live, each living player may publically choose (once
+	per game) that a player of their own alignment dies.
+	"""
+	caller: PlayerID
+	died: PlayerID
+	def __call__(self, state: State) -> StateGen:
+		a = info.IsEvil(self.caller)(state, self.caller)
+		b = info.IsEvil(self.died)(state, self.caller)
+		if a ^ b is not info.TRUE:
+			yield from state.players[self.died].character.killed(
+				state, self.died
+			)
+
+
+class NightEvent:
+	"""
+	Doesn't extend the Event interface, because deaths are not publically 
+	visible events. We only learn who is dead or alive come dawn.
 	"""
 	pass
 
 @dataclass
-class NightDeath(Death):
+class NightDeath(NightEvent):
 	player: PlayerID
 
 @dataclass
-class NightResurrection(Death):
+class NightResurrection(NightEvent):
 	player: PlayerID
 
 
@@ -72,3 +89,5 @@ class NightResurrection(Death):
 # 	when_nominating: bool = False	
 # 	def __call__(self, state: State) -> StateGen:
 # 		raise NotImplementedError()
+
+

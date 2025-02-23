@@ -77,13 +77,13 @@ class Character:
 		"""
 		raise NotImplementedError()
 
-	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
-			if self.default_info_check(state, self.night_info, night, me):
-				yield state
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:		
+		if self.default_info_check(state, self.night_info, night, me):
+			yield state
 
 	def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
-			if self.default_info_check(state, self.day_info, day, me):
-				yield state
+		if self.default_info_check(state, self.day_info, day, me):
+			yield state
 
 	def end_day(self, state: State, day: int, me: PlayerID) -> bool:
 			"""
@@ -144,12 +144,12 @@ class Character:
 	def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
 		pass
 
-	def apply_death(self, state: State, me: PlayerID) -> StateGen:
+	def _apply_death(self, state: State, me: PlayerID) -> StateGen:
 		state.players[me].is_dead = True
 		self.maybe_deactivate_effects(state, me)
 		yield from state.death_in_town(me)
 
-	def maybe_killed_at_night(
+	def attacked_at_night(
 		self: Character,
 	 	state: State,
 	 	me: PlayerID,
@@ -162,19 +162,21 @@ class Character:
 		attacker has become drunk.
 		"""
 		if not state.players[me].is_dead and not self.cant_die(state, me):
-			yield from self.apply_death(state, me)
+			yield from self._apply_death(state, me)
 		else:
 			yield state
 
 	def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
 		"""Goblin, Psychopath, Saint etc override this method."""
 		if died:
-			if self.cant_die(state, me):
-				return
-			if not state.players[me].is_dead:  # Dying when dead is invalid.
-				yield from self.apply_death(state, me)
+			yield from self.killed(state, me)
 		elif self.cant_die(state, me):
 			yield state
+
+	def killed(self, state: State, me: PlayerID) -> StateGen:
+		""" Check the death is logically valid, then apply it."""
+		if not self.cant_die(state, me) and not state.players[me].is_dead:
+			yield from self._apply_death(state, me)
 
 	def cant_die(self, state: State, me: PlayerID) -> bool:
 		"""Things like checking for innkeeper protection will go here :)"""
@@ -335,6 +337,64 @@ class Clockmaker(Character):
 			return correct_distance & ~too_close
 
 @dataclass
+class Courtier(Character):
+	"""
+	Once per game, at night, choose a character:
+	they are drunk for 3 nights & 3 days.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+	target: PlayerID = None
+	choice_night: int | None = None
+
+	@dataclass
+	class Choice:
+		character: type[Character]
+
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+		courtier = state.players[me]
+		if courtier.is_evil:
+			# Yield all choices like a poisoner, plus the non-choice
+			raise NotImplementedError("Todo: Evil Courtier")
+
+		choice = courtier.character.night_info.get(night, None)
+		if choice is None:
+			yield state; return
+		if courtier.is_dead or self.choice_night is not None:
+			return  # Drinking when spent or dead is a lie
+		self.choice_night = night
+		if courtier.droison_count:
+			yield state; return  # Shame!
+
+		for target_id, target in enumerate(state.players):
+			hit = info.IsCharacter(target_id, choice.character)(state, me)
+			if hit is info.FALSE:
+				continue
+			new_state = state.fork()
+			new_courtier = new_state.players[me].character
+			new_courtier.target = target_id
+			new_courtier.maybe_activate_effects(new_state, me)
+			yield new_state
+
+	def end_day(self, state: State, day: int, me: PlayerID) -> bool:
+		if self.target is not None and (day - self.choice_night) >= 2:
+			self.maybe_deactivate_effects(state, me)
+			self.target = None
+		return True
+
+	def _activate_effects_impl(self, state: State, me: PlayerID):
+		if self.target == me:
+			state.players[me].droison_count += 1
+		elif self.target is not None:
+			state.players[self.target].droison(state, me)
+
+	def _deactivate_effects_impl(self, state: State, me: PlayerID):
+		if self.target == me:
+			state.players[me].droison_count -= 1
+		elif self.target is not None:
+			state.players[self.target].undroison(state, me)
+
+@dataclass
 class Dreamer(Character):
 	"""
 	Each night, choose a player (not yourself or Travellers): 
@@ -451,7 +511,7 @@ class GenericDemon(Character):
 			new_state = state.fork()
 			new_demon = new_state.players[me].character
 			target_char = new_state.players[target].character
-			yield from target_char.maybe_killed_at_night(new_state, target, me)
+			yield from target_char.attacked_at_night(new_state, target, me)
 
 @dataclass
 class Goblin(Character):
@@ -478,7 +538,7 @@ class Imp(GenericDemon):
 			new_state = state.fork()
 			new_demon = new_state.players[me].character
 			target_char = new_state.players[target].character
-			yield from target_char.maybe_killed_at_night(new_state, target, me)
+			yield from target_char.attacked_at_night(new_state, target, me)
 
 @dataclass
 class Investigator(Character):
@@ -627,6 +687,15 @@ class LordOfTyphon(GenericDemon):
 			yield state
 
 @dataclass
+class Lunatic(Character):
+	"""
+	You think you are the Demon, but you are not.
+	The demon knows who you are & who you chose at night.
+	"""
+	category: ClassVar[Categories] = OUTSIDER
+	is_liar: ClassVar[bool] = True
+
+@dataclass
 class Marionette(Character):
 	"""
 	You think you are a good character, but you are not. 
@@ -644,6 +713,15 @@ class Marionette(Character):
 		)
 		if demon_neighbour is not info.FALSE:
 			yield state
+
+@dataclass
+class Mayor(Character):
+	"""
+	If only 3 player live & no execution occurs, your team wins. 
+	If you die at night, another player might die instead.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
 
 @dataclass
 class Mutant(Character):
@@ -760,19 +838,22 @@ class Poisoner(Character):
 			new_poisoner.maybe_activate_effects(new_state, src)
 			yield new_state
 
-	def end_day(self, state: State, day: int, src: PlayerID) -> bool:
-		self.maybe_deactivate_effects(state, src)
+	def end_day(self, state: State, day: int, me: PlayerID) -> bool:
+		self.maybe_deactivate_effects(state, me)
 		self.target = None
 		return True
 
-	def _activate_effects_impl(self, state: State, src: PlayerID):
-		state.players[self.target].droison(state, src)
+	def _activate_effects_impl(self, state: State, me: PlayerID):
+		if self.target == me:
+			state.players[me].droison_count += 1
+		elif self.target is not None:
+			state.players[self.target].droison(state, me)
 
-	def _deactivate_effects_impl(self, state: State, src: PlayerID):
-		# Break a self-poisoning infinite recursion, whilst still leaving the 
-		# Poisoner marked as droisoned.
-		if self.target != src:
-			state.players[self.target].undroison(state, src)
+	def _deactivate_effects_impl(self, state: State, me: PlayerID):
+		if self.target == me:
+			state.players[me].droison_count -= 1
+		elif self.target is not None:
+			state.players[self.target].undroison(state, me)
 
 	def _world_str(self, state: State) -> str:
 		return f' (Poisoned {", ".join(
@@ -815,7 +896,7 @@ class Pukka(Character):
 				yield new_state
 			else:
 				target_char = new_state.players[self.target].character
-				for substate in target_char.maybe_killed_at_night(
+				for substate in target_char.attacked_at_night(
 					new_state, self.target, me
 				):
 					substate.players[self.target].undroison(substate, me)
@@ -859,11 +940,11 @@ class Ravenkeeper(Character):
 				return info.FALSE
 			return info.IsCharacter(self.player, self.character)(state, src)
 
-	def apply_death(self, state: State, me: PlayerID) -> StateGen:
+	def killed(self, state: State, me: PlayerID) -> StateGen:
 		"""Override Reason: Record when death happened."""
 		if state.night is not None:
 			self.death_night = state.night
-		yield from super().apply_death(state, me)
+		yield from super().killed(state, me)
 
 	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
 		"""
@@ -1053,7 +1134,7 @@ class Slayer(Character):
 				shooter.character.spent = True
 
 			if self.died and should_die is not info.FALSE:
-				yield from target.character.apply_death(state, self.target)
+				yield from target.character.killed(state, self.target)
 			elif not self.died and should_die is not info.TRUE:
 				yield state
 
@@ -1163,9 +1244,20 @@ class Vortox(GenericDemon):
 	Each day, if no-one was executed, evil wins.
 	"""
 
-	def end_day(self, state: State, day: int, src: PlayerID) -> bool:
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		"""Override Reason: Vortox immediately activates effects."""
+		self.maybe_activate_effects(state, me)
+		yield state
+
+	def end_day(self, state: State, day: int, me: PlayerID) -> bool:
 		events_ = state.day_events.get(day, [])
 		return any(isinstance(ev, events.Execution) for ev in events_)
+
+	def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+		state.vortox = True
+
+	def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+		state.vortox = False
 
 
 @dataclass
@@ -1178,6 +1270,7 @@ class Zombuul(Character):
 
 
 GLOBAL_SETUP_ORDER = [
+	Vortox,
 	Marionette,
 	NoDashii,
 	FortuneTeller,
@@ -1186,6 +1279,7 @@ GLOBAL_SETUP_ORDER = [
 ]
 
 GLOBAL_NIGHT_ORDER = [
+	Courtier,
 	Poisoner,
 	ScarletWoman,
 	Imp,
@@ -1224,11 +1318,13 @@ GLOBAL_DAY_ORDER = [
 ]
 
 INACTIVE_CHARACTERS = [
-	Leviathan,
-	Goblin,
+	Baron,
 	Drunk,
+	Goblin,
+	Leviathan,
+	Lunatic,
+	Marionette,
+	Mayor,
 	Recluse,
 	Spy,
-	Baron,
-	Marionette,
 ]

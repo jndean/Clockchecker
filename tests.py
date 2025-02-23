@@ -225,6 +225,66 @@ class Puzzles(unittest.TestCase):
 			(Slayer, Librarian, Imp, Spy, Chef, Recluse, WasherWoman, Empath),
 		))
 
+	def test_puzzle_4(self):
+		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1f823s4/weekly_puzzle_4_the_manyheaded_monster/
+
+		You, Anna, Dan, Fraser, Sarah, Tim, Matt, Hannah = range(8)
+		state = State(
+			players=[
+				Player(name='You', character=Investigator(night_info={
+					1: Investigator.Ping(Matt, Hannah, Marionette)
+				})),
+				Player(name='Anna', character=Empath(night_info={
+					1: Empath.Ping(2)
+				})),
+				Player(name='Dan', character=Undertaker(night_info={
+					2: Undertaker.Ping(Anna, Empath)
+				})),
+				Player(name='Fraser', character=FortuneTeller(night_info={
+					1: FortuneTeller.Ping(Anna, Tim, demon=True),
+					2: FortuneTeller.Ping(You, Fraser, demon=False),
+					3: FortuneTeller.Ping(You, Sarah, demon=True),
+				})),
+				Player(name='Sarah', character=Librarian(night_info={
+					1: Librarian.Ping(You, Hannah, Drunk)
+				})),
+				Player(name='Tim', character=Recluse()),
+				Player(name='Matt', character=Juggler(
+					day_info={
+						1: Juggler.Juggle({
+							You: Investigator,
+							Dan: LordOfTyphon,
+							Tim: Recluse,
+							Hannah: Dreamer,
+						}
+					)},
+					night_info={2: Juggler.Ping(1)}
+				)),
+				Player(name='Hannah', character=Dreamer(night_info={
+					1: Dreamer.Ping(You, Investigator, LordOfTyphon)
+				})),
+			],
+			day_events={
+				1: Execution(Anna, died=True),
+				2: Execution(Dan, died=True),
+			},
+			night_deaths={2: Hannah, 3: Tim},
+		)
+
+		worlds = world_gen(
+			state,
+			possible_demons=[LordOfTyphon],
+			possible_minions=[Marionette, Poisoner],
+			possible_hidden_good=[Drunk],
+			possible_hidden_self=[Drunk, Marionette],
+		)
+		assert_solutions(self, worlds, solutions=(
+			(Investigator, Drunk, Marionette, LordOfTyphon, Poisoner, Recluse, 
+				Juggler, Dreamer),
+			(Investigator, Drunk, Poisoner, LordOfTyphon, Marionette, Recluse, 
+				Juggler, Dreamer),
+		))
+
 
 	def test_puzzle_5a(self):
 		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1fcriex/weekly_puzzle_5a_5b_you_only_guess_twice/
@@ -264,7 +324,6 @@ class Puzzles(unittest.TestCase):
 			(Alsaahir, Noble, Knight, Investigator, Empath, Leviathan, Goblin),
 			(Alsaahir, Noble, Knight, Investigator, Goblin, Steward, Leviathan),
 		))
-
 
 
 	def test_puzzle_5b(self):
@@ -434,6 +493,49 @@ class Puzzles(unittest.TestCase):
 		assert_solutions(self, worlds, solutions=(
 			(Savant, VillageIdiot, FortuneTeller, Goblin, 
 				Leviathan, Shugenja, Mutant, VillageIdiot),
+		))
+
+
+	def test_puzzle_12a(self):
+		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
+
+		You, Tim, Fraser, Hannah, Sarah, Jasmine = range(6)
+		state = State(
+			players=[
+				Player(name='You', character=Dreamer(night_info={
+					1: Dreamer.Ping(Sarah, Lunatic, ScarletWoman)
+				})),
+				Player(name='Tim', character=Clockmaker(night_info={
+					1: Clockmaker.Ping(2)
+				})),
+				Player(name='Fraser', character=Empath(night_info={
+					1: Empath.Ping(0)
+				})),
+				Player(name='Hannah', character=Slayer()),
+				Player(name='Sarah', character=Courtier(night_info={
+					1: Courtier.Choice(Vortox)
+				})),
+				Player(name='Jasmine', character=Mayor()),
+			],
+			day_events={
+				1: [
+					DoomsayerCall(caller=Hannah, died=Tim),
+					Slayer.Shot(src=Hannah, target=Fraser, died=False),
+					DoomsayerCall(caller=You, died=Sarah),
+				]
+			},
+		)
+
+		worlds = world_gen(
+			state,
+			possible_demons=[Vortox],
+			possible_minions=[Spy, ScarletWoman],
+			possible_hidden_good=[Lunatic],
+			possible_hidden_self=[],
+		)
+
+		assert_solutions(self, worlds, solutions=(
+			(Dreamer, Clockmaker, Lunatic, Slayer, Spy, Vortox),
 		))
 
 

@@ -135,11 +135,11 @@ class IsEvil(Info):
 	player: PlayerID
 	def __call__(self, state: State, src: PlayerID = None):
 		player = state.players[self.player]
-		if (
-			isinstance(player.character, (chars.Recluse, chars.Spy))
-			and not player.droison_count  # Misregistrations are part of ability
-		):
-			return MAYBE
+		if not player.droison_count:  # Misregistrations are part of ability
+			if isinstance(player.character, chars.Recluse):
+				return TRUE if player.is_evil else MAYBE
+			if isinstance(player.character, chars.Spy):
+				return MAYBE if player.is_evil else FALSE
 		return STBool(player.is_evil)
 
 @dataclass
@@ -270,5 +270,5 @@ def get_next_player_who_is(
 def circle_distance(a: PlayerID, b: PlayerID, n_players: int) -> int:
 	"""If a sits next to b, they have distance 1."""
 	if b < a:
-		min(a - b, n_players + b - a)
+		return min(a - b, n_players + b - a)
 	return min(b - a, n_players + a - b)

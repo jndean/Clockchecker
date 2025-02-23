@@ -20,7 +20,7 @@ import events
 import info
 
 
-_DEBUG = os.environ.get('DEBUG', False)  # Set True to enable debug mode
+_DEBUG = os.environ.get('DEBUG', True)  # Set True to enable debug mode
 _DEBUG_STATE_FORK_COUNTS = {}
 
 
@@ -42,7 +42,7 @@ class Player:
 	droison_count: int = 0
 
 	def droison(self, state: State, src: PlayerID) -> None:
-		self.droison_count += 1 
+		self.droison_count += 1
 		self.character.maybe_deactivate_effects(state, self.id)
 
 	def undroison(self, state: State, src: PlayerID) -> None:
@@ -52,9 +52,9 @@ class Player:
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
 		ret = type(self.character).__name__
-		ret += self.character._world_str(state)
 		if self.is_dead:
 			ret += ' 💀'
+		ret += self.character._world_str(state)
 		return ret
 
 
@@ -64,6 +64,7 @@ class State:
 	players: list[Player]
 	day_events: dict[int, list[Event]] = field(default_factory=dict)
 	night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
+	finish_final_day: bool = False
 
 	def __post_init__(self):
 		"""
@@ -79,13 +80,31 @@ class State:
 			if not isinstance(deaths, Iterable):
 				deaths = [deaths]
 			for i, death in enumerate(deaths):
-				if not isinstance(death, events.Death):
+				if not isinstance(death, events.NightEvent):
 					assert isinstance(death, int), "Bad night_death value."
 					deaths[i] = events.NightDeath(death)
 			self.night_deaths[night] = deaths
 		for day, events_ in self.day_events.items():
 			if isinstance(events_, events.Event):
 				self.day_events[day] = [events_]
+
+		self.max_day = max(
+			max((
+				max(p.character.day_info, default=0) 
+				for p in self.players
+			)),
+			max(self.day_events, default=0),
+		)
+		self.max_night = max(
+			self.max_day,
+			max((
+				max(p.character.night_info, default=0)
+				for p in self.players
+			)),
+			max(self.night_deaths, default=0),
+		)
+		self.max_day = max(self.max_day, self.max_night - 1)
+		self.finish_final_day |= (self.max_day < self.max_night)
 
 		# The root debug key is the empty tuple
 		if _DEBUG:
@@ -111,6 +130,7 @@ class State:
 		self.night, self.day = None, None
 		self.order_position = 0
 		self.previously_alive = [True for _ in range(len(self.players))]
+		self.vortox = False
 		return True
 
 	def fork(self) -> State:
@@ -221,7 +241,7 @@ class State:
 
 	def update_character_index(self):
 		# TODO: This fn should modify self.order_position to compensate for change?
-		self.vortox = False
+		# self.vortox = False
 		self.setup_order, self.night_order, self.day_order = [], [], []
 		for global_order, order in (
 			(characters.GLOBAL_SETUP_ORDER, self.setup_order),
@@ -232,8 +252,8 @@ class State:
 				for i, player in enumerate(self.players):
 					if type(player.character) is character:
 						order.append(i)
-						if character is characters.Vortox:
-							self.vortox = True
+						# if character is characters.Vortox:
+						# 	self.vortox = True
 
 	def death_in_town(self, player_id: PlayerID) -> StateGen:
 		"""Trigger things that require global checks, e.g. Minstrel or SW."""
@@ -271,6 +291,7 @@ def _run_game_gen(
 	n_players: int,
 	max_night: int,
 	max_day: int,
+	finish_final_day: bool,
 	event_counts: Mapping[int, int],
 ) -> StateGen:
 	"""
@@ -295,7 +316,8 @@ def _run_game_gen(
 				states = apply_all(states, 'run_next_player', (round_, 'day'))
 			for event in range(event_counts[round_]):
 				states = apply_all(states, 'run_event', (round_, event))
-			states = apply_all(states, 'end_day', ())
+			if round_ < max_day or finish_final_day:
+				states = apply_all(states, 'end_day', ())
 
 	yield from states
 
@@ -332,22 +354,6 @@ def world_gen(
 	)
 
 	num_players = len(public_state.players)
-	max_day = max(
-		max((
-			max(p.character.day_info, default=0) 
-			for p in public_state.players
-		)),
-		max(public_state.day_events, default=0),
-	)
-	max_night = max(
-		max_day,
-		max((
-			max(p.character.night_info, default=0)
-			for p in public_state.players
-		)),
-		max(public_state.night_deaths, default=0),
-	)
-	max_day = max(max_day, max_night - 1)
 	event_counts = defaultdict(int, {
 		day: len(events) for day, events in public_state.day_events.items()
 	})
@@ -400,7 +406,14 @@ def world_gen(
 		_DEBUG_STATE_FORK_COUNTS[()] = 0
 
 	gen = _initial_characters_gen()
-	gen = _run_game_gen(gen, num_players, max_night, max_day, event_counts)
+	gen = _run_game_gen(
+		gen,
+		num_players,
+		public_state.max_night,
+		public_state.max_day,
+		public_state.finish_final_day,
+		event_counts
+	)
 	if deduplicate_initial_characters:
 		gen = _deduplicate_by_initial_characters(gen)
 
