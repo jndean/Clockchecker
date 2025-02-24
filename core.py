@@ -4,11 +4,9 @@ from collections.abc import Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
-import enum
 import itertools as it
-from multiprocessing import Pool
 import os
-from typing import Any, Callable, ClassVar, Generator, TYPE_CHECKING
+from typing import Any, Callable, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from characters import Character
@@ -35,11 +33,17 @@ class Player:
 	characters can change, but players are forever.
 	"""
 	name: str
-	character: Character
-	bluff: type[Character] | None = None
+	claim: type[Character]
+	night_info: dict[int, Info] = field(default_factory=dict)
+	day_info: dict[int, Info] = field(default_factory=dict)
+	character: Character | None = None
 	is_evil: bool = False
 	is_dead: bool = False
 	droison_count: int = 0
+	character_history: list[type[Character]] = field(default_factory=list)
+
+	def __post_init__(self):
+		self.character = self.claim()
 
 	def droison(self, state: State, src: PlayerID) -> None:
 		self.droison_count += 1
@@ -51,10 +55,12 @@ class Player:
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
-		ret = type(self.character).__name__
+		ret = ' -> '.join(
+			self.character_history 
+			+ [self.character._world_str(state)]
+		)
 		if self.is_dead:
 			ret += ' 💀'
-		ret += self.character._world_str(state)
 		return ret
 
 
@@ -73,7 +79,6 @@ class State:
 		"""
 		for i, player in enumerate(self.players):
 			player.id = i
-			player.bluff = type(player.character)
 		assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
 		# Make entering night deaths neater by accepting bare ints 
 		for night, deaths in self.night_deaths.items():
@@ -89,18 +94,12 @@ class State:
 				self.day_events[day] = [events_]
 
 		self.max_day = max(
-			max((
-				max(p.character.day_info, default=0) 
-				for p in self.players
-			)),
+			max((max(p.day_info, default=0) for p in self.players)),
 			max(self.day_events, default=0),
 		)
 		self.max_night = max(
 			self.max_day,
-			max((
-				max(p.character.night_info, default=0)
-				for p in self.players
-			)),
+			max((max(p.night_info, default=0) for p in self.players)),
 			max(self.night_deaths, default=0),
 		)
 		self.max_day = max(self.max_day, self.max_night - 1)
@@ -157,7 +156,6 @@ class State:
 			and all(a == b for a, b in zip(self.debug_key, key))
 		)
 
-
 	def run_next_player(self, round_: int, phase: str) -> StateGen:
 		match phase:
 			case 'setup':
@@ -186,7 +184,6 @@ class State:
 			yield self
 		else:
 			yield from events[event](self)
-
 
 	def end_setup(self) -> StateGen:
 		self.order_position = 0
@@ -235,14 +232,16 @@ class State:
 		self.day = None
 		yield self
 
-	def character_change(self, player: PlayerID, character: Character):
-		self.players[player].character = character
+	def character_change(self, player_id: PlayerID, character: type[Character]):
+		player = self.players[player_id]
+		player.character_history.append(player.character._world_str(self))
+		player.character = character()
 		self.update_character_index()
 
 	def update_character_index(self):
 		# TODO: This fn should modify self.order_position to compensate for change?
-		# self.vortox = False
 		self.setup_order, self.night_order, self.day_order = [], [], []
+		self.death_in_town_callback_players = []
 		for global_order, order in (
 			(characters.GLOBAL_SETUP_ORDER, self.setup_order),
 			(characters.GLOBAL_NIGHT_ORDER, self.night_order),
@@ -252,12 +251,20 @@ class State:
 				for i, player in enumerate(self.players):
 					if type(player.character) is character:
 						order.append(i)
-						# if character is characters.Vortox:
-						# 	self.vortox = True
+		for player_id, player in enumerate(self.players):
+			if hasattr(player.character, "death_in_town"):
+				self.death_in_town_callback_players.append(player_id)
 
 	def death_in_town(self, player_id: PlayerID) -> StateGen:
 		"""Trigger things that require global checks, e.g. Minstrel or SW."""
 		player = self.players[player_id]
+
+		# One day I might have to turn this into a proper stack of gnerators, 
+		# but for now all the characters can be implemented by modifying the 
+		# current state :)
+		for callback_id in self.death_in_town_callback_players:
+			callback = self.players[callback_id].character.death_in_town
+			callback(self, player_id, callback_id)
 
 		# Game might end on Demon death
 		if player.character.category is characters.DEMON:

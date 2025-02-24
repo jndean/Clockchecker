@@ -7,7 +7,7 @@ from typing import ClassVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from core import State, StateGen, Player
-	from info import PlayerID, Info
+	from info import PlayerID, Info, STBool
 
 import info
 import events
@@ -53,8 +53,8 @@ class Character:
 	# Characters like Recluse and Spy override here
 	misregister_categories: ClassVar[tuple[Categories, ...]] = ()
 	
-	night_info: dict[int, Info] = field(default_factory=dict)
-	day_info: dict[int, Info] = field(default_factory=dict)
+	# night_info: dict[int, Info] = field(default_factory=dict)
+	# day_info: dict[int, Info] = field(default_factory=dict)
 
 	effects_active: bool = False
 
@@ -78,11 +78,13 @@ class Character:
 		raise NotImplementedError()
 
 	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:		
-		if self.default_info_check(state, self.night_info, night, me):
+		if self.default_info_check(
+			state, state.players[me].night_info, night, me
+		):
 			yield state
 
 	def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
-		if self.default_info_check(state, self.day_info, day, me):
+		if self.default_info_check(state, state.players[me].day_info, day, me):
 			yield state
 
 	def end_day(self, state: State, day: int, me: PlayerID) -> bool:
@@ -187,7 +189,7 @@ class Character:
 		For printing nice output representations of worlds. E.g 
 		E.g. see Posoiner or Fortune Teller.
 		"""
-		return ''
+		return type(self).__name__
 
 
 @dataclass
@@ -217,7 +219,7 @@ class Balloonist(Character):
 	class Ping:
 		player: PlayerID
 
-	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
 		"""
 		Override Reason: even though we don't need to assert the balloonist 
 		gets correct info when poisoned, we still need to take the action to 
@@ -229,8 +231,8 @@ class Balloonist(Character):
 		have registered as one of minion or demon. I will fix this properly if 
 		it ever actually comes up :)
 		"""
-		balloonist = state.players[src]
-		ping = self.night_info.get(night, None)
+		balloonist = state.players[me]
+		ping = balloonist.night_info.get(night, None)
 		if (balloonist.is_dead
 			or balloonist.is_evil
 			or ping is None
@@ -252,7 +254,7 @@ class Balloonist(Character):
 				yield state
 			return
 
-		same = info.SameCategory(character, prev_character)(state, src)
+		same = info.SameCategory(character, prev_character)(state, me)
 		if same is not info.TRUE:
 			yield state
 
@@ -357,7 +359,7 @@ class Courtier(Character):
 			# Yield all choices like a poisoner, plus the non-choice
 			raise NotImplementedError("Todo: Evil Courtier")
 
-		choice = courtier.character.night_info.get(night, None)
+		choice = courtier.night_info.get(night, None)
 		if choice is None:
 			yield state; return
 		if courtier.is_dead or self.choice_night is not None:
@@ -423,6 +425,12 @@ class Drunk(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = True
+
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		"""Drunk can only 'lie' about being Townsfolk"""
+		drunk = state.players[me]
+		if drunk.claim.category is TOWNSFOLK:
+			yield state
 
 @dataclass
 class Empath(Character):
@@ -491,7 +499,10 @@ class FortuneTeller(Character):
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
-		return f' (Red Herring = {state.players[self.red_herring].name})'
+		return (
+			f'{type(self).__name__} (Red Herring = '
+			f'{state.players[self.red_herring].name})'
+		)
 
 
 @dataclass
@@ -578,9 +589,9 @@ class Juggler(Character):
 	@dataclass
 	class Ping(info.Info):
 		count: int
-		def __call__(self, state: State, src: PlayerID) -> STBool:
+		def __call__(self, state: State, me: PlayerID) -> STBool:
 			assert state.night > 1, "Jugglers don't ping on night 1"
-			juggle = getattr(state.players[src].character, 'juggle', None)
+			juggle = getattr(state.players[me], 'juggle', None)
 			assert juggle is not None, (
 				"No Juggler.Juggle happened before the Juggler.Ping")
 			return info.ExactlyN(
@@ -589,17 +600,17 @@ class Juggler(Character):
 					info.IsCharacter(player, character)
 					for player, character in juggle.items()
 				)
-			)(state, src)
+			)(state, me)
 
-	def run_day(self, state: State, day: int, player: PlayerID) -> StateGen:
+	def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
 		"""
 		Overridden because: No vortox inversion, and the Juggler can make their
 		guess even if droisoned or dead during the day.
 		TODO!: juggle should be evaluated during the day, not the night!
 		"""
-		character = state.players[player].character
-		if state.day in character.day_info:
-			character.juggle = character.day_info[state.day].juggle
+		juggler = state.players[me]
+		if state.day in juggler.day_info:
+			juggler.juggle = juggler.day_info[state.day].juggle
 		yield state
 
 @dataclass
@@ -737,7 +748,7 @@ class Mutant(Character):
 		if (
 			player.droison_count 
 			or player.is_dead
-			or player.bluff.category is not OUTSIDER
+			or player.claim.category is not OUTSIDER
 		):
 			yield state
 
@@ -856,9 +867,10 @@ class Poisoner(Character):
 			state.players[self.target].undroison(state, me)
 
 	def _world_str(self, state: State) -> str:
-		return f' (Poisoned {", ".join(
-			state.players[p].name for p in self.target_history
-		)})'
+		return (
+			f'{type(self).__name__} (Poisoned '
+			f'{", ".join(state.players[p].name for p in self.target_history)})'
+		)
 
 
 @dataclass
@@ -946,13 +958,13 @@ class Ravenkeeper(Character):
 			self.death_night = state.night
 		yield from super().killed(state, me)
 
-	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
 		"""
 		Override Reason: Even if dead.
 		The Ping checks the death was on the same night.
 		"""
 		if self.default_info_check(
-			state, self.night_info, night, src, even_if_dead=True
+			state, state.players[me].night_info, night, me, even_if_dead=True
 		):
 			yield state
 
@@ -987,21 +999,38 @@ class Savant(Character):
 				return not (a | b)
 			return a ^ b
 
-	def run_day(self, state: State, day: int, src: PlayerID) -> StateGen:
+	def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
 		""" Override Reason: Novel Vortox effect on Savant, see Savant.Ping."""
-		savant = state.players[src]
+		savant = state.players[me]
 		if (
 			savant.is_dead
 			or savant.is_evil
 			or savant.droison_count
-			or day not in savant.character.day_info
+			or day not in savant.day_info
 		):
 			yield state; return
-		ping = savant.character.day_info[day]
-		result = ping(state, src)
+		ping = savant.day_info[day]
+		result = ping(state, me)
 		if result is not info.FALSE:
 			yield state
 
+@dataclass
+class ScarletWoman(Character):
+	category: ClassVar[Categories] = MINION
+	is_liar: ClassVar[bool] = True
+
+	def death_in_town(self, state: State, death: PlayerID, me: PlayerID):
+		"""Catch a Demon death. I don't allow catching Recluse deaths."""
+		scarletwoman = state.players[me]
+		dead_player = state.players[death]
+		living_players = sum(not p.is_dead for p in state.players)
+		if (
+			not scarletwoman.is_dead
+			and scarletwoman.droison_count == 0
+			and dead_player.character.category is DEMON
+			and living_players >= 4
+		):
+			state.character_change(me, type(dead_player.character))
 
 @dataclass
 class Seamstress(Character):
@@ -1024,12 +1053,6 @@ class Seamstress(Character):
 			if self.same:
 				return ~enemies
 			return enemies
-
-@dataclass
-class ScarletWoman(Character):
-	category: ClassVar[Categories] = MINION
-	is_liar: ClassVar[bool] = True
-
 
 @dataclass
 class Shugenja(Character):
@@ -1231,9 +1254,10 @@ class VillageIdiot(Character):
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
+		ret = type(self).__name__
 		if self.is_drunk_VI:
-			return ' (Drunk)'
-		return ''
+			ret += ' (Drunk)'
+		return ret
 
 
 @dataclass
@@ -1275,6 +1299,7 @@ GLOBAL_SETUP_ORDER = [
 	NoDashii,
 	FortuneTeller,
 	VillageIdiot,
+	Drunk,
 	LordOfTyphon,  # Goes last so that evils created in setup must be in a line
 ]
 

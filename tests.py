@@ -33,19 +33,19 @@ class Puzzles(unittest.TestCase):
 			def __call__(self, state: State, src: PlayerID):
 				N = len(state.players)
 				result = FALSE
-				for i, player in enumerate(state.players):
-					found_drunk = IsCharacter(i, Drunk)(state, src)
+				for player in range(len(state.players)):
+					found_drunk = IsCharacter(player, Drunk)(state, src)
 					if found_drunk is FALSE:
 						continue
 					tf_neighbours = (
-						IsCategory((i - 1) % N, TOWNSFOLK)(state, src) & 
-						IsCategory((i + 1) % N, TOWNSFOLK)(state, src)
+						IsCategory((player - 1) % N, TOWNSFOLK)(state, src) & 
+						IsCategory((player + 1) % N, TOWNSFOLK)(state, src)
 					)
 					result |= found_drunk & tf_neighbours
 				return result
 
 		state = State([
-			Player(name='You', character=Savant(day_info={
+			Player(name='You', claim=Savant, day_info={
 				1: Savant.Ping(
 					IsInPlay(Investigator), 
 					IsEvil(Tim) | IsEvil(Anna)
@@ -58,22 +58,22 @@ class Puzzles(unittest.TestCase):
 					IsCategory(Tim, MINION) | IsCategory(Sula, MINION),
 					~IsInPlay(Noble)
 				),
-			})),
-			Player(name='Tim', character=Knight(night_info={
+			}),
+			Player(name='Tim', claim=Knight, night_info={
 				1: Knight.Ping(Sula, Anna)
-			})),
-			Player(name='Sula', character=Steward(night_info={
+			}),
+			Player(name='Sula', claim=Steward, night_info={
 				1: Steward.Ping(Matt)
-			})),
-			Player(name='Oscar', character=Investigator(night_info={
+			}),
+			Player(name='Oscar', claim=Investigator, night_info={
 				1: Investigator.Ping(Sula, Anna, Goblin)
-			})),
-			Player(name='Matt', character=Noble(night_info={
+			}),
+			Player(name='Matt', claim=Noble, night_info={
 				1: Noble.Ping(Tim, Sula, Oscar)
-			})),
-			Player(name='Anna', character=Seamstress(night_info={
+			}),
+			Player(name='Anna', claim=Seamstress, night_info={
 				1: Seamstress.Ping(Sula, Oscar, same=False)
-			}))
+			}),
 		])
 
 		worlds = world_gen(
@@ -94,22 +94,22 @@ class Puzzles(unittest.TestCase):
 
 		You, Steph, Fraser, Tim, Sarah, Matthew, Anna, Sula = range(8)
 		state = State([
-			Player(name='You', character=Seamstress(night_info={
+			Player(name='You', claim=Seamstress, night_info={
 				1: Seamstress.Ping(Matthew, Sula, same=True)
-			})),
-			Player(name='Steph', character=Knight(night_info={
+			}),
+			Player(name='Steph', claim=Knight, night_info={
 				1: Knight.Ping(Tim, Sula)
-			})),
-			Player(name='Fraser', character=FortuneTeller(night_info={
+			}),
+			Player(name='Fraser', claim=FortuneTeller, night_info={
 				1: FortuneTeller.Ping(Sarah, Anna, demon=False),
 				2: FortuneTeller.Ping(You, Fraser, demon=False),
 				3: FortuneTeller.Ping(Steph, Sarah, demon=False),
-			})),
-			Player(name='Tim', character=Saint()),
-			Player(name='Sarah', character=Investigator(night_info={
+			}),
+			Player(name='Tim', claim=Saint),
+			Player(name='Sarah', claim=Investigator, night_info={
 				1: Investigator.Ping(Matthew, Fraser, Goblin)
-			})),
-			Player(name='Matthew', character=Juggler(
+			}),
+			Player(name='Matthew', claim=Juggler,
 				day_info={
 					1: Juggler.Juggle({
 						Steph: Knight,
@@ -120,15 +120,15 @@ class Puzzles(unittest.TestCase):
 					})
 				},
 				night_info={2: Juggler.Ping(2)}
-			)),
-			Player(name='Anna', character=Clockmaker(night_info={
+			),
+			Player(name='Anna', claim=Clockmaker, night_info={
 				1: Clockmaker.Ping(1)
-			})),
-			Player(name='Sula', character=Balloonist(night_info={
+			}),
+			Player(name='Sula', claim=Balloonist, night_info={
 				1: Balloonist.Ping(Tim),
 				2: Balloonist.Ping(Matthew),
 				3: Balloonist.Ping(Steph),
-			})),
+			}),
 		])
 
 		worlds = world_gen(
@@ -151,23 +151,23 @@ class Puzzles(unittest.TestCase):
 		You, Aoife, Tom, Sula, Matthew, Oscar, Josh = range(7)
 		state = State(
 			players=[
-				Player(name='You', character=Slayer()),
-				Player(name='Aoife', character=Chef(night_info={
+				Player(name='You', claim=Slayer),
+				Player(name='Aoife', claim=Chef, night_info={
 					1: Chef.Ping(0)
-				})),
-				Player(name='Tom', character=Recluse()),
-				Player(name='Sula', character=Investigator(night_info={
+				}),
+				Player(name='Tom', claim=Recluse),
+				Player(name='Sula', claim=Investigator, night_info={
 					1: Investigator.Ping(You, Aoife, Baron)
-				})),
-				Player(name='Matthew', character=WasherWoman(night_info={
+				}),
+				Player(name='Matthew', claim=WasherWoman, night_info={
 					1: WasherWoman.Ping(Aoife, Oscar, Librarian)
-				})),
-				Player(name='Oscar', character=Librarian(night_info={
+				}),
+				Player(name='Oscar', claim=Librarian, night_info={
 					1: Librarian.Ping(None)
-				})),
-				Player(name='Josh', character=Empath(night_info={
+				}),
+				Player(name='Josh', claim=Empath, night_info={
 					1: Empath.Ping(0)
-				})),
+				}),
 			],
 			day_events={
 				1: Slayer.Shot(src=You, target=Tom, died=True),
@@ -192,24 +192,24 @@ class Puzzles(unittest.TestCase):
 		You, Tim, Sarah, Hannah, Dan, Anna, Matt, Fraser = range(8)
 		state = State(
 			players=[
-				Player(name='You', character=Slayer()),
-				Player(name='Tim', character=Librarian(night_info={
+				Player(name='You', claim=Slayer),
+				Player(name='Tim', claim=Librarian, night_info={
 					1: Librarian.Ping(You, Hannah, Drunk)
-				})),
-				Player(name='Sarah', character=Investigator(night_info={
+				}),
+				Player(name='Sarah', claim=Investigator, night_info={
 					1: Investigator.Ping(Tim, Fraser, ScarletWoman)
-				})),
-				Player(name='Hannah', character=Saint()),
-				Player(name='Dan', character=Chef(night_info={
+				}),
+				Player(name='Hannah', claim=Saint),
+				Player(name='Dan', claim=Chef, night_info={
 					1: Chef.Ping(0)
-				})),
-				Player(name='Anna', character=Recluse()),
-				Player(name='Matt', character=WasherWoman(night_info={
+				}),
+				Player(name='Anna', claim=Recluse),
+				Player(name='Matt', claim=WasherWoman, night_info={
 					1: WasherWoman.Ping(Tim, Dan, Librarian)
-				})),
-				Player(name='Fraser', character=Empath(night_info={
+				}),
+				Player(name='Fraser', claim=Empath, night_info={
 					1: Empath.Ping(0)
-				})),
+				}),
 			],
 			day_events={1: Slayer.Shot(src=You, target=Anna, died=True)},
 		)
@@ -231,25 +231,25 @@ class Puzzles(unittest.TestCase):
 		You, Anna, Dan, Fraser, Sarah, Tim, Matt, Hannah = range(8)
 		state = State(
 			players=[
-				Player(name='You', character=Investigator(night_info={
+				Player(name='You', claim=Investigator, night_info={
 					1: Investigator.Ping(Matt, Hannah, Marionette)
-				})),
-				Player(name='Anna', character=Empath(night_info={
+				}),
+				Player(name='Anna', claim=Empath, night_info={
 					1: Empath.Ping(2)
-				})),
-				Player(name='Dan', character=Undertaker(night_info={
+				}),
+				Player(name='Dan', claim=Undertaker, night_info={
 					2: Undertaker.Ping(Anna, Empath)
-				})),
-				Player(name='Fraser', character=FortuneTeller(night_info={
+				}),
+				Player(name='Fraser', claim=FortuneTeller, night_info={
 					1: FortuneTeller.Ping(Anna, Tim, demon=True),
 					2: FortuneTeller.Ping(You, Fraser, demon=False),
 					3: FortuneTeller.Ping(You, Sarah, demon=True),
-				})),
-				Player(name='Sarah', character=Librarian(night_info={
+				}),
+				Player(name='Sarah', claim=Librarian, night_info={
 					1: Librarian.Ping(You, Hannah, Drunk)
-				})),
-				Player(name='Tim', character=Recluse()),
-				Player(name='Matt', character=Juggler(
+				}),
+				Player(name='Tim', claim=Recluse),
+				Player(name='Matt', claim=Juggler,
 					day_info={
 						1: Juggler.Juggle({
 							You: Investigator,
@@ -259,10 +259,10 @@ class Puzzles(unittest.TestCase):
 						}
 					)},
 					night_info={2: Juggler.Ping(1)}
-				)),
-				Player(name='Hannah', character=Dreamer(night_info={
+				),
+				Player(name='Hannah', claim=Dreamer, night_info={
 					1: Dreamer.Ping(You, Investigator, LordOfTyphon)
-				})),
+				}),
 			],
 			day_events={
 				1: Execution(Anna, died=True),
@@ -291,25 +291,25 @@ class Puzzles(unittest.TestCase):
 
 		You, Dan, Tom, Matt, Anna, Hannah, Oscar = range(7)
 		state = State([
-			Player(name='You', character=Alsaahir()),
-			Player(name='Dan', character=Noble(night_info={
+			Player(name='You', claim=Alsaahir),
+			Player(name='Dan', claim=Noble, night_info={
 				1: Noble.Ping(Tom, Anna, Hannah)
-			})),
-			Player(name='Tom', character=Knight(night_info={
+			}),
+			Player(name='Tom', claim=Knight, night_info={
 				1: Knight.Ping(Dan, Anna)
-			})),
-			Player(name='Matt', character=Investigator(night_info={
+			}),
+			Player(name='Matt', claim=Investigator, night_info={
 				1: Investigator.Ping(Anna, Oscar, Goblin)
-			})),
-			Player(name='Anna', character=Empath(night_info={
+			}),
+			Player(name='Anna', claim=Empath, night_info={
 				1: Empath.Ping(Dan)
-			})),
-			Player(name='Hannah', character=Steward(night_info={
+			}),
+			Player(name='Hannah', claim=Steward, night_info={
 				1: Steward.Ping(Tom)
-			})),
-			Player(name='Oscar', character=Seamstress(night_info={
+			}),
+			Player(name='Oscar', claim=Seamstress, night_info={
 				1: Seamstress.Ping(Tom, Hannah, same=False)
-			})),
+			}),
 		])
 
 		worlds = world_gen(
@@ -331,25 +331,25 @@ class Puzzles(unittest.TestCase):
 
 		You, Sarah, Tim, Matthew, Steph, Aoife, Fraser = range(7)
 		state = State([
-			Player(name='You', character=Juggler()),
-			Player(name='Sarah', character=Empath(night_info={
+			Player(name='You', claim=Juggler),
+			Player(name='Sarah', claim=Empath, night_info={
 				1: Empath.Ping(You)
-			})),
-			Player(name='Tim', character=Seamstress(night_info={
+			}),
+			Player(name='Tim', claim=Seamstress, night_info={
 				1: Seamstress.Ping(You, Fraser, same=True)
-			})),
-			Player(name='Matthew', character=Steward(night_info={
+			}),
+			Player(name='Matthew', claim=Steward, night_info={
 				1: Steward.Ping(You)
-			})),
-			Player(name='Steph', character=Investigator(night_info={
+			}),
+			Player(name='Steph', claim=Investigator, night_info={
 				1: Investigator.Ping(Sarah, Fraser, Goblin)
-			})),
-			Player(name='Aoife', character=Noble(night_info={
+			}),
+			Player(name='Aoife', claim=Noble, night_info={
 				1: Noble.Ping(Sarah, Tim, Matthew)
-			})),
-			Player(name='Fraser', character=Knight(night_info={
+			}),
+			Player(name='Fraser', claim=Knight, night_info={
 				1: Knight.Ping(You, Steph)
-			})),
+			}),
 		])
 
 		worlds = world_gen(
@@ -374,38 +374,40 @@ class Puzzles(unittest.TestCase):
 		You, Sarah, Tim, Dan, Aoife, Sula, Steph, Fraser, Matthew = range(9)
 		state = State(
 			players=[
-				Player(name='You', character=Librarian(night_info={
+				Player(name='You', claim=Librarian, night_info={
 					1: Librarian.Ping(Sula, Fraser, Drunk)
-				})),
-				Player(name='Sarah', character=Saint()),
-				Player(name='Tim', character=Noble(night_info={
+				}),
+				Player(name='Sarah', claim=Saint),
+				Player(name='Tim', claim=Noble, night_info={
 					1: Noble.Ping(Aoife, Sula, Fraser)
-				})),
-				Player(name='Dan', character=Seamstress(night_info={
+				}),
+				Player(name='Dan', claim=Seamstress, night_info={
 					1: Seamstress.Ping(Aoife, Tim, same=False)
-				})),
-				Player(name='Aoife', character=Investigator(night_info={
+				}),
+				Player(name='Aoife', claim=Investigator, night_info={
 					1: Investigator.Ping(Dan, Matthew, Marionette)
-				})),
-				Player(name='Sula', character=Juggler(
-					day_info={1: Juggler.Juggle({
-						You: Librarian,
-						Tim: Marionette,
-						Dan: Vortox,
-						Fraser: Drunk,
-						Matthew: Pukka,
-					})},
+				}),
+				Player(name='Sula', claim=Juggler,
+					day_info={
+						1: Juggler.Juggle({
+							You: Librarian,
+							Tim: Marionette,
+							Dan: Vortox,
+							Fraser: Drunk,
+							Matthew: Pukka,
+						})
+					},
 					night_info={2: Juggler.Ping(2)}
-				)),
-				Player(name='Steph', character=Knight(night_info={
+				),
+				Player(name='Steph', claim=Knight, night_info={
 					1: Knight.Ping(Sarah, Dan)
-				})),
-				Player(name='Fraser', character=Empath(night_info={
+				}),
+				Player(name='Fraser', claim=Empath, night_info={
 					1: Empath.Ping(0)
-				})),
-				Player(name='Matthew', character=Steward(night_info={
+				}),
+				Player(name='Matthew', claim=Steward, night_info={
 					1: Steward.Ping(Dan)
-				})),
+				}),
 			],
 			day_events={1: Execution(Fraser, died=True)},
 			night_deaths={2: Steph},
@@ -428,7 +430,7 @@ class Puzzles(unittest.TestCase):
 
 		You, Fraser, Sarah, Oscar, Anna, Aoife, Steph, Tim = range(8)
 		state = State([
-			Player(name='You', character=Savant(day_info={
+			Player(name='You', claim=Savant, day_info={
 				1: Savant.Ping(
 					ExactlyN(N=1, args=[IsEvil(Fraser), IsEvil(Anna), IsEvil(Steph)]),
 					Clockmaker.Ping(3),
@@ -449,37 +451,37 @@ class Puzzles(unittest.TestCase):
 						IsCategory(Tim, TOWNSFOLK)
 					]),
 				),
-			})),
-			Player(name='Fraser', character=VillageIdiot(night_info={
+			}),
+			Player(name='Fraser', claim=VillageIdiot, night_info={
 				1: VillageIdiot.Ping(Sarah, is_evil=False),
 				2: VillageIdiot.Ping(Aoife, is_evil=False),
 				3: VillageIdiot.Ping(You, is_evil=False),
-			})),
-			Player(name='Sarah', character=FortuneTeller(night_info={
+			}),
+			Player(name='Sarah', claim=FortuneTeller, night_info={
 				1: FortuneTeller.Ping(Oscar, Aoife, demon=False),
 				2: FortuneTeller.Ping(You, Sarah, demon=True),
 				3: FortuneTeller.Ping(Fraser, Tim, demon=False),
-			})),
-			Player(name='Oscar', character=Investigator(night_info={
+			}),
+			Player(name='Oscar', claim=Investigator, night_info={
 				1: Investigator.Ping(Fraser, Steph, Goblin),
-			})),
-			Player(name='Anna', character=Juggler(
+			}),
+			Player(name='Anna', claim=Juggler,
 				day_info={1: Juggler.Juggle({You: Savant, Tim: VillageIdiot})},
 				night_info={2: Juggler.Ping(1)}
-			)),
-			Player(name='Aoife', character=Shugenja(night_info={
+			),
+			Player(name='Aoife', claim=Shugenja, night_info={
 				1: Shugenja.Ping(clockwise=False)
-			})),
-			Player(name='Steph', character=Dreamer(night_info={
+			}),
+			Player(name='Steph', claim=Dreamer, night_info={
 				1: Dreamer.Ping(Sarah, FortuneTeller, Leviathan),
 				2: Dreamer.Ping(You, Savant, Goblin),
 				3: Dreamer.Ping(Fraser, Mutant, Goblin),
-			})),
-			Player(name='Tim', character=VillageIdiot(night_info={
+			}),
+			Player(name='Tim', claim=VillageIdiot, night_info={
 				1: VillageIdiot.Ping(Anna, is_evil=False),
 				2: VillageIdiot.Ping(Sarah, is_evil=False),
 				3: VillageIdiot.Ping(You, is_evil=False),
-			})),
+			}),
 		])
 
 		worlds = world_gen(
@@ -502,20 +504,20 @@ class Puzzles(unittest.TestCase):
 		You, Tim, Fraser, Hannah, Sarah, Jasmine = range(6)
 		state = State(
 			players=[
-				Player(name='You', character=Dreamer(night_info={
+				Player(name='You', claim=Dreamer, night_info={
 					1: Dreamer.Ping(Sarah, Lunatic, ScarletWoman)
-				})),
-				Player(name='Tim', character=Clockmaker(night_info={
+				}),
+				Player(name='Tim', claim=Clockmaker, night_info={
 					1: Clockmaker.Ping(2)
-				})),
-				Player(name='Fraser', character=Empath(night_info={
+				}),
+				Player(name='Fraser', claim=Empath, night_info={
 					1: Empath.Ping(0)
-				})),
-				Player(name='Hannah', character=Slayer()),
-				Player(name='Sarah', character=Courtier(night_info={
+				}),
+				Player(name='Hannah', claim=Slayer),
+				Player(name='Sarah', claim=Courtier, night_info={
 					1: Courtier.Choice(Vortox)
-				})),
-				Player(name='Jasmine', character=Mayor()),
+				}),
+				Player(name='Jasmine', claim=Mayor),
 			],
 			day_events={
 				1: [
@@ -539,6 +541,56 @@ class Puzzles(unittest.TestCase):
 		))
 
 
+	def test_puzzle_12b(self):
+		You, Oscar, Anna, Josh, Fraser, Tom, Aoife, Steph = range(8)
+
+		state = State(
+			players=[
+				Player(name='You', claim=Librarian, night_info={
+					1: Librarian.Ping(Fraser, Steph, Lunatic)
+				}),
+				Player(name='Oscar', claim=Investigator, night_info={
+					1: Investigator.Ping(Josh, Fraser, Spy)
+				}),
+				Player(name='Anna', claim=Empath, night_info={
+					1: Empath.Ping(1)
+				}),
+				Player(name='Josh', claim=Mayor),
+				Player(name='Fraser', claim=Slayer),
+				Player(name='Tom', claim=Dreamer, night_info={
+					1: Dreamer.Ping(Steph, Lunatic, Spy)
+				}),
+				Player(name='Aoife', claim=Clockmaker, night_info={
+					1: Clockmaker.Ping(3)
+				}),
+				Player(name='Steph', claim=Courtier, night_info={
+					1: Courtier.Choice(Vortox)
+				}),
+			],
+			day_events={
+				1: [
+					DoomsayerCall(caller=Tom, died=Josh),
+					Slayer.Shot(src=Fraser, target=Steph, died=False),
+					DoomsayerCall(caller=Steph, died=Oscar),
+					DoomsayerCall(caller=Fraser, died=Aoife),
+				]
+			},
+		)
+
+		worlds = world_gen(
+			state,
+			possible_demons=[Vortox],
+			possible_minions=[Spy, ScarletWoman],
+			possible_hidden_good=[Lunatic],
+			possible_hidden_self=[],
+		)
+
+		assert_solutions(self, worlds, solutions=(
+			(Librarian, Vortox, Lunatic, Mayor, Slayer, Dreamer, Clockmaker, 
+				ScarletWoman),
+		))
+
+
 	def test_puzzle_13(self):
 		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1gka3js/weekly_puzzle_13_clockblocking/
 
@@ -546,24 +598,24 @@ class Puzzles(unittest.TestCase):
 
 		state = State(
 			players=[
-				Player(name='You', character=Investigator(night_info={
+				Player(name='You', claim=Investigator, night_info={
 					1: Investigator.Ping(Sarah, Aoife, ScarletWoman)
-				})),
-				Player(name='Jasmine', character=Clockmaker(night_info={
+				}),
+				Player(name='Jasmine', claim=Clockmaker, night_info={
 					1: Clockmaker.Ping(3)
-				})),
-				Player(name='Oscar', character=Librarian(night_info={
+				}),
+				Player(name='Oscar', claim=Librarian, night_info={
 					1: Librarian.Ping(None)
-				})),
-				Player(name='Tim', character=Ravenkeeper(night_info={
+				}),
+				Player(name='Tim', claim=Ravenkeeper, night_info={
 					2: Ravenkeeper.Ping(Oscar, Librarian)
-				})),
-				Player(name='Sarah', character=FortuneTeller(night_info={
+				}),
+				Player(name='Sarah', claim=FortuneTeller, night_info={
 					1: FortuneTeller.Ping(You, Oscar, demon=False),
 					2: FortuneTeller.Ping(You, Jasmine, demon=False),
-				})),
-				Player(name='Fraser', character=Slayer()),
-				Player(name='Aoife', character=Recluse()),
+				}),
+				Player(name='Fraser', claim=Slayer),
+				Player(name='Aoife', claim=Recluse),
 			],
 			day_events={
 				1: [
@@ -593,38 +645,38 @@ class Puzzles(unittest.TestCase):
 
 		You, Fraser, Aoife, Josh, Tim, Matt, Olivia, Oscar = range(8)
 		state = State([
-			Player(name='You', character=Juggler(
+			Player(name='You', claim=Juggler,
 				day_info={1: Juggler.Juggle({Matt: Goblin, Oscar: Goblin})},
 				night_info={2: Juggler.Ping(0)},
-			)),
-			Player(name='Fraser', character=Juggler(
+			),
+			Player(name='Fraser', claim=Juggler,
 				day_info={1: Juggler.Juggle({Olivia: Juggler, Oscar: Drunk})},
 				night_info={2: Juggler.Ping(1)},
-			)),
-			Player(name='Aoife', character=Juggler(
+			),
+			Player(name='Aoife', claim=Juggler,
 				day_info={1: Juggler.Juggle({Olivia: Leviathan, Oscar: Leviathan})},
 				night_info={2: Juggler.Ping(0)},
-			)),
-			Player(name='Josh', character=Juggler(
+			),
+			Player(name='Josh', claim=Juggler,
 				day_info={1: Juggler.Juggle({Tim: Goblin, Oscar: Juggler})},
 				night_info={2: Juggler.Ping(1)},
-			)),
-			Player(name='Tim', character=Juggler(
+			),
+			Player(name='Tim', claim=Juggler,
 				day_info={1: Juggler.Juggle({You: Leviathan, Josh: Juggler})},
 				night_info={2: Juggler.Ping(0)},
-			)),
-			Player(name='Matt', character=Juggler(
+			),
+			Player(name='Matt', claim=Juggler,
 				day_info={1: Juggler.Juggle({Josh: Goblin, Tim: Juggler})},
 				night_info={2: Juggler.Ping(0)},
-			)),
-			Player(name='Olivia', character=Juggler(
+			),
+			Player(name='Olivia', claim=Juggler,
 				day_info={1: Juggler.Juggle({You: Juggler, Aoife: Drunk})},
 				night_info={2: Juggler.Ping(2)},
-			)),
-			Player(name='Oscar', character=Juggler(
+			),
+			Player(name='Oscar', claim=Juggler,
 				day_info={1: Juggler.Juggle({Josh: Goblin, Matt: Juggler})},
 				night_info={2: Juggler.Ping(0)},
-			)),
+			),
 		])
 
 		worlds = world_gen(
