@@ -4,49 +4,47 @@ from events import *
 from info import *
 
 
-# https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it
 
-You, Oscar, Anna, Josh, Fraser, Tom, Aoife, Steph = range(8)
+You, Matthew, Dan, Tom, Sula, Fraser, Josh = range(7)
 
 state = State(
 	players=[
-		Player(name='You', claim=Librarian, night_info={
-			1: Librarian.Ping(Fraser, Steph, Lunatic)
+		Player(name='You', claim=Slayer),
+		Player(name='Matthew', claim=Ravenkeeper, night_info={
+			2: Ravenkeeper.Ping(Josh, Imp)
 		}),
-		Player(name='Oscar', claim=Investigator, night_info={
-			1: Investigator.Ping(Josh, Fraser, Spy)
+		Player(name='Dan', claim=Undertaker, night_info={
+			2: Undertaker.Ping(Josh, Poisoner)
 		}),
-		Player(name='Anna', claim=Empath, night_info={
-			1: Empath.Ping(1)
+		Player(name='Tom', claim=FortuneTeller, night_info={
+			1: FortuneTeller.Ping(Tom, Sula, demon=False),
+			2: FortuneTeller.Ping(Tom, Josh, demon=True),
 		}),
-		Player(name='Josh', claim=Mayor),
-		Player(name='Fraser', claim=Slayer),
-		Player(name='Tom', claim=Dreamer, night_info={
-			1: Dreamer.Ping(Steph, Lunatic, Spy)
+		Player(name='Sula', claim=Chef, night_info={
+			1: Chef.Ping(0)
 		}),
-		Player(name='Aoife', claim=Clockmaker, night_info={
-			1: Clockmaker.Ping(3)
-		}),
-		Player(name='Steph', claim=Courtier, night_info={
-			1: Courtier.Choice(Vortox)
+		Player(name='Fraser', claim=Recluse),
+		Player(name='Josh', claim=WasherWoman, night_info={
+			1: WasherWoman.Ping(Dan, Sula, Undertaker)
 		}),
 	],
 	day_events={
-		1: [
-			DoomsayerCall(caller=Tom, died=Josh),
-			Slayer.Shot(src=Fraser, target=Steph, died=False),
-			DoomsayerCall(caller=Steph, died=Oscar),
-			DoomsayerCall(caller=Fraser, died=Aoife),
-		]
+		1: Execution(Josh),
+		2: Slayer.Shot(src=You, target=Fraser, died=False),
 	},
+	night_deaths={2: Matthew},
 )
 
 worlds = world_gen(
 	state,
-	possible_demons=[Vortox],
-	possible_minions=[Spy, ScarletWoman],
-	possible_hidden_good=[Lunatic],
-	possible_hidden_self=[],
+	possible_demons=[Imp],
+	possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
+	possible_hidden_good=[Drunk],
+	possible_hidden_self=[Drunk],
 )
 
-
+valid_worlds = list(worlds)
+for world in valid_worlds:
+	print(world)
+print(f'Found {len(valid_worlds)} valid worlds')

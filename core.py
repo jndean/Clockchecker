@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
@@ -9,7 +9,7 @@ import os
 from typing import Any, Callable, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
-	from characters import Character
+	from characters import Character, CategoryBounds
 	from events import Event
 	from info import PlayerID, Info
 
@@ -18,7 +18,7 @@ import events
 import info
 
 
-_DEBUG = os.environ.get('DEBUG', True)  # Set True to enable debug mode
+_DEBUG = os.environ.get('DEBUG', False)  # Set True to enable debug mode
 _DEBUG_STATE_FORK_COUNTS = {}
 
 
@@ -109,20 +109,8 @@ class State:
 		if _DEBUG:
 			self.debug_key = ()
 
-	def begin_game(self, default_counts: tuple[int, ...]) -> bool:
+	def begin_game(self):
 		"""Called after player positions and characters have been chosen"""
-
-		# Check that the starting player type counts are legal
-		T, O, M, D = default_counts
-		bounds = ((T, T), (O, O), (M, M), (D, D))
-		for player in self.players:
-			bounds = player.character.modify_category_counts(bounds)
-		counts = Counter(p.character.category for p in self.players)
-		for (lo, hi), cat in zip(bounds, characters.Categories):
-			if not (lo <= counts[cat] <= hi):
-				return False
-		self.category_counts = counts
-
 		# Initialise data structures for game
 		self.update_character_index()
 		self.initial_characters = tuple(type(p.character) for p in self.players)
@@ -130,7 +118,6 @@ class State:
 		self.order_position = 0
 		self.previously_alive = [True for _ in range(len(self.players))]
 		self.vortox = False
-		return True
 
 	def fork(self) -> State:
 		"""
@@ -292,6 +279,84 @@ class State:
 		ret.append(')')
 		return '\n'.join(ret)
 
+def _initial_characters_gen(
+	puzzle_state: State,
+	possible_demons: list[Character],
+	possible_minions: list[Character],
+	possible_hidden_good: list[Character],
+	possible_hidden_self: list[Character],
+	category_counts: tuple[int, int, int, int],
+	world_init_check: Callable[[State], bool],
+):
+	"""
+	Generate a world for each possible starting character combination. We're
+	only concerned with character counts here, more sophisticated setup
+	validity rules (e.g. Marionette/Typhon placement) are handled by individual
+	characters once the world is created.
+	"""
+	def _create_world(liars, positions):
+		if not _check_valid_character_counts(
+			puzzle_state, liars, positions,
+			category_counts, possible_hidden_self,
+		):
+			return None
+		world = puzzle_state.fork()
+		for liar, position in zip(liars, positions):
+			if position == 0 and liar not in possible_hidden_self:
+				return None
+			world.players[position].character = liar()
+			world.players[position].is_evil = liar.category in (
+				characters.MINION, characters.DEMON
+			)
+		world.begin_game()
+		if world_init_check is not None and not world_init_check(world):
+			return None
+		return world
+
+	n_townsfolk, n_outsiders, n_minions, n_demons = category_counts
+	liar_combinations = it.product(
+		it.combinations(possible_demons, n_demons),
+		it.chain(*[
+			it.combinations(possible_minions, i)
+			for i in range(n_minions, len(possible_minions) + 1)
+		]),
+		it.chain(*[
+			it.combinations(possible_hidden_good, i)
+			for i in range(len(possible_hidden_good) + 1)
+		])
+	)
+	player_ids = list(range(len(puzzle_state.players)))
+	for demons, minions, hidden_good in liar_combinations:
+		liars = demons + minions + hidden_good
+		for liar_positions in it.permutations(player_ids, len(liars)):
+			world = _create_world(liars, liar_positions)
+			if world is not None:
+				yield world
+
+
+def _check_valid_character_counts(
+	puzzle_state: State,
+	liar_characters: Iterable[type[Character]],
+	liar_positions: Iterable[int],
+	default_counts: CategoryBounds,
+	possible_hidden_self: Iterable[Character],
+) -> bool:
+	"""Check that the starting player category counts are legal."""
+	setup = [p.claim for p in puzzle_state.players]
+	for liar, position in zip(liar_characters, liar_positions):
+		setup[position] = liar
+		if position == 0 and liar not in possible_hidden_self:
+			return False
+	T, O, M, D = default_counts
+	bounds = ((T, T), (O, O), (M, M), (D, D))
+	for character in setup:
+		bounds = character.modify_category_counts(bounds)
+	actual_counts = Counter(character.category for character in setup)
+	for (lo, hi), category in zip(bounds, characters.Categories):
+		if not lo <= actual_counts[category] <= hi:
+			return False
+	return True
+	
 
 def _run_game_gen(
 	states: StateGen,
@@ -344,101 +409,89 @@ def _deduplicate_by_initial_characters(states: StateGen) -> StateGen:
 
 
 def world_gen(
-	public_state: State,
+	puzzle_state: State,
 	possible_demons: list[Character],
 	possible_minions: list[Character],
 	possible_hidden_good: list[Character],
 	possible_hidden_self: list[Character],
 	category_counts: tuple[int, int, int, int] | None = None,
-	world_init_check: Callable[State, bool] | None = None,
+	world_init_check: Callable[[State], bool] | None = None,
 	deduplicate_initial_characters: bool = True,
 ) -> StateGen:
 	"""Generate worlds from the perspective of player 0"""
-
-	check_characters_registered(
-		[type(p.character) for p in public_state.players] + possible_demons + 
-		possible_minions + possible_hidden_good + possible_hidden_self
+	validate_inputs(
+		puzzle_state, possible_demons, possible_minions, 
+		possible_hidden_good, possible_hidden_self,
 	)
 
-	num_players = len(public_state.players)
-	event_counts = defaultdict(int, {
-		day: len(events) for day, events in public_state.day_events.items()
-	})
-
+	num_players = len(puzzle_state.players)
 	if category_counts is None:
 		category_counts = characters.DEFAULT_CATEGORY_COUNTS[num_players]
-	n_townsfolk, n_outsiders, n_minions, n_demons = category_counts
-	liar_combinations = it.product(
-		it.combinations(possible_demons, n_demons),
-		it.chain(*[
-			it.combinations(possible_minions, i)
-			for i in range(n_minions, len(possible_minions) + 1)
-		]),
-		it.chain(*[
-			it.combinations(possible_hidden_good, i)
-			for i in range(len(possible_hidden_good) + 1)
-		])
-	)
-
-	def _createWorld(
-		liars: list[Character],
-		positions: list[int]
-	) -> State | None:
-		"""Given a list of """
-		world = public_state.fork()
-		for liar, position in zip(liars, positions):
-			if position == 0 and liar not in possible_hidden_self:
-				return None
-			world.players[position].character = liar()
-			world.players[position].is_evil = liar.category in (
-				characters.MINION, characters.DEMON
-			)
-		if not world.begin_game(category_counts):
-			return None
-		if world_init_check is not None and not world_init_check(world):
-			return None
-		return world
-
-	def _initial_characters_gen() -> StateGen:
-		player_ids = list(range(len(public_state.players)))
-		for demons, minions, hidden_good in liar_combinations:
-			liars = demons + minions + hidden_good
-			for liar_positions in it.permutations(player_ids, len(liars)):
-				world = _createWorld(liars, liar_positions)
-				if world is not None:
-					yield world
+	event_counts = defaultdict(int, {
+		day: len(events) for day, events in puzzle_state.day_events.items()
+	})
 
 	if _DEBUG:
 		_DEBUG_STATE_FORK_COUNTS.clear()
 		_DEBUG_STATE_FORK_COUNTS[()] = 0
 
-	gen = _initial_characters_gen()
+	gen = _initial_characters_gen(
+		puzzle_state, possible_demons, possible_minions, possible_hidden_good,
+		possible_hidden_self, category_counts, world_init_check,
+	)
 	gen = _run_game_gen(
-		gen,
-		num_players,
-		public_state.max_night,
-		public_state.max_day,
-		public_state.finish_final_day,
-		event_counts
+		gen, num_players, puzzle_state.max_night, puzzle_state.max_day,
+		puzzle_state.finish_final_day, event_counts
 	)
 	if deduplicate_initial_characters:
 		gen = _deduplicate_by_initial_characters(gen)
-
 	yield from gen
 
+	if _DEBUG:
+		print(f'Considered {len(_DEBUG_STATE_FORK_COUNTS)} worlds')
 
-def check_characters_registered(check_list: Iterable[type[Character]]):
+
+def validate_inputs(
+	public_state: State,
+	possible_demons: list[Character],
+	possible_minions: list[Character],
+	possible_hidden_good: list[Character],
+	possible_hidden_self: list[Character],
+):
 	"""
-	Whenever I implement a new character I forget to register it in the night 
-	order and lose time trying to figure out why it isn't working. This test 
-	funciton just catches when I've done that, to save me some debugging time.
+	When I enter a new puzzle and it is not solved correctly, half the time it's
+	because I have mis-entered the puzzle or forgotten to register newly
+	implemented characters in the night order or other such repeated mistakes.
+	This fn does a half-hearted job of catching such mistakes to reduce
+	debugging time during development.
 	"""
-	registered = (characters.GLOBAL_NIGHT_ORDER
-	 			   + characters.GLOBAL_DAY_ORDER 
-	 			   + characters.INACTIVE_CHARACTERS)
-	for character in check_list:
-		if character not in registered:
+
+	# Check all used characters are registered in the night order
+	used_characters = (
+		[type(p.character) for p in public_state.players] + possible_demons + 
+		possible_minions + possible_hidden_good + possible_hidden_self
+	)
+	registered_characters = (
+		characters.GLOBAL_NIGHT_ORDER
+		+ characters.GLOBAL_DAY_ORDER 
+		+ characters.INACTIVE_CHARACTERS
+	)
+	for character in used_characters:
+		if character not in registered_characters:
 			raise ValueError(
 				f'Character {character.__name__} has not been placed in the '
 				'night order. Did you forget?'
 			)
+	
+	# Check valid choices of hidden good characters
+	for character in possible_hidden_good:
+		if not character.is_liar:
+			raise ValueError(
+				f"{character.__name__} can't be in possible_hidden_good"
+			)
+	for character in possible_demons:
+		if character.category is not characters.DEMON:
+			raise ValueError(f'{character.__name__} is not a Demon')
+	for character in possible_minions:
+		if character.category is not characters.MINION:
+			raise ValueError(f'{character.__name__} is not a Minion')

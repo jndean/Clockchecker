@@ -119,9 +119,9 @@ class Character:
 	def maybe_activate_effects(self, state: State, me: PlayerID) -> None:
 		"""
 		Effects that this character is having on other players. Needs to be 
-		triggerable under in one method so that e.g. a poisoner dying at night 
-		can reactivate that poisoner's current victim.
-		If a character doesn't want thsi wrapper logic, it can override this 
+		triggerable under one method so that e.g. a poisoner dying at night can
+		reactivate that poisoner's current victim.
+		If a character doesn't want this wrapper logic, it can override this 
 		method rather than the _impl method.
 		"""
 		if (
@@ -282,7 +282,7 @@ class Chef(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		count: int
 		def __call__(self, state: State, src: PlayerID) -> STBool:
 			N = len(state.players)
@@ -304,7 +304,7 @@ class Clockmaker(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		steps: int
 		def __call__(self, state: State, src: PlayerID) -> STBool:
 			"""
@@ -406,7 +406,7 @@ class Dreamer(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player: PlayerID
 		character1: type[Character]
 		character2: type[Character]
@@ -441,7 +441,7 @@ class Empath(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		count: int
 		def __call__(self, state: State, src: PlayerID) -> STBool:
 			left, right = (info.get_next_player_who_is(
@@ -476,26 +476,27 @@ class FortuneTeller(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player1: PlayerID
 		player2: PlayerID
 		demon: bool
 
-		def __call__(self, state: State, src: PlayerID) -> STBool:
+		def __call__(self, state: State, me: PlayerID) -> STBool:
 			real_result = (
-				info.IsCategory(self.player2, DEMON)(state, src) |
-				info.IsCategory(self.player1, DEMON)(state, src) |
-				info.CharAttrEq(src, 'red_herring', self.player1)(state, src) |
-				info.CharAttrEq(src, 'red_herring', self.player2)(state, src)
+				info.IsCategory(self.player2, DEMON)(state, me) |
+				info.IsCategory(self.player1, DEMON)(state, me) |
+				info.CharAttrEq(me, 'red_herring', self.player1)(state, me) |
+				info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
 			)
 			return real_result == info.STBool(self.demon)
 
-	def run_setup(self, state: State, src: PlayerID) -> StateGen:
-		# Any player could be chosen as the red herring
-		for red_herring in range(len(state.players)):
-			new_state = state.fork()
-			new_state.players[src].character.red_herring = red_herring
-			yield new_state
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		# Any good player could be chosen as the red herring
+		for player in range(len(state.players)):
+			if info.IsEvil(player)(state, me) is not info.TRUE:
+				new_state = state.fork()
+				new_state.players[me].character.red_herring = player
+				yield new_state
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
@@ -545,7 +546,7 @@ class Imp(GenericDemon):
 			if target == me:
 				import sys  # TMP
 				if 'unittest' not in sys.modules:
-					print("Star pass not implemented yet")
+					pass  # print("Star pass not implemented yet")
 			new_state = state.fork()
 			new_demon = new_state.players[me].character
 			target_char = new_state.players[target].character
@@ -560,7 +561,7 @@ class Investigator(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player1: PlayerID
 		player2: PlayerID
 		character: type[Character]
@@ -647,7 +648,7 @@ class Librarian(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player1: PlayerID | None
 		player2: PlayerID | None = None
 		character: type[Character] | None = None
@@ -941,11 +942,12 @@ class Ravenkeeper(Character):
 	death_night: int | None = None
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player: PlayerID
 		character: type[Character]
 
 		def __call__(self, state: State, src: PlayerID) -> STBool:
+			assert state.night > 1, "Ravenkeepers don't die night 1!"
 			ravenkeeper = state.players[src].character
 			death_night = ravenkeeper.death_night
 			if death_night is None or death_night != state.night:
@@ -1182,7 +1184,7 @@ class Undertaker(Character):
 	is_liar: ClassVar[bool] = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player: PlayerID
 		character: type[Character]
 
@@ -1230,7 +1232,7 @@ class VillageIdiot(Character):
 	is_drunk_VI: bool = False
 
 	@dataclass
-	class Ping:
+	class Ping(info.Info):
 		player: PlayerID
 		is_evil: bool
 		def __call__(self, state: State, src: PlayerID) -> STBool:

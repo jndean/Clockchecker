@@ -497,6 +497,93 @@ class Puzzles(unittest.TestCase):
 				Leviathan, Shugenja, Mutant, VillageIdiot),
 		))
 
+		
+	def test_puzzle_8(self):
+		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1ftqc28/weekly_puzzle_8_the_stitchup/
+
+		You, Josh, Steph, Anna, Tim, Matthew, Fraser = range(7)
+		state = State([
+			Player(name='You', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Anna, Matthew, same=False)
+			}),
+			Player(name='Josh', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Anna, Tim, same=False)
+			}),
+			Player(name='Steph', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Tim, Matthew, same=False)
+			}),
+			Player(name='Anna', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Josh, Matthew, same=False)
+			}),
+			Player(name='Tim', claim=Seamstress, night_info={
+				1: Seamstress.Ping(You, Josh, same=False)
+			}),
+			Player(name='Matthew', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Steph, Fraser, same=False)
+			}),
+			Player(name='Fraser', claim=Seamstress, night_info={
+				1: Seamstress.Ping(Steph, Anna, same=False)
+			}),
+		])
+
+		worlds = world_gen(
+			state,
+			possible_demons=[Imp],
+			possible_minions=[Poisoner],
+			possible_hidden_good=[],
+			possible_hidden_self=[],
+		)
+
+		assert_solutions(self, worlds, solutions=(
+			(Seamstress, Imp, Poisoner) +  (Seamstress,) * 4,
+			(Seamstress, Poisoner, Imp) +  (Seamstress,) * 4,
+		))
+		
+		
+	def test_puzzle_10(self):
+		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it
+
+		You, Matthew, Dan, Tom, Sula, Fraser, Josh = range(7)
+		state = State(
+			players=[
+				Player(name='You', claim=Slayer),
+				Player(name='Matthew', claim=Ravenkeeper, night_info={
+					2: Ravenkeeper.Ping(Josh, Imp)
+				}),
+				Player(name='Dan', claim=Undertaker, night_info={
+					2: Undertaker.Ping(Josh, Poisoner)
+				}),
+				Player(name='Tom', claim=FortuneTeller, night_info={
+					1: FortuneTeller.Ping(Tom, Sula, demon=False),
+					2: FortuneTeller.Ping(Tom, Josh, demon=True),
+				}),
+				Player(name='Sula', claim=Chef, night_info={
+					1: Chef.Ping(0)
+				}),
+				Player(name='Fraser', claim=Recluse),
+				Player(name='Josh', claim=WasherWoman, night_info={
+					1: WasherWoman.Ping(Dan, Sula, Undertaker)
+				}),
+			],
+			day_events={
+				1: Execution(Josh),
+				2: Slayer.Shot(src=You, target=Fraser, died=False),
+			},
+			night_deaths={2: Matthew},
+		)
+		worlds = world_gen(
+			state,
+			possible_demons=[Imp],
+			possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
+			possible_hidden_good=[Drunk],
+			possible_hidden_self=[Drunk],
+		)
+
+		assert_solutions(self, worlds, solutions=(
+			(Slayer, Ravenkeeper, Imp, FortuneTeller, Chef, Poisoner, 
+				WasherWoman),
+		))
+
 
 	def test_puzzle_12a(self):
 		# https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
