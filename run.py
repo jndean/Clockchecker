@@ -4,42 +4,48 @@ from events import *
 from info import *
 
 
-# https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1iu1vxo/weekly_puzzle_28_a_study_in_scarlet/
 
-You, Matthew, Dan, Tom, Sula, Fraser, Josh = range(7)
-
+You, Matt, Fraser, Aoife, Adam, Oscar, Olivia, Sarah = range(8)
 state = State(
 	players=[
-		Player(name='You', claim=Slayer),
-		Player(name='Matthew', claim=Ravenkeeper, night_info={
-			2: Ravenkeeper.Ping(Josh, Imp)
+		Player(name='You', claim=Chambermaid, night_info={
+			1: Chambermaid.Ping(Adam, Sarah, 1)
 		}),
-		Player(name='Dan', claim=Undertaker, night_info={
-			2: Undertaker.Ping(Josh, Poisoner)
+		Player(name='Matt', claim=Juggler,
+		  day_info={1: Juggler.Juggle({Fraser: Undertaker, Oscar: NoDashii})},
+		  night_info={2: Juggler.Ping(2)},
+		),
+		Player(name='Fraser', claim=Undertaker, night_info={
+			2: Undertaker.Ping(Aoife, NoDashii)
 		}),
-		Player(name='Tom', claim=FortuneTeller, night_info={
-			1: FortuneTeller.Ping(Tom, Sula, demon=False),
-			2: FortuneTeller.Ping(Tom, Josh, demon=True),
+		Player(name='Aoife', claim=Librarian, night_info={
+			1: Librarian.Ping(Matt, Adam, Drunk),
 		}),
-		Player(name='Sula', claim=Chef, night_info={
-			1: Chef.Ping(0)
+		Player(name='Adam', claim=Clockmaker, night_info={
+			1: Clockmaker.Ping(4)
 		}),
-		Player(name='Fraser', claim=Recluse),
-		Player(name='Josh', claim=WasherWoman, night_info={
-			1: WasherWoman.Ping(Dan, Sula, Undertaker)
+		Player(name='Oscar', claim=Empath, night_info={
+			1: Empath.Ping(1),
+			2: Empath.Ping(2),
+			3: Empath.Ping(1),
+		}),		
+		Player(name='Olivia', claim=FortuneTeller, night_info={
+			1: FortuneTeller.Ping(Olivia, Sarah, demon=False),
+			2: FortuneTeller.Ping(Olivia, Aoife, demon=False),
+			3: FortuneTeller.Ping(Matt, Oscar, demon=False),
+		}),
+		Player(name='Sarah', claim=Oracle, night_info={
+			2: Oracle.Ping(1)
 		}),
 	],
-	day_events={
-		1: Execution(Josh),
-		2: Slayer.Shot(src=You, target=Fraser, died=False),
-	},
-	night_deaths={2: Matthew},
+	day_events={1: Execution(Adam), 2: Execution(Aoife)},
+	night_deaths={2: You, 3: Sarah},
 )
-
 worlds = world_gen(
 	state,
-	possible_demons=[Imp],
-	possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
+	possible_demons=[Pukka, NoDashii],
+	possible_minions=[ScarletWoman],
 	possible_hidden_good=[Drunk],
 	possible_hidden_self=[Drunk],
 )

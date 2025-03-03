@@ -90,6 +90,12 @@ class Info(ABC):
 		return InfoOp(self, other, 'eq')
 	def __invert__(self):
 		return InfoOp(self, None, 'invert')
+	def __bool__(self):
+		raise ValueError(
+			"Implicitly converting an Info to a bool is most likely to happen "
+			"when erroneously using logical operators 'and', 'or' or 'not', "
+			"instead of &, | or ~. Therefore this is disallowed."
+		)
 
 @dataclass
 class InfoOp(Info):

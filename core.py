@@ -37,9 +37,12 @@ class Player:
 	night_info: dict[int, Info] = field(default_factory=dict)
 	day_info: dict[int, Info] = field(default_factory=dict)
 	character: Character | None = None
+
 	is_evil: bool = False
 	is_dead: bool = False
+	woke_tonight: bool = False
 	droison_count: int = 0
+
 	character_history: list[type[Character]] = field(default_factory=list)
 
 	def __post_init__(self):
@@ -52,6 +55,9 @@ class Player:
 	def undroison(self, state: State, src: PlayerID) -> None:
 		self.droison_count -= 1 
 		self.character.maybe_activate_effects(state, self.id)
+
+	def woke(self) -> None:
+		self.woke_tonight = True
 
 	def _world_str(self, state: State) -> str:
 		"""For printing nice output representations of worlds"""
@@ -117,7 +123,7 @@ class State:
 		self.night, self.day = None, None
 		self.order_position = 0
 		self.previously_alive = [True for _ in range(len(self.players))]
-		self.vortox = False
+		self.vortox = False  # The vortox will set this during setup
 
 	def fork(self) -> State:
 		"""
@@ -154,6 +160,7 @@ class State:
 				if self.order_position >= len(self.night_order):
 					yield self; return
 				player = self.players[self.night_order[self.order_position]]
+				characters.record_if_player_woke_tonight(self, player.id)
 				substates = player.character.run_night(self, round_, player.id)
 			case 'day':
 				if self.order_position >= len(self.day_order):
@@ -180,6 +187,7 @@ class State:
 
 	def end_night(self) -> StateGen:
 		for player in self.players:
+			player.woke_tonight = False
 			player.done_action = False
 		self.order_position = 0
 
@@ -195,7 +203,7 @@ class State:
 				# Deaths/Resurrections require players to be alive/dead resp.
 				previously_alive_gt = isinstance(death, events.NightDeath)
 				if self.previously_alive[death.player] != previously_alive_gt:
-					return False  
+					return
 				currently_alive_gt[death.player] = not previously_alive_gt
 		if currently_alive != currently_alive_gt:
 			return
@@ -223,6 +231,9 @@ class State:
 		player = self.players[player_id]
 		player.character_history.append(player.character._world_str(self))
 		player.character = character()
+		player.character.first_night = (
+			self.night if self.night is not None else self.day + 1
+		)
 		self.update_character_index()
 
 	def update_character_index(self):
@@ -264,6 +275,7 @@ class State:
 
 		yield self
 
+
 	def __str__(self) -> str:
 		ret = [f'World{self.debug_key if _DEBUG else ''}(']
 		pad = max(len(player.name) for player in self.players) + 1
@@ -302,8 +314,6 @@ def _initial_characters_gen(
 			return None
 		world = puzzle_state.fork()
 		for liar, position in zip(liars, positions):
-			if position == 0 and liar not in possible_hidden_self:
-				return None
 			world.players[position].character = liar()
 			world.players[position].is_evil = liar.category in (
 				characters.MINION, characters.DEMON

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import namedtuple
 from dataclasses import dataclass, field
 import enum
 from typing import ClassVar, TYPE_CHECKING
@@ -11,6 +10,28 @@ if TYPE_CHECKING:
 
 import info
 import events
+
+
+"""
+Implementing a Character Checklist:
+ - Copying some other similar-ish character is likely a good starting point.
+ - For a basic info characters, just create a Ping class inheriting from 
+   info.Info and implement the __call__ method.
+ - For more complex characters, or characters who have to make choices that are
+   not evidenced by a Ping, override the relevant character methods such as
+   [modify_category_counts, run_night/day/setup, killed, executed, etc.].
+ - When overriding the default methods for complex characters, remember to 
+   consider the desired behaviour of the new character if they are:
+    - dead
+	- droisoned
+	- not their usual alignment
+	- not the character who gets their claimed ping (Some TODO!)
+	- spent
+	- vortoxed
+ - Remember to set `character.spent` or (TODO) call `state.chose(target)`
+   appropriately and curse the Chambermaid / Goon for forcing that mental 
+   burden on us.
+"""
 
 
 class Categories(enum.Enum):
@@ -46,17 +67,28 @@ DEFAULT_CATEGORY_COUNTS = {
 	15: (9, 2, 3, 1),
 }
 
+# Rules for when a player can legally ping and what the Chambermaid should see.
+# Characters using MANUAL are responsible for rejecting worlds where pings are 
+# not on legal nights.
+class WakePattern(enum.Enum):
+	NEVER = enum.auto()
+	FIRST_NIGHT = enum.auto()
+	EACH_NIGHT = enum.auto()
+	EACH_NIGHT_STAR = enum.auto()
+	EACH_NIGHT_UNTIL_SPENT = enum.auto()
+	MANUAL = enum.auto()
+
 
 @dataclass
 class Character:
 
 	# Characters like Recluse and Spy override here
 	misregister_categories: ClassVar[tuple[Categories, ...]] = ()
-	
-	# night_info: dict[int, Info] = field(default_factory=dict)
-	# day_info: dict[int, Info] = field(default_factory=dict)
 
 	effects_active: bool = False
+
+	# Night the character was created, usually 1
+	first_night: int = 1
 
 	@staticmethod
 	def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
@@ -77,7 +109,12 @@ class Character:
 		"""
 		raise NotImplementedError()
 
-	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:		
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:	
+		"""
+		Take the character's night action. Most basic info roles can just 
+		inherit this default implementation and implement their own Pings to go
+		in night_info.
+		"""	
 		if self.default_info_check(
 			state, state.players[me].night_info, night, me
 		):
@@ -105,16 +142,19 @@ class Character:
 	) -> bool:
 		"""Most info roles can reuse this pattern to run all their functions."""
 		player = state.players[me]
-		if info_index not in all_info or player.is_evil or self.is_liar:
+		ping = all_info.get(info_index, None)
+		if ping is None or player.is_evil or self.is_liar:
 			return True
 		if player.is_dead and not even_if_dead:
 			return False
-		if player.droison_count and not state.vortox:
+
+		is_vortox = state.vortox and (self.category is TOWNSFOLK)
+		# We only ignore droisoned info if non-vortox worlds.
+		if player.droison_count and not is_vortox:
 			return True
-		result = all_info[info_index](state, me)
-		if state.vortox and (self.category is TOWNSFOLK):
-			return result is not info.TRUE
-		return result is not info.FALSE
+		if is_vortox:
+			return ping(state, me) is not info.TRUE
+		return ping(state, me) is not info.FALSE
 
 	def maybe_activate_effects(self, state: State, me: PlayerID) -> None:
 		"""
@@ -142,11 +182,14 @@ class Character:
 			self._deactivate_effects_impl(state, me)
 
 	def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+		"""Individual character effect implementations override here."""
 		pass
 	def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+		"""Individual character effect implementations override here."""
 		pass
 
 	def _apply_death(self, state: State, me: PlayerID) -> StateGen:
+		"""Trigger consequences of a confirmed death."""
 		state.players[me].is_dead = True
 		self.maybe_deactivate_effects(state, me)
 		yield from state.death_in_town(me)
@@ -158,15 +201,22 @@ class Character:
 	 	src: PlayerID,
 	 ) -> StateGen:
 		"""
-		Called when attacked. Soldier etc override this method to not die.
-		Remember to re-read the attacker properties on the yielded state in the 
+		Called when attacked at night, decides whether this causes death or not.
+		Remember to re-read the attacker properties on the yielded state in the
 		calling method, because e.g. the Goon will create a state where the
 		attacker has become drunk.
 		"""
-		if not state.players[me].is_dead and not self.cant_die(state, me):
-			yield from self._apply_death(state, me)
-		else:
+		if (
+			state.players[me].is_dead 
+			or self.cant_die(state, me)
+			or (
+				state.players[src].character.category is DEMON
+				and getattr(state.players[me], 'safe_from_demon_count', 0)
+			)
+		):
 			yield state
+		else:
+			yield from self._apply_death(state, me)
 
 	def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
 		"""Goblin, Psychopath, Saint etc override this method."""
@@ -176,7 +226,7 @@ class Character:
 			yield state
 
 	def killed(self, state: State, me: PlayerID) -> StateGen:
-		""" Check the death is logically valid, then apply it."""
+		"""Check the death is logically valid, then apply it."""
 		if not self.cant_die(state, me) and not state.players[me].is_dead:
 			yield from self._apply_death(state, me)
 
@@ -194,8 +244,10 @@ class Character:
 
 @dataclass
 class Alsaahir(Character):
+	"""Not yet implemented"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
 class Balloonist(Character):
@@ -205,6 +257,7 @@ class Balloonist(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
 	# Records the categories the last ping could have been registering as.
 	prev_character: type[Character] = None 
@@ -216,7 +269,7 @@ class Balloonist(Character):
 		return bounds
 
 	@dataclass
-	class Ping:
+	class Ping:  # Not info.Info because it doesn't implement __call__!
 		player: PlayerID
 
 	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
@@ -233,7 +286,8 @@ class Balloonist(Character):
 		"""
 		balloonist = state.players[me]
 		ping = balloonist.night_info.get(night, None)
-		if (balloonist.is_dead
+		if (
+			balloonist.is_dead
 			or balloonist.is_evil
 			or ping is None
 		):
@@ -266,6 +320,7 @@ class Baron(Character):
 	"""
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 	@staticmethod
 	def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
@@ -274,12 +329,64 @@ class Baron(Character):
 		return bounds
 
 @dataclass
+class Chambermaid(Character):
+	"""
+	Each night, choose 2 alive players (not yourself):
+	you learn how many woke tonight due to their ability.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+	@dataclass
+	class Ping(info.Info):
+		player1: PlayerID
+		player2: PlayerID
+		count: int
+		def __call__(self, state: State, src: PlayerID) -> STBool:
+			valid_choices = (
+				self.player1 != src and self.player2 != src 
+				and info.IsAlive(self.player1)(state, src) is not info.FALSE
+				and info.IsAlive(self.player2)(state, src) is not info.FALSE
+			)
+			wake_count = (
+				state.players[self.player1].woke_tonight +
+				state.players[self.player2].woke_tonight
+			)
+			return info.STBool(valid_choices and wake_count == self.count)
+
+def record_if_player_woke_tonight(state: State, pid: PlayerID) -> None:
+	# Special cases not yet implemented:
+	# - Chambermaid doesn't wake if there aren't valid choices
+	# - Demon doesn't wake to on ability when exorcised
+	player = state.players[pid]
+	character = player.character
+	match character.wake_pattern:
+		case WakePattern.NEVER | WakePattern.MANUAL:
+			woke = False
+		case WakePattern.FIRST_NIGHT:
+			woke = state.night == character.first_night
+		case WakePattern.EACH_NIGHT:
+			woke = True
+		case WakePattern.EACH_NIGHT_STAR:
+			woke = state.night != character.first_night
+		case WakePattern.EACH_NIGHT_UNTIL_SPENT:
+			woke = not character.spent
+		case _:
+			raise ValueError(
+				f'{type(character).__name__} has {character.wake_pattern=}'
+			)
+	if woke and not player.is_dead:
+		player.woke()
+
+@dataclass
 class Chef(Character):
 	"""
 	You start knowing how many pairs of evil players there are.
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -302,6 +409,7 @@ class Clockmaker(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -346,8 +454,11 @@ class Courtier(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
+
 	target: PlayerID = None
 	choice_night: int | None = None
+	spent: bool = False
 
 	@dataclass
 	class Choice:
@@ -362,19 +473,20 @@ class Courtier(Character):
 		choice = courtier.night_info.get(night, None)
 		if choice is None:
 			yield state; return
-		if courtier.is_dead or self.choice_night is not None:
+		if courtier.is_dead or self.spent:
 			return  # Drinking when spent or dead is a lie
 		self.choice_night = night
+		self.spent = True
 		if courtier.droison_count:
 			yield state; return  # Shame!
 
-		for target_id, target in enumerate(state.players):
-			hit = info.IsCharacter(target_id, choice.character)(state, me)
+		for target in range(len(state.players)):
+			hit = info.IsCharacter(target, choice.character)(state, me)
 			if hit is info.FALSE:
 				continue
 			new_state = state.fork()
 			new_courtier = new_state.players[me].character
-			new_courtier.target = target_id
+			new_courtier.target = target
 			new_courtier.maybe_activate_effects(new_state, me)
 			yield new_state
 
@@ -404,6 +516,7 @@ class Dreamer(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -425,10 +538,12 @@ class Drunk(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = True
+	# wake_pattern is decided during run_setup
 
 	def run_setup(self, state: State, me: PlayerID) -> StateGen:
-		"""Drunk can only 'lie' about being Townsfolk"""
 		drunk = state.players[me]
+		self.wake_pattern = drunk.claim.wake_pattern
+		"""Drunk can only 'lie' about being Townsfolk"""
 		if drunk.claim.category is TOWNSFOLK:
 			yield state
 
@@ -439,6 +554,7 @@ class Empath(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -459,6 +575,7 @@ class Empath(Character):
 class FangGu(Character):
 	category: ClassVar[Categories] = DEMON
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
 	@staticmethod
 	def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
@@ -474,6 +591,7 @@ class FortuneTeller(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -505,7 +623,6 @@ class FortuneTeller(Character):
 			f'{state.players[self.red_herring].name})'
 		)
 
-
 @dataclass
 class GenericDemon(Character):
 	"""
@@ -513,6 +630,7 @@ class GenericDemon(Character):
 	"""
 	category: ClassVar[Categories] = DEMON
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
 	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
 		"""Override Reason: Create a world for every kill choice."""
@@ -527,8 +645,10 @@ class GenericDemon(Character):
 
 @dataclass
 class Goblin(Character):
+	"""TODO: Not yet implemented"""
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
 class Imp(GenericDemon):
@@ -548,7 +668,6 @@ class Imp(GenericDemon):
 				if 'unittest' not in sys.modules:
 					pass  # print("Star pass not implemented yet")
 			new_state = state.fork()
-			new_demon = new_state.players[me].character
 			target_char = new_state.players[target].character
 			yield from target_char.attacked_at_night(new_state, target, me)
 
@@ -559,6 +678,7 @@ class Investigator(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -580,6 +700,7 @@ class Juggler(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
 	@dataclass
 	class Juggle(events.Event):
@@ -591,10 +712,14 @@ class Juggler(Character):
 	class Ping(info.Info):
 		count: int
 		def __call__(self, state: State, me: PlayerID) -> STBool:
-			assert state.night > 1, "Jugglers don't ping on night 1"
-			juggle = getattr(state.players[me], 'juggle', None)
+			juggler = state.players[me]
+			juggle = getattr(juggler, 'juggle', None)
+			assert state.night == juggler.character.first_night + 1, (
+				"Juggler.Ping only allowed on Juggler's second night"
+			)
 			assert juggle is not None, (
 				"No Juggler.Juggle happened before the Juggler.Ping")
+			juggler.woke()
 			return info.ExactlyN(
 				N=self.count, 
 				args=(
@@ -607,7 +732,7 @@ class Juggler(Character):
 		"""
 		Overridden because: No vortox inversion, and the Juggler can make their
 		guess even if droisoned or dead during the day.
-		TODO!: juggle should be evaluated during the day, not the night!
+		TODO!: juggle should be evaluated here during the day, not the night!
 		"""
 		juggler = state.players[me]
 		if state.day in juggler.day_info:
@@ -621,6 +746,7 @@ class Knight(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -635,8 +761,25 @@ class Knight(Character):
 
 @dataclass
 class Leviathan(Character):
+	"""
+	If more than 1 good player is executed, evil wins.
+	All players know you are in play. After day 5, evil wins.
+	"""
 	category: ClassVar[Categories] = DEMON
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+		"""Game ends if S&H Leviathan reaches Night 6."""
+		leviathan = state.players[me]
+		if (
+			night < 6
+			or leviathan.droison_count 
+			or leviathan.is_dead
+		):
+			yield state
+
+
 
 @dataclass
 class Librarian(Character):
@@ -646,6 +789,7 @@ class Librarian(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -706,6 +850,11 @@ class Lunatic(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = True
+	# wake_pattern is decided during run_setup
+
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		self.wake_pattern = state.players[me].claim.wake_pattern
+		yield state
 
 @dataclass
 class Marionette(Character):
@@ -715,9 +864,11 @@ class Marionette(Character):
 	"""
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
+	# wake_pattern is decided during run_setup
 
 	def run_setup(self, state: State, me: PlayerID) -> StateGen:
 		"""Override Reason: Check neighbouring Demon"""
+		self.wake_pattern = state.players[me].claim.wake_pattern
 		N = len(state.players)
 		demon_neighbour = (
 			info.IsCategory((me - 1) % N, DEMON)(state, me) 
@@ -734,6 +885,7 @@ class Mayor(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
 class Mutant(Character):
@@ -742,6 +894,7 @@ class Mutant(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 	def run_night(self, state: State, night: int, src: PlayerID) -> StateGen:
 		# Mutants never break madness in these puzzles
@@ -760,6 +913,7 @@ class Noble(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -784,14 +938,10 @@ class NoDashii(GenericDemon):
 	tf_neighbour2: PlayerID | None = None
 
 	def run_setup(self, state: State, src: PlayerID) -> StateGen:
-		N = len(state.players)
-		townsfolk = [
-			info.IsCategory((src + step) % N, TOWNSFOLK)(state, src) 
-			for step in range(1, N)
-		]
 		# I allow the No Dashii to poison misregistering characters (e.g. Spy),
 		# so there may be multiple possible combinations of neighbour pairs
 		# depending on ST choices. Find them all and create a world for each.
+		N = len(state.players)
 		fwd_candidates, bkwd_candidates = [], []
 		for candidates, direction in (
 			(fwd_candidates, 1),
@@ -822,6 +972,32 @@ class NoDashii(GenericDemon):
 		state.players[self.tf_neighbour1].undroison(state, src)
 		state.players[self.tf_neighbour2].undroison(state, src)
 
+	def _world_str(self, state):
+		return 'NoDashii (Poisoned {} & {})'.format(
+			state.players[self.tf_neighbour1].name,
+			state.players[self.tf_neighbour2].name,
+		)
+
+@dataclass
+class Oracle(Character):
+	"""
+	Each night*, you learn how many dead players are evil.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+	@dataclass
+	class Ping(info.Info):
+		count: int
+		def __call__(self, state: State, src: PlayerID) -> STBool:
+			return info.ExactlyN(
+				N=self.count, 
+				args=[
+					info.IsEvil(player) & ~info.IsAlive(player)
+					for player in range(len(state.players))
+				]
+			)(state, src)
 
 @dataclass
 class Poisoner(Character):
@@ -830,6 +1006,8 @@ class Poisoner(Character):
 	"""
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
 	target: PlayerID = None
 
 	# Keep history just for debug and pretty printing the history of a game.
@@ -882,6 +1060,8 @@ class Pukka(Character):
 	"""
 	category: ClassVar[Categories] = DEMON
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
 	target: PlayerID | None = None
 
 	# For pretty printing the history of a game.
@@ -938,6 +1118,7 @@ class Ravenkeeper(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
 	death_night: int | None = None
 
@@ -958,6 +1139,7 @@ class Ravenkeeper(Character):
 		"""Override Reason: Record when death happened."""
 		if state.night is not None:
 			self.death_night = state.night
+			state.players[me].woke()
 		yield from super().killed(state, me)
 
 	def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
@@ -970,8 +1152,6 @@ class Ravenkeeper(Character):
 		):
 			yield state
 
-
-
 @dataclass
 class Recluse(Character):
 	"""
@@ -980,6 +1160,7 @@ class Recluse(Character):
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = False
 	misregister_categories: ClassVar[tuple[Categories, ...]] = (MINION, DEMON)
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 
 @dataclass
@@ -990,6 +1171,7 @@ class Savant(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 	@dataclass
 	class Ping(info.Info):
@@ -1020,6 +1202,7 @@ class Savant(Character):
 class ScarletWoman(Character):
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
 	def death_in_town(self, state: State, death: PlayerID, me: PlayerID):
 		"""Catch a Demon death. I don't allow catching Recluse deaths."""
@@ -1032,6 +1215,8 @@ class ScarletWoman(Character):
 			and dead_player.character.category is DEMON
 			and living_players >= 4
 		):
+			if state.night is not None:
+				scarletwoman.woke()
 			state.character_change(me, type(dead_player.character))
 
 @dataclass
@@ -1042,13 +1227,14 @@ class Seamstress(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
 		player1: PlayerID
 		player2: PlayerID
 		same: bool
-		def __call__(self, state: State, src: PlayerID):
+		def __call__(self, state: State, src: PlayerID) -> STBool:
 			a = info.IsEvil(self.player1)(state, src)
 			b = info.IsEvil(self.player2)(state, src)
 			enemies = a ^ b
@@ -1064,11 +1250,12 @@ class Shugenja(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
 		clockwise: bool
-		def __call__(self, state: State, src: PlayerID):
+		def __call__(self, state: State, src: PlayerID) -> STBool:
 			N = len(state.players)
 			direction = 1 if self.clockwise else - 1
 			evils = [None] + [
@@ -1090,7 +1277,35 @@ class Shugenja(Character):
 				return info.FALSE
 			if fwd_true < bwd_maybe:
 				return info.TRUE
-			return info.MAYBE	
+			return info.MAYBE
+		
+		
+@dataclass
+class Soldier(Character):
+	"""
+	You are safe from the Demon.
+	"""
+	category: ClassVar[Categories] = TOWNSFOLK
+	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+	def run_setup(self, state: State, me: PlayerID) -> StateGen:
+		"""Override Reason: Activate safe_from_demon."""
+		self.maybe_activate_effects(state, me)
+		yield state
+
+	def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+		soldier = state.players[me]
+		# Characetrs like monk might delete the attr if it hits 0, so recreate
+		# it if neccessary.
+		if hasattr(soldier, 'safe_from_demon_count'):
+			soldier.safe_from_demon_count += 1
+		else:
+			soldier.safe_from_demon_count = 1
+
+	def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+		state.players[me].safe_from_demon_count -= 1
+
 
 @dataclass
 class Steward(Character):
@@ -1099,11 +1314,12 @@ class Steward(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
 		player: PlayerID
-		def __call__(self, state: State, src: PlayerID):
+		def __call__(self, state: State, src: PlayerID) -> STBool:
 			return ~info.IsEvil(self.player)(state, src)
 
 @dataclass
@@ -1113,6 +1329,7 @@ class Saint(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 	def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
 		"""
@@ -1131,6 +1348,8 @@ class Slayer(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
 	spent: bool = False
 
 	@dataclass
@@ -1174,6 +1393,7 @@ class Spy(Character):
 	misregister_categories: ClassVar[tuple[Categories, ...]] = (
 		TOWNSFOLK, OUTSIDER
 	)
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
 @dataclass
 class Undertaker(Character):
@@ -1182,23 +1402,32 @@ class Undertaker(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
 	@dataclass
 	class Ping(info.Info):
-		player: PlayerID
-		character: type[Character]
+		player: PlayerID | None
+		character: type[Character] | None
 
 		def __call__(self, state: State, src: PlayerID) -> STBool:
 			assert state.night > 1, "Undertaker acts from second night."
-			for event in state.day_events.get(state.night - 1, []):
-				if (
-					isinstance(event, events.Execution)
-					and event.player == self.player
-					and event.died
-				):
-					return info.IsCharacter(self.player, self.character)(
-						state, src
+			assert (self.character is None) == (self.player is None)
+
+			previous_day_events = state.day_events.get(state.night - 1, [])
+			if self.player is None:
+				return STBool(
+					not any(
+						isinstance(e, events.Execution) and e.died 
+						for e in previous_day_events
 					)
+				)
+			elif any(
+				isinstance(event, events.Execution)
+				and event.player == self.player
+				and event.died
+				for event in previous_day_events
+			):
+				return info.IsCharacter(self.player, self.character)(state, src)
 			return info.FALSE
 
 @dataclass
@@ -1208,6 +1437,7 @@ class WasherWoman(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
 	@dataclass
 	class Ping(info.Info):
@@ -1229,6 +1459,8 @@ class VillageIdiot(Character):
 	"""
 	category: ClassVar[Categories] = TOWNSFOLK
 	is_liar: ClassVar[bool] = False
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
 	is_drunk_VI: bool = False
 
 	@dataclass
@@ -1288,8 +1520,10 @@ class Vortox(GenericDemon):
 
 @dataclass
 class Zombuul(Character):
+	"""Not implemented properly yet"""
 	category: ClassVar[Categories] = DEMON
 	is_liar: ClassVar[bool] = True
+	wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
 	registering_dead: bool = False
 
@@ -1302,10 +1536,13 @@ GLOBAL_SETUP_ORDER = [
 	FortuneTeller,
 	VillageIdiot,
 	Drunk,
+	Lunatic,
+	Soldier,
 	LordOfTyphon,  # Goes last so that evils created in setup must be in a line
 ]
 
 GLOBAL_NIGHT_ORDER = [
+	Leviathan,
 	Courtier,
 	Poisoner,
 	ScarletWoman,
@@ -1325,6 +1562,7 @@ GLOBAL_NIGHT_ORDER = [
 	Undertaker,
 	Clockmaker,
 	Dreamer,
+	Oracle,
 	Seamstress,
 	Juggler,
 	Steward,
@@ -1333,6 +1571,7 @@ GLOBAL_NIGHT_ORDER = [
 	Balloonist,
 	Shugenja,
 	VillageIdiot,
+	Chambermaid,
 ]
 
 GLOBAL_DAY_ORDER = [
@@ -1348,10 +1587,10 @@ INACTIVE_CHARACTERS = [
 	Baron,
 	Drunk,
 	Goblin,
-	Leviathan,
 	Lunatic,
 	Marionette,
 	Mayor,
 	Recluse,
+	Soldier,
 	Spy,
 ]
