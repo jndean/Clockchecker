@@ -4,7 +4,7 @@ Reddit user u\Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](
 ## Puzzle Examples
 <table>
 <tr><th>Puzzle 26</th></tr>
-<tr><td><img src="https://i.redd.it/9h3598yc75he1.png"></td></tr>
+<tr><td><p align="center"><img src="README_imgs/puzzle26.png" width=600px></p></td></tr>
 <tr><th>Solver Script</th></tr>
 <tr><td>
  
@@ -51,26 +51,12 @@ for world in world_gen(
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td>
-
-```
-World(
-     You : Empath 💀
-  Olivia : Saint 💀
-     Dan : Slayer 💀
-     Tom : Imp
- Matthew : Poisoner (Poisoned Fraser, Josh, You)
-    Josh : Soldier 💀
-    Sula : Undertaker
-  Fraser : Chef
-) 
-```
-</td></tr>
+<tr><td><img src="README_imgs/solution26.png" width=450px></td></tr>
 </table>
 
 <table>
 <tr><th>Puzzle 12b</th></tr>
-<tr><td><img src="https://preview.redd.it/weekly-puzzle-thunderstruck-v0-lev8yps3wpxd1.png?width=1356&format=png&auto=webp&s=e6c0d4e266f69c38e24db79066841a622bb33a13"></td></tr>
+<tr><td><p align="center"><img src="README_imgs/puzzle12b.webp" width=600px></p></td></tr>
 <tr><th>Solver Script</th></tr>
 <tr><td>
  
@@ -122,21 +108,7 @@ for world in  world_gen(
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td>
-
-```
-World(
-    You : Librarian
-  Oscar : Vortox 💀
-   Anna : Lunatic
-   Josh : Mayor 💀
- Fraser : Slayer
-    Tom : Dreamer
-  Aoife : Clockmaker 💀
-  Steph : ScarletWoman -> Vortox
-)
-```
-</td></tr>
+<tr><td><img src="README_imgs/solution12b.png" width=450px></td></tr>
 </table>
 
 ## Example Character Implementations
