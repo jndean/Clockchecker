@@ -1,11 +1,12 @@
-# ClockChecker 🕰️
+# Clockchecker 🕰️
 Reddit user u\Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). ClockChecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation is for implementing new characters to be as easy as possible.
  
 ## Puzzle Examples
 <table>
- <tr><th>*Solver Script*</th><th>*Puzzle*</th></tr>
-<tr> 
-<td rowspan="3">
+<tr><th>Puzzle 26</th></tr>
+<tr><td><img src="https://i.redd.it/9h3598yc75he1.png"></td></tr>
+<tr><th>Solver Script</th></tr>
+<tr><td>
  
  ```python3
 from clockchecker import *
@@ -48,14 +49,10 @@ for world in world_gen(
 ):
     print(world)
  ```
-</td>
+</td></tr>
+<tr><th>Output</th></tr>
+<tr><td>
 
-<td><img src="https://i.redd.it/9h3598yc75he1.png"> </td>
-</tr>
-<tr><th>*Output*</th></tr>
-<tr>
-<td>
- 
 ```
 World(
      You : Empath 💀
@@ -68,16 +65,14 @@ World(
   Fraser : Chef
 ) 
 ```
-</td>
-</tr>
+</td></tr>
 </table>
 
 <table>
- <tr><th>Puzzle</th><th>Solver Script</th></tr>
-
-<tr> 
- <td><img src="https://preview.redd.it/weekly-puzzle-thunderstruck-v0-lev8yps3wpxd1.png?width=1356&format=png&auto=webp&s=e6c0d4e266f69c38e24db79066841a622bb33a13"> </td>
-<td rowspan="3">
+<tr><th>Puzzle 12b</th></tr>
+<tr><td><img src="https://preview.redd.it/weekly-puzzle-thunderstruck-v0-lev8yps3wpxd1.png?width=1356&format=png&auto=webp&s=e6c0d4e266f69c38e24db79066841a622bb33a13"></td></tr>
+<tr><th>Solver Script</th></tr>
+<tr><td>
  
  ```python3
 from clockchecker import *
@@ -125,12 +120,10 @@ for world in  world_gen(
 ):
     print(world)
  ```
-</td>
-</tr>
+</td></tr>
 <tr><th>Output</th></tr>
-<tr>
-<td>
- 
+<tr><td>
+
 ```
 World(
     You : Librarian
@@ -143,12 +136,11 @@ World(
   Steph : ScarletWoman -> Vortox
 )
 ```
-</td>
-</tr>
+</td></tr>
 </table>
 
 ## Example Character Implementations
-The hope is for implementing new characters easy, and for those implementations to be easy to read and easy to reason over. TPI is determined to make this goal unattainable, however _most_ characters fit well in the Clockchecker framework. Some examples lifted directly from the `characters.py` file are below.
+The hope is for implementing characters to be easy write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable, however _most_ characters fit well in the Clockchecker framework. Some example characters taken from the `characters.py` file are below.
 
 <details open>
 <summary><b>Investigator</b></summary>
@@ -271,5 +263,55 @@ class GenericDemon(Character):
 			new_state = state.fork()
 			target_char = new_state.players[target].character
 			yield from target_char.attacked_at_night(new_state, target, me)
+```
+</details>
+
+<details>
+<summary><b>No Dashii</b></summary>
+
+```python
+@dataclass
+class NoDashii(GenericDemon):
+	"""
+	Each night*, choose a player: they die. 
+	Your 2 Townsfolk neighbors are poisoned.
+	"""
+	tf_neighbour1: PlayerID | None = None
+	tf_neighbour2: PlayerID | None = None
+
+	def run_setup(self, state: State, src: PlayerID) -> StateGen:
+		# I allow the No Dashii to poison misregistering characters (e.g. Spy),
+		# so there may be multiple possible combinations of neighbour pairs
+		# depending on ST choices. Find them all and create a world for each.
+		N = len(state.players)
+		fwd_candidates, bkwd_candidates = [], []
+		for candidates, direction in (
+			(fwd_candidates, 1),
+			(bkwd_candidates, -1),
+		):
+			for step in range(1, N):
+				player = (src + direction * step) % N
+				is_tf = info.IsCategory(player, TOWNSFOLK)(state, src)
+				if is_tf is not info.FALSE:
+					candidates.append(player)
+				if is_tf is info.TRUE:
+					break
+		# Create a world or each combination of left and right poisoned player
+		for fwd in fwd_candidates:
+			for bkwd in bkwd_candidates:
+				new_state = state.fork()
+				new_nodashii = new_state.players[src].character
+				new_nodashii.tf_neighbour1 = fwd
+				new_nodashii.tf_neighbour2 = bkwd
+				new_nodashii.maybe_activate_effects(new_state, src)
+				yield new_state
+
+	def _activate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.tf_neighbour1].droison(state, src)
+		state.players[self.tf_neighbour2].droison(state, src)
+
+	def _deactivate_effects_impl(self, state: State, src: PlayerID):
+		state.players[self.tf_neighbour1].undroison(state, src)
+		state.players[self.tf_neighbour2].undroison(state, src)
 ```
 </details>
