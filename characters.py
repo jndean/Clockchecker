@@ -639,7 +639,6 @@ class GenericDemon(Character):
 			yield state; return
 		for target in range(len(state.players)):
 			new_state = state.fork()
-			new_demon = new_state.players[me].character
 			target_char = new_state.players[target].character
 			yield from target_char.attacked_at_night(new_state, target, me)
 
@@ -850,11 +849,7 @@ class Lunatic(Character):
 	"""
 	category: ClassVar[Categories] = OUTSIDER
 	is_liar: ClassVar[bool] = True
-	# wake_pattern is decided during run_setup
-
-	def run_setup(self, state: State, me: PlayerID) -> StateGen:
-		self.wake_pattern = state.players[me].claim.wake_pattern
-		yield state
+	wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
 @dataclass
 class Marionette(Character):
@@ -1200,6 +1195,10 @@ class Savant(Character):
 
 @dataclass
 class ScarletWoman(Character):
+	"""
+	If there are 5 or more players alive & the Demon dies, you become the Demon.
+	(Travellers don't count).
+	"""
 	category: ClassVar[Categories] = MINION
 	is_liar: ClassVar[bool] = True
 	wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
@@ -1536,7 +1535,6 @@ GLOBAL_SETUP_ORDER = [
 	FortuneTeller,
 	VillageIdiot,
 	Drunk,
-	Lunatic,
 	Soldier,
 	LordOfTyphon,  # Goes last so that evils created in setup must be in a line
 ]
