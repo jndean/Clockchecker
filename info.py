@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from abc import ABC, ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 import enum
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from characters import Character
 	from core import State
 
-import core
-import characters as chars
+import characters
 
 type PlayerID = int
 
@@ -142,9 +142,9 @@ class IsEvil(Info):
 	def __call__(self, state: State, src: PlayerID = None):
 		player = state.players[self.player]
 		if not player.droison_count:  # Misregistrations are part of ability
-			if isinstance(player.character, chars.Recluse):
+			if isinstance(player.character, characters.Recluse):
 				return TRUE if player.is_evil else MAYBE
-			if isinstance(player.character, chars.Spy):
+			if isinstance(player.character, characters.Spy):
 				return MAYBE if player.is_evil else FALSE
 		return STBool(player.is_evil)
 
@@ -162,7 +162,7 @@ class IsAlive(Info):
 	def __call__(self, state: State, src: PlayerID) -> STBool:
 		player = state.players[self.player]
 		character = player.character
-		if type(character) is chars.Zombuul and character.registering_dead:
+		if type(character) is characters.Zombuul and character.registering_dead:
 			return FALSE
 		return STBool(not player.is_dead)
 
@@ -183,7 +183,7 @@ class IsCharacter(Info):
 @dataclass
 class IsCategory(Info): 
 	player: PlayerID
-	category: character.Categories
+	category: characters.Categories
 	def __call__(self, state: State, src: PlayerID) -> STBool:
 		player = state.players[self.player]
 		character = type(player.character)
@@ -247,7 +247,7 @@ class SameCategory(Info):
 
 @dataclass
 class CustomInfo(Info):
-	method: Callable[State, STBool]
+	method: Callable[[State], STBool]
 	def __call__(self, state: State, src: PlayerID) -> STBool:
 		return self.method(state)
 
@@ -278,3 +278,23 @@ def circle_distance(a: PlayerID, b: PlayerID, n_players: int) -> int:
 	if b < a:
 		return min(a - b, n_players + b - a)
 	return min(b - a, n_players + a - b)
+
+
+def behaves_evil(state: State, player_id: PlayerID) -> bool:
+	"""
+	Characters have the is_liar ClassVar which determines if they lie about
+	their own role and info. However, some good characters also lie about other
+	character's info. E.g. the lunatic is good but may lie about receiving a 
+	Nightwatchman ping, whilst the drunk lies about their character and info but
+	would truthfully report a Nightwatchman ping.
+	"""
+	player = state.players[player_id]
+	character = type(player.character)
+	if character in (
+		characters.Lunatic,
+		# characters.Politician,
+	):
+		return True
+	if character is characters.Marionette:
+		return False
+	return player.is_evil

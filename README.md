@@ -2,6 +2,7 @@
 Reddit user u\Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). ClockChecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation is for implementing new characters to be as easy as possible.
  
 ## Puzzle Examples
+<p align="center">
 <table>
 <tr><th>Puzzle 26</th></tr>
 <tr><td><p align="center"><img src="README_imgs/puzzle26.png" width=600px></p></td></tr>
@@ -110,6 +111,7 @@ for world in  world_gen(
 <tr><th>Output</th></tr>
 <tr><td><img src="README_imgs/solution12b.png" width=450px></td></tr>
 </table>
+</p>
 
 ## Example Character Implementations
 The hope is for implementing characters to be easy write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable, however _most_ characters fit well in the Clockchecker framework. Some example characters taken from the `characters.py` file are below.

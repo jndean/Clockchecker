@@ -50,11 +50,15 @@ class Player:
 
 	def droison(self, state: State, src: PlayerID) -> None:
 		self.droison_count += 1
-		self.character.maybe_deactivate_effects(state, self.id)
+		self.character.maybe_deactivate_effects(
+			state, self.id, characters.Reason.DROISON
+		)
 
 	def undroison(self, state: State, src: PlayerID) -> None:
 		self.droison_count -= 1 
-		self.character.maybe_activate_effects(state, self.id)
+		self.character.maybe_activate_effects(
+			state, self.id, characters.Reason.DROISON
+		)
 
 	def woke(self) -> None:
 		self.woke_tonight = True
