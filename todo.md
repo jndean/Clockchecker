@@ -13,6 +13,8 @@
 
  - During setup, move all events in Player.day_info into State.day_info, and automatically set src=player. That way users can specify events under the relevant player, and only need to list them in the State.day_events list directly if order is important.
 
+ - If no solutions are found and Atheist is in Puzzle statement, return Atheist world
+
 
 # Active Bugs To Fix:
 
@@ -21,11 +23,11 @@
 
  	- Juggler wrong!
 
-	- Marionette should reduce outsider min bound
-
 	- Pukka shouldn't stop poisoning on end_day
 
-	- Should implement run_night for Lunatic so it can call decide_if_woke_tonight for it's claimed character (make that func accept a character, rather than a player)
+	- Should implement run_night for Lunatic so it can call decide_if_woke_tonight for the demon they think they are (make decide_if_woke_tonight accept a 
+	character, rather than a player). This should also be respected in `info.behaves_like`.
+	Perhaps Lunatic.run_setup should generate a world for each choice of demon? May require separation of Puzzle and State.
 
 	- IsCategory(Spy, TOWNSFOLK) returns MAYBE but IsCategory(Spy, MINION) 
 	returns TRUE, should be able to misregister!
@@ -37,7 +39,7 @@
 	which way the Vortox should push ST choices (if you believe the ST doesn't 
 	have misregistration choices in a vortox world). A solution would be to make
 	STBool have True, False, True-That-Can-Misregister-As-False, and False-That-Can-Misregister-As-True. Maybe called TRUE, FALSE, SURE, NAH?
-	Having said that, the current system can correctly solve all the available vortox puzzles.
+	Having said that, the current system can correctly solve all the available vortox puzzles, so perhaps I'm ok leaving it for now.
 
 
 # Things we don't and won't handle:

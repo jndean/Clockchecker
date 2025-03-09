@@ -14,12 +14,14 @@ import events
 
 """
 Implementing a Character Checklist:
- - Copying some other similar-ish character is likely a good starting point.
- - For a basic info characters, just create a Ping class inheriting from 
-   info.Info and implement the __call__ method.
+ - Copy some other similar-ish character.
+ - For basic info characters, just create a Ping class inheriting from 
+   Info and implement the __call__ method.
  - For more complex characters, or characters who have to make choices that are
    not evidenced by a Ping, override the relevant character methods such as
    [modify_category_counts, run_night/day/setup, killed, executed, etc.].
+ - For characetrs that do things publically in the day, consider implementing an
+   Event instead of a Ping.
  - When overriding the default methods for complex characters, remember to 
    consider the desired behaviour of the new character if they are:
     - dead
@@ -28,9 +30,9 @@ Implementing a Character Checklist:
     - not the character who gets their claimed ping (Some TODO!)
     - spent
     - vortoxed
- - Remember to set `character.spent` or (TODO) call `state.chose(target)`
-   appropriately and curse the Chambermaid / Goon for forcing that mental 
-   burden on us.
+ - Remember to set `character.spent` or call `state.chose(target)` (TODO) 
+   (or `player.woke()` if using WakePattern.MANUAL) appropriately and curse the
+   Chambermaid / Goon for forcing that mental burden on us.
 """
 
 
@@ -273,6 +275,45 @@ class Alsaahir(Character):
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
+
+@dataclass
+class Artist(Character):
+    """
+    Once per game, during the day, privately ask the Storyteller any yes/no
+    question.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    spent: bool = False
+
+    @dataclass
+    class Ping(info.Info):
+        statement: info.Info
+        def __call__(self, state: State, src: PlayerID):
+            return self.statement(state, src)
+
+@dataclass
+class Atheist(Character):
+    """
+    The Storyteller can break the game rules, and if executed, good wins,
+    even if you are dead. [No evil characters].
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        """
+        We find Atheist games by running the solver as normal and finding no
+        valid worlds. As such, any game that hits this setup method will have
+        evil players plus an Atheist, and is therefore invalid and should yield
+        no worlds.
+        """
+        return
+        yield  # Makes this method isn't a generator
+
 @dataclass
 class Balloonist(Character):
     """
@@ -293,8 +334,10 @@ class Balloonist(Character):
         return bounds
 
     @dataclass
-    class Ping:  # Not info.Info because it doesn't implement __call__!
+    class Ping(info.Info):
         player: PlayerID
+        def __call__(self, state: State, src: PlayerID) -> info.STBool:
+            raise RuntimeError("Balloonist should never call the Ping directly")
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
         """
@@ -729,39 +772,32 @@ class Juggler(Character):
     @dataclass
     class Juggle(events.Event):
         juggle: dict[PlayerID, Character]
+        player: PlayerID | None = None
         def __call__(self, state: State) -> StateGen:
-            pass
+            if not info.has_ability_of(state, self.player, Juggler):
+                yield state; return
+            juggler = state.players[self.player]
+            # Evaluate the juggles now, check the count later.
+            juggler.correct_juggles = tuple(
+                info.IsCharacter(player, character)(state, self.player)
+                for player, character in self.juggle.items()
+            )
+            yield state
 
     @dataclass
     class Ping(info.Info):
         count: int
         def __call__(self, state: State, me: PlayerID) -> STBool:
             juggler = state.players[me]
-            juggle = getattr(juggler, 'juggle', None)
             assert state.night == juggler.character.first_night + 1, (
                 "Juggler.Ping only allowed on Juggler's second night"
             )
-            assert juggle is not None, (
-                "No Juggler.Juggle happened before the Juggler.Ping")
+            correct_juggles = getattr(juggler, 'correct_juggles', None)
+            assert correct_juggles is not None, (
+                "No Juggler.Juggle happened before the Juggler.Ping"
+            )
             juggler.woke()
-            return info.ExactlyN(
-                N=self.count, 
-                args=(
-                    info.IsCharacter(player, character)
-                    for player, character in juggle.items()
-                )
-            )(state, me)
-
-    def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
-        """
-        Overridden because: No vortox inversion, and the Juggler can make their
-        guess even if droisoned or dead during the day.
-        TODO!: juggle should be evaluated here during the day, not the night!
-        """
-        juggler = state.players[me]
-        if state.day in juggler.day_info:
-            juggler.juggle = juggler.day_info[state.day].juggle
-        yield state
+            return info.ExactlyN(N=self.count, args=correct_juggles)(state, me)
 
 @dataclass
 class Knight(Character):
@@ -1492,12 +1528,16 @@ class Slayer(Character):
 
     @dataclass
     class Shot(events.Event):
-        src: PlayerID
         target: PlayerID
         died: bool
+        player: PlayerID | None = None
 
         def __call__(self, state: State) -> StateGen:
-            shooter = state.players[self.src]
+            shooter = state.players[self.player]
+            if not info.has_ability_of(state, self.player, Slayer):
+                if info.behaves_evil(state, self.player):
+                    yield state
+                return
             target = state.players[self.target]
             if (
                 shooter.is_dead
@@ -1509,7 +1549,7 @@ class Slayer(Character):
                 should_die = info.FALSE
             else:
                 should_die = info.IsCategory(self.target, DEMON)(
-                    state, self.src
+                    state, self.player
                 )
 
             if isinstance(shooter.character, Slayer):
@@ -1626,11 +1666,47 @@ class VillageIdiot(Character):
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
-        ret = type(self).__name__
-        if self.is_drunk_VI:
-            ret += ' (Drunk)'
-        return ret
+        return f'VillageIdiot ({"Drunk" if self.is_drunk_VI else "Sober"})'
 
+@dataclass
+class Virgin(Character):
+    """
+    The 1st time you are nominated, if the nominator is a Townsfolk, 
+    they are executed immediately.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    spent: bool = False
+
+    @dataclass
+    class NominatedWithoutExecution(events.Event):
+        """
+        This class if for when the nomination did not trigger an execution. A
+        nomination that does trigger an Execution should instead be represented
+        by an events.ExecutionByST, since this allows for te possiblility that
+        the execution was not caused by the Virgin's ability.
+        """
+        nominator: PlayerID
+        player: PlayerID | None = None
+        def __call__(self, state: State) -> StateGen:
+            if not info.has_ability_of(state, self.player, Virgin):
+                yield state; return
+            virgin = state.players[self.player]
+            if not isinstance(virgin.character, Virgin):
+                raise NotImplementedError('Recording a Philo Virgin is spent.')
+            townsfolk_nominator = info.IsCategory(self.nominator, TOWNSFOLK)(
+                state, self.player
+            )
+            if (
+                virgin.is_dead
+                or virgin.droison_count
+                or virgin.character.spent
+                or townsfolk_nominator is not info.TRUE
+            ):
+                virgin.character.spent = True
+                yield state
 
 @dataclass
 class Vortox(GenericDemon):
@@ -1668,6 +1744,7 @@ class Zombuul(Character):
 
 
 GLOBAL_SETUP_ORDER = [
+    Atheist,  # Most efficiency if it goes first
     Vortox,
     Marionette,
     NoDashii,
@@ -1715,15 +1792,15 @@ GLOBAL_NIGHT_ORDER = [
 
 GLOBAL_DAY_ORDER = [
     Alsaahir,
-    Juggler,
+    Artist,
     Savant,
-    Slayer,
     Saint,
     Mutant,
     Puzzlemaster,
 ]
 
 INACTIVE_CHARACTERS = [
+    Atheist,
     Baron,
     Drunk,
     Goblin,
@@ -1731,6 +1808,8 @@ INACTIVE_CHARACTERS = [
     Marionette,
     Mayor,
     Recluse,
+    Slayer,
     Soldier,
     Spy,
+    Virgin,
 ]

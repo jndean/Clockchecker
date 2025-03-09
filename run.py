@@ -3,42 +3,43 @@ from characters import *
 from events import *
 from info import *
 
-# https://www.reddit.com/r/BloodOnTheClocktower/comments/1hgdsmp/weekly_puzzle_19_he_could_be_you_he_could_be_me/
 
-You, Fraser, Oscar, Jasmine, Olivia, Matt, Sula, Aoife = range(8)
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1hlgh1w/weekly_puzzle_20_the_three_wise_men/
+
+You, Caspar, Joseph, Melchior, Mary, Balthazar, Gabriel = range(7)
 state = State(
     players=[
-        Player(name='You', claim=Librarian, night_info={
-            1: Librarian.Ping(Fraser, Matt, Drunk)
+        Player(name='You', claim=Investigator, night_info={
+            1: Investigator.Ping(Mary, Gabriel, Baron)
         }),
-        Player(name='Fraser', claim=Saint),
-        Player(name='Oscar', claim=Recluse),
-        Player(name='Jasmine', claim=Slayer),
-        Player(name='Olivia', claim=Undertaker, night_info={
-            2: Undertaker.Ping(You, Baron),
+        Player(name='Caspar', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Mary, is_evil=True),
+            2: VillageIdiot.Ping(Joseph, is_evil=True),
         }),
-        Player(name='Matt', claim=Ravenkeeper, night_info={
-            2: Ravenkeeper.Ping(Fraser, Saint)
+        Player(name='Joseph', claim=Saint),
+        Player(name='Melchior', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Balthazar, is_evil=True),
+            2: VillageIdiot.Ping(Mary, is_evil=True),
         }),
-        Player(name='Sula', claim=Washerwoman, night_info={
-            1: Washerwoman.Ping(Fraser, Olivia, Undertaker)
+        Player(name='Mary', claim=Virgin, day_info={
+            1: Virgin.NominatedWithoutExecution(Balthazar)
         }),
-        Player(name='Aoife', claim=Empath, night_info={
-            1: Empath.Ping(0),
-            2: Empath.Ping(1),
+        Player(name='Balthazar', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Joseph, is_evil=True),
+            2: VillageIdiot.Ping(Caspar, is_evil=True),
+        }),
+        Player(name='Gabriel', claim=Ravenkeeper, night_info={
+            2: Ravenkeeper.Ping(Balthazar, Drunk)
         }),
     ],
-    day_events={
-        1: Execution(You),
-        2: Slayer.Shot(src=Jasmine, target=Oscar, died=True),
-    },
-    night_deaths={2: Matt},
+    day_events={1: Execution(You)},
+    night_deaths={2: Gabriel},
 )
 
 worlds = list(world_gen(
     state,
     possible_demons=[Imp],
-    possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
+    possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
     possible_hidden_good=[Drunk],
     possible_hidden_self=[Drunk],
 ))
@@ -46,3 +47,4 @@ worlds = list(world_gen(
 for world in worlds:
     print(world)
 print(f'Found {len(worlds)} valid worlds')
+
