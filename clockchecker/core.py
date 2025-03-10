@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
@@ -9,20 +9,20 @@ import os
 from typing import Any, Callable, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from characters import Character, CategoryBounds
-    from events import Event
-    from info import PlayerID, Info
+    from .characters import Character, CategoryBounds
+    from .events import Event
+    from .info import PlayerID, Info
 
-import characters
-import events
-import info
+from . import characters
+from . import events
+from . import info
 
 
 _DEBUG = os.environ.get('DEBUG', False)  # Set True to enable debug mode
 _DEBUG_STATE_FORK_COUNTS = {}
 
-
-type StateGen = Generator[State]
+if TYPE_CHECKING:
+    StateGen = Generator[State]
 
 
 @dataclass
@@ -296,7 +296,7 @@ class State:
 
 
     def __str__(self) -> str:
-        ret = [f'World{self.debug_key if _DEBUG else ''}(']
+        ret = [f'World{self.debug_key if _DEBUG else ""}(']
         pad = max(len(player.name) for player in self.players) + 1
         for player in self.players:
             char = type(player.character)

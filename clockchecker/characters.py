@@ -5,11 +5,11 @@ import enum
 from typing import ClassVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core import State, StateGen, Player
-    from info import PlayerID, Info, STBool
+    from .core import State, StateGen, Player
+    from .info import PlayerID, Info, STBool
 
-import info
-import events
+from . import info
+from . import events
 
 
 """
@@ -48,7 +48,7 @@ OUTSIDER = Categories.Outsider
 MINION = Categories.Minion
 DEMON = Categories.Demon
 
-type CategoryBounds = tuple[
+CategoryBounds = tuple[
     tuple[int, int],  # Townsfolk count min / max
     tuple[int, int],  # Outsiders count min / max
     tuple[int, int],  # Minions count min / max
@@ -69,7 +69,7 @@ DEFAULT_CATEGORY_COUNTS = {
     15: (9, 2, 3, 1),
 }
 
-# Rules for when a player can legally ping and what the Chambermaid should see.
+# Rules for when a player can ping and what the Chambermaid should see.
 # Characters using MANUAL are responsible for rejecting worlds where pings are 
 # not on legal nights.
 class WakePattern(enum.Enum):
@@ -668,10 +668,10 @@ class FortuneTeller(Character):
 
         def __call__(self, state: State, me: PlayerID) -> STBool:
             real_result = (
-                info.IsCategory(self.player2, DEMON)(state, me) |
-                info.IsCategory(self.player1, DEMON)(state, me) |
-                info.CharAttrEq(me, 'red_herring', self.player1)(state, me) |
-                info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
+                info.IsCategory(self.player2, DEMON)(state, me)
+                | info.IsCategory(self.player1, DEMON)(state, me)
+                | info.CharAttrEq(me, 'red_herring', self.player1)(state, me)
+                | info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
             )
             return real_result == info.STBool(self.demon)
 
@@ -684,9 +684,8 @@ class FortuneTeller(Character):
                 yield new_state
 
     def _world_str(self, state: State) -> str:
-        """For printing nice output representations of worlds"""
         return (
-            f'{type(self).__name__} (Red Herring = '
+            'FortuneTeller (Red Herring = '
             f'{state.players[self.red_herring].name})'
         )
 

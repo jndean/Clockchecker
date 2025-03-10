@@ -1,0 +1,18 @@
+[project]
+name = "clockchecker"
+version = "1.0"
+authors = [
+  { name="Josef Dean", email="email@josefdean.co.uk" },
+]
+description = "A solver for a particular kind of Blood on the Clocktower puzzle"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools.packages.find]
+exclude = ["README_imgs"]

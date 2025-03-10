@@ -7,13 +7,13 @@ import enum
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from characters import Character
-    from core import State
+    from .characters import Character
+    from .core import State
 
-import characters
+from . import characters
 
-type PlayerID = int
 
+PlayerID = int
 
 
 class STBool(enum.Enum):

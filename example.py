@@ -1,12 +1,10 @@
-from core import *
-from characters import *
-from events import *
-from info import *
+from clockchecker import *
 
 
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hlgh1w/weekly_puzzle_20_the_three_wise_men/
 
 You, Caspar, Joseph, Melchior, Mary, Balthazar, Gabriel = range(7)
+
 state = State(
     players=[
         Player(name='You', claim=Investigator, night_info={

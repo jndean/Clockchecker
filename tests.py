@@ -1,9 +1,6 @@
 import unittest
 
-from core import *
-from characters import *
-from events import *
-from info import *
+from clockchecker import *
 
 
 def assert_solutions(
@@ -28,14 +25,14 @@ class Puzzles(unittest.TestCase):
     def test_puzzle_1(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1erb5e2/can_the_sober_savant_solve_the_puzzle
 
-        You, Tim, Sula, Oscar, Matt, Anna = range(6)
+        # This puzzle requires a custom method for one of the savant statements
         class DrunkBetweenTownsfolk(Info):
             def __call__(self, state: State, src: PlayerID):
                 N = len(state.players)
                 result = FALSE
                 for player in range(len(state.players)):
                     found_drunk = IsCharacter(player, Drunk)(state, src)
-                    if found_drunk is FALSE:
+                    if found_drunk is FALSE:  # Allow MAYBE
                         continue
                     tf_neighbours = (
                         IsCategory((player - 1) % N, TOWNSFOLK)(state, src) & 
@@ -44,6 +41,7 @@ class Puzzles(unittest.TestCase):
                     result |= found_drunk & tf_neighbours
                 return result
 
+        You, Tim, Sula, Oscar, Matt, Anna = range(6)
         state = State([
             Player(name='You', claim=Savant, day_info={
                 1: Savant.Ping(
@@ -87,7 +85,6 @@ class Puzzles(unittest.TestCase):
         assert_solutions(self, worlds, solutions=(
             (Savant, Goblin, Steward, Drunk, Noble, Leviathan),
         ))
-
 
     def test_puzzle_2(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ewxu0r/weekly_puzzle_2_come_fly_with_me/

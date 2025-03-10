@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core import State, StateGen, Player
-    from info import PlayerID, Info
+    from .core import State, StateGen, Player
+    from .info import PlayerID, Info
 
-import core
-import characters
-import info
+from . import core
+from . import characters
+from . import info
 
 
 

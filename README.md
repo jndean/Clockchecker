@@ -114,16 +114,19 @@ for world in  world_gen(
 </p>
 
 ## Usage
-TODO. See above example scripts.
-All currently solved puzzles are present as unit tests in tests.py. Run them all
-with 
+Run the example script (which usually just contains whatever puzzle I was implementing most recently) with:
+```bash
+python example.py
 ```
-cd Clockchecker
-python3.13 -m unittest
+All currently solved puzzles are present as unit tests in tests.py. Run them all with
+```bash
+python -m unittest
 ```
+At time of writing clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. The above unittest command today solves 24 puzzles in 8.57 seconds on a single thread.
 
 ## Example Character Implementations
-The hope is for implementing characters to be easy write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable, however _most_ characters fit well in the Clockchecker framework. Some example characters taken from the `characters.py` file are below.
+The hope is for characters to be easy write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the Clockchecker framework; some example characters taken from the `characters.py` file are below. 
+Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE`, `MAYBE`. For example, `info.IsCharacter(josef, IMP)` will evaluate to `MAYBE` if josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
 
 <details open>
 <summary><b>Investigator</b></summary>
@@ -151,7 +154,43 @@ class Investigator(Character):
             )
 ```
 </details>
+<details>
+<summary><b>Fortune Teller</b></summary>
 
+```python
+@dataclass
+class FortuneTeller(Character):
+    """
+    Each night, choose 2 players: you learn if either is a Demon. 
+    There is a good player that registers as a Demon to you.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    @dataclass
+    class Ping(info.Info):
+        player1: PlayerID
+        player2: PlayerID
+        demon: bool
+        def __call__(self, state: State, me: PlayerID) -> STBool:
+            real_result = (
+                info.IsCategory(self.player1, DEMON)(state, me)
+                | info.IsCategory(self.player2, DEMON)(state, me)
+                | info.CharAttrEq(me, 'red_herring', self.player1)(state, me)
+                | info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
+            )
+            return real_result == info.STBool(self.demon)
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        # Any good player could be chosen as the red herring
+        for player in range(len(state.players)):
+            if info.IsEvil(player)(state, me) is not info.TRUE:
+                new_state = state.fork()
+                new_state.players[me].character.red_herring = player
+                yield new_state
+```
+</details>
 <details>
 <summary><b>Baron</b></summary>
  
