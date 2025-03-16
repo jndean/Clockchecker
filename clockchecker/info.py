@@ -132,7 +132,13 @@ class InfoOp(Info):
             "disallowed."
         )
 
-
+class NotInfo:
+    pass
+    def __call__(self, *args, **kwargs):
+        raise ValueError(
+            f"Looks like you're trying to treat a {type(self)} as Info, when "
+            'it has in fact been explicitly marked as NotInfo :)'
+        )
 
 # ------------------- Info Objects -------------------- #
 

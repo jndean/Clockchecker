@@ -492,7 +492,6 @@ class Puzzles(unittest.TestCase):
                 Leviathan, Shugenja, Mutant, VillageIdiot),
         ))
 
-        
     def test_puzzle_8(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ftqc28/weekly_puzzle_8_the_stitchup/
 
@@ -533,7 +532,63 @@ class Puzzles(unittest.TestCase):
             (Seamstress, Imp, Poisoner) +  (Seamstress,) * 4,
             (Seamstress, Poisoner, Imp) +  (Seamstress,) * 4,
         ))
+
+    def test_puzzle_9(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fz4jqe/weekly_puzzle_9_the_new_acrobat/
+
+        You, Fraser, Oscar, Josh, Anna, Sula, Hannah = range(7)
+        state = State(
+            players=[
+                Player(name='You', claim=Acrobat, night_info={
+                    2: Acrobat.Choice(Fraser),
+                    3: Acrobat.Choice(Josh),
+                }),
+                Player(name='Fraser', claim=Balloonist, night_info={
+                    1: Balloonist.Ping(Oscar),
+                    2: Balloonist.Ping(Anna),
+                    3: Balloonist.Ping(You),
+                }),
+                Player(name='Oscar', claim=Gossip, day_info={
+                    1: Gossip.Gossip(IsCategory(Fraser, DEMON)),
+                    2: Gossip.Gossip(IsCategory(Anna, DEMON)),
+                }),
+                Player(name='Josh', claim=Knight, night_info={
+                    1: Knight.Ping(Fraser, Oscar)
+                }),
+                Player(name='Anna', claim=Gambler, night_info={
+                    2: Gambler.Gamble(Sula, Goblin),
+                    3: Gambler.Gamble(You, Drunk),
+                }),
+                Player(name='Sula', claim=Juggler, day_info={
+                    1: Juggler.Juggle({
+                        You: Goblin,
+                        Oscar: Gossip,
+                        Josh: Knight,
+                        Anna: Imp,
+                    })
+                }),
+                Player(name='Hannah', claim=Steward, night_info={
+                    1: Steward.Ping(Oscar)
+                }),
+            ],
+            night_deaths={
+                2: Sula,
+                3: [You, Josh, Anna]
+            },
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[Imp, Po],
+            possible_minions=[Goblin],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+        )
         
+        assert_solutions(self, worlds, solutions=(
+           (Acrobat, Balloonist, Gossip, Drunk, Imp, Juggler, Goblin),
+        ))
+
         
     def test_puzzle_10(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it
@@ -673,8 +728,6 @@ class Puzzles(unittest.TestCase):
 
 
     def test_puzzle_13(self):
-        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gka3js/weekly_puzzle_13_clockblocking/
-
         You, Jasmine, Oscar, Tim, Sarah, Fraser, Aoife = range(7)
         state = State(
             players=[
@@ -694,15 +747,12 @@ class Puzzles(unittest.TestCase):
                     1: FortuneTeller.Ping(You, Oscar, demon=False),
                     2: FortuneTeller.Ping(You, Jasmine, demon=False),
                 }),
-                Player(name='Fraser', claim=Slayer),
+                Player(name='Fraser', claim=Slayer, day_info={
+                    2: Slayer.Shot(Oscar, died=False),
+                }),
                 Player(name='Aoife', claim=Recluse),
             ],
-            day_events={
-                1: [
-                    Slayer.Shot(player=Fraser, target=Oscar, died=False),
-                    Execution(Aoife, died=True)
-                ],
-            },
+            day_events={1: Execution(Aoife, died=True)},
             night_deaths={2: Tim,},
         )
 

@@ -1,48 +1,60 @@
 from clockchecker import *
 
 
-# https://www.reddit.com/r/BloodOnTheClocktower/comments/1hlgh1w/weekly_puzzle_20_the_three_wise_men/
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1fz4jqe/weekly_puzzle_9_the_new_acrobat/
 
-You, Caspar, Joseph, Melchior, Mary, Balthazar, Gabriel = range(7)
+You, Fraser, Oscar, Josh, Anna, Sula, Hannah = range(7)
 
 state = State(
     players=[
-        Player(name='You', claim=Investigator, night_info={
-            1: Investigator.Ping(Mary, Gabriel, Baron)
+        Player(name='You', claim=Acrobat, night_info={
+            2: Acrobat.Choice(Fraser),
+            3: Acrobat.Choice(Josh),
         }),
-        Player(name='Caspar', claim=VillageIdiot, night_info={
-            1: VillageIdiot.Ping(Mary, is_evil=True),
-            2: VillageIdiot.Ping(Joseph, is_evil=True),
+        Player(name='Fraser', claim=Balloonist, night_info={
+            1: Balloonist.Ping(Oscar),
+            2: Balloonist.Ping(Anna),
+            3: Balloonist.Ping(You),
         }),
-        Player(name='Joseph', claim=Saint),
-        Player(name='Melchior', claim=VillageIdiot, night_info={
-            1: VillageIdiot.Ping(Balthazar, is_evil=True),
-            2: VillageIdiot.Ping(Mary, is_evil=True),
+        Player(name='Oscar', claim=Gossip, day_info={
+            1: Gossip.Gossip(IsCategory(Fraser, DEMON)),
+            2: Gossip.Gossip(IsCategory(Anna, DEMON)),
         }),
-        Player(name='Mary', claim=Virgin, day_info={
-            1: Virgin.NominatedWithoutExecution(Balthazar)
+        Player(name='Josh', claim=Knight, night_info={
+            1: Knight.Ping(Fraser, Oscar)
         }),
-        Player(name='Balthazar', claim=VillageIdiot, night_info={
-            1: VillageIdiot.Ping(Joseph, is_evil=True),
-            2: VillageIdiot.Ping(Caspar, is_evil=True),
+        Player(name='Anna', claim=Gambler, night_info={
+            2: Gambler.Gamble(Sula, Goblin),
+            3: Gambler.Gamble(You, Drunk),
         }),
-        Player(name='Gabriel', claim=Ravenkeeper, night_info={
-            2: Ravenkeeper.Ping(Balthazar, Drunk)
+        Player(name='Sula', claim=Juggler, day_info={
+            1: Juggler.Juggle({
+                You: Goblin,
+                Oscar: Gossip,
+                Josh: Knight,
+                Anna: Imp,
+            })
+        }),
+        Player(name='Hannah', claim=Steward, night_info={
+            1: Steward.Ping(Oscar)
         }),
     ],
-    day_events={1: Execution(You)},
-    night_deaths={2: Gabriel},
+    night_deaths={
+        2: Sula, 
+        3: [You, Josh, Anna]
+    },
 )
+
 
 worlds = list(world_gen(
     state,
-    possible_demons=[Imp],
-    possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
+    possible_demons=[Imp, Po],
+    possible_minions=[Goblin],
     possible_hidden_good=[Drunk],
     possible_hidden_self=[Drunk],
 ))
 
+
 for world in worlds:
     print(world)
 print(f'Found {len(worlds)} valid worlds')
-

@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
+import enum
 import itertools as it
 import os
 from typing import Any, Callable, Generator, TYPE_CHECKING
@@ -25,6 +26,18 @@ if TYPE_CHECKING:
     StateGen = Generator[State]
 
 
+class Phase(enum.Enum):
+    NIGHT = enum.auto()
+    DAY = enum.auto()
+    SETUP = enum.auto()
+   
+GLOBAL_PHASE_ORDERS = {
+    Phase.NIGHT: characters.GLOBAL_NIGHT_ORDER,
+    Phase.DAY: characters.GLOBAL_DAY_ORDER,
+    Phase.SETUP: characters.GLOBAL_SETUP_ORDER,
+}
+
+
 @dataclass
 class Player:
     """
@@ -43,7 +56,7 @@ class Player:
     woke_tonight: bool = False
     droison_count: int = 0
 
-    character_history: list[type[Character]] = field(default_factory=list)
+    character_history: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         self.character = self.claim()
@@ -137,11 +150,13 @@ class State:
     def begin_game(self):
         """Called after player positions and characters have been chosen"""
         # Initialise data structures for game
+        self.current_phase = Phase.SETUP
+        self.phase_order_index = 0
         self.update_character_index()
+        self.current_phase_order = self.setup_order
         self.initial_characters = tuple(type(p.character) for p in self.players)
         self.night, self.day = None, None
-        self.order_position = 0
-        self.previously_alive = [True for _ in range(len(self.players))]
+        self.previously_alive = [True] * len(self.players)
         self.vortox = False  # The vortox will set this during setup
 
     def fork(self) -> State:
@@ -168,27 +183,23 @@ class State:
             and all(a == b for a, b in zip(self.debug_key, key))
         )
 
-    def run_next_player(self, round_: int, phase: str) -> StateGen:
-        match phase:
-            case 'setup':
-                if self.order_position >= len(self.setup_order):
-                    yield self; return
-                player = self.players[self.setup_order[self.order_position]]
+    def run_next_player(self, round_: int) -> StateGen:
+        if self.phase_order_index >= len(self.current_phase_order):
+            yield self
+            return
+        player = self.players[self.current_phase_order[self.phase_order_index]]
+
+        match self.current_phase:
+            case Phase.SETUP:
                 substates = player.character.run_setup(self, player.id)
-            case 'night':
-                if self.order_position >= len(self.night_order):
-                    yield self; return
-                player = self.players[self.night_order[self.order_position]]
+            case Phase.NIGHT:
                 characters.record_if_player_woke_tonight(self, player.id)
                 substates = player.character.run_night(self, round_, player.id)
-            case 'day':
-                if self.order_position >= len(self.day_order):
-                    yield self; return
-                player = self.players[self.day_order[self.order_position]]
+            case Phase.DAY:
                 substates = player.character.run_day(self, round_, player.id)
 
         for substate in substates:
-            substate.order_position += 1
+            substate.phase_order_index += 1
             yield substate
 
     def run_event(self, round_: int, event: int) -> StateGen:
@@ -199,7 +210,9 @@ class State:
             yield from events[event](self)
 
     def end_setup(self) -> StateGen:
-        self.order_position = 0
+        self.current_phase = Phase.NIGHT
+        self.current_phase_order = self.night_order
+        self.phase_order_index = 0
         self.night = 1
         self.day = None
         yield self
@@ -207,8 +220,6 @@ class State:
     def end_night(self) -> StateGen:
         for player in self.players:
             player.woke_tonight = False
-            player.done_action = False
-        self.order_position = 0
 
         # Check the right people have Died / Resurrected in the night
         currently_alive = [
@@ -228,27 +239,51 @@ class State:
             return
         del self.previously_alive
 
+        self.current_phase = Phase.DAY
+        self.current_phase_order = self.day_order
+        self.phase_order_index = 0
         self.day = self.night
         self.night = None
         yield self
 
     def end_day(self) -> StateGen:
         for player in self.players:
-            player.done_action = False
             if not player.character.end_day(self, self.day, player.id):
                 return
         self.previously_alive = [
             info.IsAlive(player)(self, None) is info.TRUE
             for player in range(len(self.players))
         ]
-        self.order_position = 0
+        self.current_phase = Phase.NIGHT
+        self.current_phase_order = self.night_order
+        self.phase_order_index = 0
         self.night = self.day + 1
         self.day = None
         yield self
 
     def character_change(self, player_id: PlayerID, character: type[Character]):
         player = self.players[player_id]
+        player.character.maybe_deactivate_effects(
+            self, player_id, characters.Reason.CHARACTER_CHANGE
+        )
         player.character_history.append(player.character._world_str(self))
+        
+        # Ammend night(/day/setup) order position
+        if self.phase_order_index < len(self.current_phase_order):  # In phase
+            active_player_id = self.current_phase_order[self.phase_order_index]
+            active_character = type(self.players[active_player_id].character)
+            global_order = GLOBAL_PHASE_ORDERS[self.current_phase]
+            active_idx = global_order.index(active_character)
+            old_idx = list_find(global_order, type(player.character), 9999)
+            new_idx = list_find(global_order, character, 9999)
+            self.phase_order_index += (
+                new_idx < active_idx or 
+                (new_idx == active_idx and player_id <= active_player_id)
+            ) - (
+                old_idx < active_idx or 
+                (old_idx == active_idx and player_id <= active_player_id)
+            )
+        
         player.character = character()
         player.character.first_night = (
             self.night if self.night is not None else self.day + 1
@@ -256,7 +291,7 @@ class State:
         self.update_character_index()
 
     def update_character_index(self):
-        # TODO: This fn should modify self.order_position to compensate for change?
+        # TODO: This fn should modify self.phase_order_index to compensate for change
         self.setup_order, self.night_order, self.day_order = [], [], []
         self.death_in_town_callback_players = []
         for global_order, order in (
@@ -265,9 +300,9 @@ class State:
             (characters.GLOBAL_DAY_ORDER, self.day_order),
         ):
             for character in global_order:
-                for i, player in enumerate(self.players):
-                    if type(player.character) is character:
-                        order.append(i)
+                for player_id in range(len(self.players)):
+                    if info.has_ability_of(self, player_id, character):
+                        order.append(player_id)
         for player_id, player in enumerate(self.players):
             if hasattr(player.character, "death_in_town"):
                 self.death_in_town_callback_players.append(player_id)
@@ -276,7 +311,7 @@ class State:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
         player = self.players[player_id]
 
-        # One day I might have to turn this into a proper stack of gnerators, 
+        # One day I might have to turn this into a proper stack of generators, 
         # but for now all the characters can be implemented by modifying the 
         # current state :)
         for callback_id in self.death_in_town_callback_players:
@@ -289,7 +324,7 @@ class State:
                 not p.is_dead and p.character.category is characters.DEMON
                 for p in self.players
             ):
-                # Evil twin check would go here.
+                # Evil Twin / Mastermind check would go here.
                 return
 
         yield self
@@ -406,15 +441,15 @@ def _run_game_gen(
             yield from getattr(ss, method)(*args)
 
     for player in range(n_players):
-        states = apply_all(states, 'run_next_player', (None, 'setup'))
+        states = apply_all(states, 'run_next_player', (None, ))
     states = apply_all(states, 'end_setup', ())
     for round_ in range(1, max_night + 1):
         for player in range(n_players):
-            states = apply_all(states, 'run_next_player', (round_, 'night'))
+            states = apply_all(states, 'run_next_player', (round_, ))
         states = apply_all(states, 'end_night', ())
         if round_ <= max_day:
             for player in range(n_players):
-                states = apply_all(states, 'run_next_player', (round_, 'day'))
+                states = apply_all(states, 'run_next_player', (round_, ))
             for event in range(event_counts[round_]):
                 states = apply_all(states, 'run_event', (round_, event))
             if round_ < max_day or finish_final_day:
@@ -524,3 +559,11 @@ def validate_inputs(
     for character in possible_minions:
         if character.category is not characters.MINION:
             raise ValueError(f'{character.__name__} is not a Minion')
+        
+
+
+def list_find(X: list, item: Any, sentinel: int) -> int:
+    try:
+        return X.index(item)
+    except ValueError:
+        return sentinel

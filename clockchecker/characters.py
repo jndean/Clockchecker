@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import enum
+import itertools
 from typing import ClassVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .core import State, StateGen, Player
     from .info import PlayerID, Info, STBool
 
-from . import info
+from . import core
 from . import events
+from . import info
 
 
 """
@@ -222,12 +224,15 @@ class Character:
 
     def attacked_at_night(
         self: Character,
-         state: State,
-         me: PlayerID,
-         src: PlayerID,
+        state: State,
+        me: PlayerID,
+        src: PlayerID,
      ) -> StateGen:
         """
         Called when attacked at night, decides whether this causes death or not.
+        This does not always imply 'me' was chosen by a player, e.g. see Gossip.
+        Characters who die to their own ability will be 'attacked' by 
+        themselves, i.e., me == src.
         Remember to re-read the attacker properties on the yielded state in the
         calling method, because e.g. the Goon will create a state where the
         attacker has become drunk.
@@ -242,11 +247,13 @@ class Character:
         ):
             yield state
         else:
+            self.death_explanation = f'killed by {state.players[src].name}'
             yield from self.apply_death(state, me)
 
     def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
         """Goblin, Psychopath, Saint etc override this method."""
         if died:
+            self.death_explanation = f'executed'
             yield from self.killed(state, me)
         elif self.cant_die(state, me):
             yield state
@@ -265,7 +272,42 @@ class Character:
         For printing nice output representations of worlds. E.g 
         E.g. see Posoiner or Fortune Teller.
         """
-        return type(self).__name__
+        ret = type(self).__name__
+        if hasattr(self, 'death_explanation'):
+            ret += f' ({self.death_explanation})'
+        return ret
+
+
+@dataclass
+class Acrobat(Character):
+    """
+    Each night*, choose a player:
+    if they are or become drunk or poisoned tonight, you die.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    @dataclass
+    class Choice(info.NotInfo):
+        player: info.Info
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        """Override Reason: Die on droisoned player choice"""
+        acrobat = state.players[me]
+        if acrobat.is_evil:
+            raise NotImplementedError("Evil Acrobat")
+        # Order of elifs is important
+        if (choice := acrobat.night_info.get(night, None)) is None:
+            yield state
+        elif acrobat.is_dead:
+            return
+        elif acrobat.droison_count:
+            yield state
+        elif state.players[choice.player].droison_count:
+            yield from self.attacked_at_night(state, me, me)
+        else:
+            yield state
 
 
 @dataclass
@@ -334,10 +376,8 @@ class Balloonist(Character):
         return bounds
 
     @dataclass
-    class Ping(info.Info):
+    class Ping(info.NotInfo):
         player: PlayerID
-        def __call__(self, state: State, src: PlayerID) -> info.STBool:
-            raise RuntimeError("Balloonist should never call the Ping directly")
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
         """
@@ -528,7 +568,7 @@ class Courtier(Character):
     spent: bool = False
 
     @dataclass
-    class Choice:
+    class Choice(info.NotInfo):
         character: type[Character]
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
@@ -609,6 +649,7 @@ class Drunk(Character):
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
+        drunk.droison_count += 1
         self.wake_pattern = drunk.claim.wake_pattern
         """Drunk can only 'lie' about being Townsfolk"""
         if drunk.claim.category is TOWNSFOLK:
@@ -665,11 +706,10 @@ class FortuneTeller(Character):
         player1: PlayerID
         player2: PlayerID
         demon: bool
-
         def __call__(self, state: State, me: PlayerID) -> STBool:
             real_result = (
-                info.IsCategory(self.player2, DEMON)(state, me)
-                | info.IsCategory(self.player1, DEMON)(state, me)
+                info.IsCategory(self.player1, DEMON)(state, me)
+                | info.IsCategory(self.player2, DEMON)(state, me)
                 | info.CharAttrEq(me, 'red_herring', self.player1)(state, me)
                 | info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
             )
@@ -688,6 +728,43 @@ class FortuneTeller(Character):
             'FortuneTeller (Red Herring = '
             f'{state.players[self.red_herring].name})'
         )
+
+@dataclass
+class Gambler(Character):
+    """
+    Each night*, choose a player & guess their character:
+    if you guess wrong, you die.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    @dataclass
+    class Gamble(info.NotInfo):
+        player: PlayerID
+        character: type[Character]
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        """Override Reason: Die on error, fork on MAYBE, ignore vortox"""
+        gambler = state.players[me]
+        if gambler.is_evil:
+            raise NotImplementedError("Evil Gambler")
+        
+        ping = gambler.night_info.get(night, None)
+        if gambler.is_dead or gambler.droison_count or ping is None:
+            yield state
+            return
+
+        result = info.IsCharacter(ping.player, ping.character)(state, me)
+        if result is info.TRUE:
+            yield state
+        elif result is info.FALSE:
+            # Gambler attacks themselves with their own ability
+            yield from self.attacked_at_night(state, me, me)
+        elif result is info.MAYBE:
+            # Create a world for both live and die
+            yield from self.attacked_at_night(state.fork(), me, me)
+            yield state.fork()
 
 @dataclass
 class GenericDemon(Character):
@@ -711,10 +788,56 @@ class GenericDemon(Character):
 
 @dataclass
 class Goblin(Character):
-    """TODO: Not yet implemented"""
+    """TODO: Ability not yet implemented"""
     category: ClassVar[Categories] = MINION
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+@dataclass
+class Gossip(Character):
+    """
+    Each day, you may make a public statement.
+    Tonight, if it was true, a player dies.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    @dataclass
+    class Gossip(events.Event):
+        statement: info.Info
+        player: PlayerID | None = None
+        def __call__(self, state: State) -> StateGen:
+            gossip = state.players[self.player]
+            # Evaluate the gossip now during the day, act on it later at night
+            gossip.gossip_result = self.statement(state, self.player)
+            yield state
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        """Override Reason: On True gossip, create a world for every kill."""
+        gossip = state.players[me]
+        result = getattr(gossip, 'gossip_result', None)
+        if (
+            gossip.is_dead
+            or gossip.droison_count
+            or result is None
+            or result is info.FALSE
+        ):
+            yield state
+            return
+        dud_kill_done = False
+        if result is info.MAYBE:
+            yield state.fork()
+            dud_kill_done = True
+        for target in range(len(state.players)):
+            if state.players[target].is_dead:
+                # Dedupe worlds where nobody dies. I _think_ this is OK?
+                if dud_kill_done:
+                    continue
+                dud_kill_done = True
+            new_state = state.fork()
+            target_char = new_state.players[target].character
+            yield from target_char.attacked_at_night(new_state, target, me)
 
 @dataclass
 class Imp(GenericDemon):
@@ -725,17 +848,53 @@ class Imp(GenericDemon):
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
         """Override Reason: Add star pass to generic demon"""
-        demon = state.players[me]
-        if night == 1 or demon.is_dead or demon.droison_count:
+        imp = state.players[me]
+        if night == 1 or imp.is_dead or imp.droison_count:
             yield state; return
+        
+        # Kill other player
+        sunk_a_kill = False
         for target in range(len(state.players)):
             if target == me:
-                import sys  # TMP
-                if 'unittest' not in sys.modules:
-                    pass  # print("Star pass not implemented yet")
+                continue
+            if state.players[target].is_dead:
+                if sunk_a_kill:
+                    continue  # Dedupe sinking kill choice
+                sunk_a_kill = True
             new_state = state.fork()
             target_char = new_state.players[target].character
             yield from target_char.attacked_at_night(new_state, target, me)
+        
+        # Star pass
+        if self.cant_die(state, me) or getattr(imp, 'safe_from_demon_count', 0):
+            yield state; return
+        self.death_explanation = 'star passed'
+        # Decide who catches the star pass. SW must catch if able.
+        scarletwomen, other_minions = [], []
+        for player in state.players:
+            character = player.character
+            if character is ScarletWoman and character.catches_death(
+                state, imp, player, True
+            ):
+                scarletwomen.append(player.id)
+            elif character.category is MINION and not player.is_dead:
+                other_minions.append(player.id)
+        catchers = scarletwomen if scarletwomen else other_minions
+
+        for minion in catchers:
+            new_state = state.fork()
+            # Note this slightly odd choice of if condition captures that the SW
+            # only wakes if they caught the star pass _due to their ability_!
+            if scarletwomen:
+                new_state.players[minion].woke()
+            new_state.character_change(minion, Imp)
+            new_me = new_state.players[me].character
+            yield from new_me.apply_death(new_state, me)
+
+        if not catchers:
+            new_state = state.fork()
+            new_me = new_state.players[me].character
+            yield from new_me.apply_death(new_state, me)
 
 @dataclass
 class Investigator(Character):
@@ -773,8 +932,6 @@ class Juggler(Character):
         juggle: dict[PlayerID, Character]
         player: PlayerID | None = None
         def __call__(self, state: State) -> StateGen:
-            if not info.has_ability_of(state, self.player, Juggler):
-                yield state; return
             juggler = state.players[self.player]
             # Evaluate the juggles now, check the count later.
             juggler.correct_juggles = tuple(
@@ -906,6 +1063,7 @@ class Lunatic(Character):
     """
     You think you are the Demon, but you are not.
     The demon knows who you are & who you chose at night.
+    ## Not quite properly implemented yet - see todo.md ##
     """
     category: ClassVar[Categories] = OUTSIDER
     is_liar: ClassVar[bool] = True
@@ -979,7 +1137,7 @@ class NightWatchman(Character):
     spent: bool = False
 
     @dataclass
-    class Choice:
+    class Choice(info.NotInfo):
         player: PlayerID
         confirmed: bool
 
@@ -1098,6 +1256,55 @@ class Oracle(Character):
                     for player in range(len(state.players))
                 ]
             )(state, src)
+
+@dataclass
+class Po(GenericDemon):
+    """
+    Each night*, you may choose a player: they die.
+    If your last choice was no-one, choose 3 players tonight.
+    """
+
+    charged: bool = False
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        po = state.players[me]
+        if night == 1 or po.is_dead:
+            yield state; return
+        
+        if not self.charged:
+            # Charge World
+            new_state = state.fork()
+            new_state.players[me].character.charged = True
+            yield new_state
+
+            # 1 Kill World
+            if po.droison_count:
+                yield state; return
+            sunk_a_kill = False
+            for target in range(len(state.players)):
+                if state.players[target].is_dead:
+                    if sunk_a_kill:
+                        continue  # Dedupe sinking kill choice
+                    sunk_a_kill = True
+                new_state = state.fork()
+                target_char = new_state.players[target].character
+                yield from target_char.attacked_at_night(new_state, target, me)
+        else:
+            # 3 Kill World
+            print('Untested code')
+            self.charged = False
+            if po.droison_count:
+                yield state; return
+            
+            def kill_gen(states: StateGen, kill: PlayerID) -> StateGen:
+                for state_ in states:
+                    target = state_.players[kill].character
+                    yield from target.attacked_at_night(state_, target, me)
+            for kills in itertools.combinations(range(len(state.players)), r=3):
+                new_states = [state.fork()]
+                for kill in kills:
+                    new_states = kill_gen(new_states, kill)
+                yield from new_states
 
 @dataclass
 class Poisoner(Character):
@@ -1381,16 +1588,27 @@ class ScarletWoman(Character):
         """Catch a Demon death. I don't allow catching Recluse deaths."""
         scarletwoman = state.players[me]
         dead_player = state.players[death]
-        living_players = sum(not p.is_dead for p in state.players)
-        if (
-            not scarletwoman.is_dead
-            and scarletwoman.droison_count == 0
-            and dead_player.character.category is DEMON
-            and living_players >= 4
-        ):
+        if self.catches_death(state, dead_player, scarletwoman):
             if state.night is not None:
                 scarletwoman.woke()
             state.character_change(me, type(dead_player.character))
+
+    def catches_death(
+        self,
+        state: State,
+        dead: Player,
+        scarletwoman: Player,
+        death_not_yet_applied: bool = False,
+    ) -> bool:
+        """Trigger condition is also checked by Imp, so has its own method."""
+        living_players = sum(not p.is_dead for p in state.players)
+        living_player_threshold = 4 + death_not_yet_applied
+        return (
+            not scarletwoman.is_dead
+            and scarletwoman.droison_count == 0
+            and dead.character.category is DEMON
+            and living_players >= living_player_threshold
+        )
 
 @dataclass
 class Seamstress(Character):
@@ -1757,15 +1975,19 @@ GLOBAL_SETUP_ORDER = [
 
 GLOBAL_NIGHT_ORDER = [
     Leviathan,
-    Courtier,
     Poisoner,
+    Courtier,
+    Gambler,
+    Acrobat,
     ScarletWoman,
     Imp,
     Pukka,
+    Po,
     FangGu,
     NoDashii,
     Vortox,
     LordOfTyphon,
+    Gossip,
     Ravenkeeper,
     Washerwoman,
     Librarian,

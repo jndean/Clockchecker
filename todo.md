@@ -18,10 +18,18 @@
 
 # Active Bugs To Fix:
 
+	- When a player changes character, the index of the night/day order doesn't 
+	currently move, so players could be skipped/repeated
+
+	- When a player's character changes, the new character doesn't activate any 
+	effects or do any setup.
+
 	- RN, Pings don't generally check that their callers are actually the
 	corresponding character. Will become more relevant when TF can become evil?
 
 	- Pukka shouldn't stop poisoning on end_day
+
+	- Not respecting the jinx on cannibal/juggler. What a ridiculous jinx!
 
 	- Should implement run_night for Lunatic so it can call decide_if_woke_tonight for the demon they think they are (make decide_if_woke_tonight accept a 
 	character, rather than a player). This should also be respected in `info.behaves_like`.
@@ -42,4 +50,4 @@
 
 # Things we don't and won't handle:
 
- - Order not specified by night order. E.g. if there are two poisoners in town then either could go first, but we only try one ordering.
+ - Order not specified by night order. E.g. if there are two poisoners in town then either could go first, but we only try one ordering. Or if there are two Scarlet Women, we only generate a world where one of them caught the demon.
