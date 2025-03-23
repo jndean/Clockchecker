@@ -1,57 +1,109 @@
+from dataclasses import dataclass
+
 from clockchecker import *
 
 
-# https://www.reddit.com/r/BloodOnTheClocktower/comments/1fz4jqe/weekly_puzzle_9_the_new_acrobat/
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1gv12ck/weekly_puzzle_15_wake_up_and_choose_violets
 
-You, Fraser, Oscar, Josh, Anna, Sula, Hannah = range(7)
+# This puzzle requires a custom method for one of the savant statements
+@dataclass
+class LongestRowOfTownsfolk(Info):
+    """This puzzle (15) has no misregistration, so ommit that logic for now."""
+    length: int
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        N = len(state.players)
+        townsfolk = [
+            info.IsCategory(player % N, TOWNSFOLK)(state, src)
+            for player in range(N * 2)  # Wrap around circle
+        ]
+        longest, current = 0, 0
+        for is_tf in townsfolk:
+            if is_tf is TRUE:
+                current += 1
+            elif is_tf is FALSE:
+                longest = max(longest, current)
+                current = 0
+            else:
+                raise NotImplementedError("Misregistration")
+        if longest > N:
+            longest = N
+        return STBool(longest == self.length)
+
+
+You, Oscar, Sarah, Hannah, Fraser, Aoife, Adam, Jasmine = range(8)
 
 state = State(
     players=[
-        Player(name='You', claim=Acrobat, night_info={
-            2: Acrobat.Choice(Fraser),
-            3: Acrobat.Choice(Josh),
+        Player(name='You', claim=Savant, day_info={
+            1: Savant.Ping(
+                ExactlyN(N=3, args=[
+                    IsInPlay(Clockmaker),
+                    IsInPlay(Klutz),
+                    IsInPlay(Juggler),
+                    IsInPlay(Vortox),
+                ]),
+                LongestRowOfTownsfolk(5),
+            )
         }),
-        Player(name='Fraser', claim=Balloonist, night_info={
-            1: Balloonist.Ping(Oscar),
-            2: Balloonist.Ping(Anna),
-            3: Balloonist.Ping(You),
+        Player(name='Oscar', claim=Klutz),
+        Player(name='Sarah', claim=Juggler, 
+            day_info={
+                1: Juggler.Juggle({
+                    You: Savant,
+                    Hannah: SnakeCharmer,
+                    Fraser: Clockmaker,
+                    Aoife: Seamstress,
+                    Jasmine: SnakeCharmer,
+                })
+            },
+            night_info={2: Juggler.Ping(3)},
+        ),
+        Player(name='Hannah', claim=SnakeCharmer, night_info={
+            1: [
+                SnakeCharmer.Choice(Sarah),
+                EvilTwin.Is(Jasmine),
+            ],
+            2: SnakeCharmer.Choice(Oscar),
+            3: SnakeCharmer.Choice(Aoife),
         }),
-        Player(name='Oscar', claim=Gossip, day_info={
-            1: Gossip.Gossip(IsCategory(Fraser, DEMON)),
-            2: Gossip.Gossip(IsCategory(Anna, DEMON)),
+        Player(name='Fraser', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(3)
         }),
-        Player(name='Josh', claim=Knight, night_info={
-            1: Knight.Ping(Fraser, Oscar)
+        Player(name='Aoife', claim=Seamstress, night_info={
+            1: Seamstress.Ping(Oscar, Hannah, same=False)
         }),
-        Player(name='Anna', claim=Gambler, night_info={
-            2: Gambler.Gamble(Sula, Goblin),
-            3: Gambler.Gamble(You, Drunk),
+        Player(name='Adam', claim=Artist, night_info={
+            1: Artist.Ping(
+                ~IsCharacter(You, Vortox)
+                & ~IsCharacter(Oscar, Vortox)
+                & ~IsCharacter(Sarah, Vortox) 
+            )
         }),
-        Player(name='Sula', claim=Juggler, day_info={
-            1: Juggler.Juggle({
-                You: Goblin,
-                Oscar: Gossip,
-                Josh: Knight,
-                Anna: Imp,
-            })
-        }),
-        Player(name='Hannah', claim=Steward, night_info={
-            1: Steward.Ping(Oscar)
+        Player(name='Jasmine', claim=SnakeCharmer, night_info={
+            1: [
+                SnakeCharmer.Choice(Fraser),
+                EvilTwin.Is(Hannah),
+            ],
+            2: SnakeCharmer.Choice(Aoife),
+            3: SnakeCharmer.Choice(Adam),
         }),
     ],
-    night_deaths={
-        2: Sula, 
-        3: [You, Josh, Anna]
+    day_events={
+        1: Execution(You),
+        2: [
+            Execution(Oscar),
+            Klutz.Choice(player=Oscar, choice=Sarah),
+        ],
     },
 )
 
 
 worlds = list(world_gen(
     state,
-    possible_demons=[Imp, Po],
-    possible_minions=[Goblin],
-    possible_hidden_good=[Drunk],
-    possible_hidden_self=[Drunk],
+    possible_demons=[NoDashii, Vortox],
+    possible_minions=[EvilTwin],
+    possible_hidden_good=[Mutant],
+    possible_hidden_self=[],
 ))
 
 

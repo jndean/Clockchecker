@@ -133,12 +133,20 @@ class InfoOp(Info):
         )
 
 class NotInfo:
-    pass
     def __call__(self, *args, **kwargs):
         raise ValueError(
             f"Looks like you're trying to treat a {type(self)} as Info, when "
             'it has in fact been explicitly marked as NotInfo :)'
         )
+
+class ExternalInfo(ABC):
+    """
+    Info claimed by a player to have been cause by another player's ability 
+    (e.g. NightWatchman ping, EvilTwin seen).
+    """
+    @abstractmethod
+    def __call__(self, state: State, src: PlayerID) -> bool:
+        pass
 
 # ------------------- Info Objects -------------------- #
 
@@ -160,7 +168,6 @@ class IsDroisoned(Info):
     by: int = None
     def __call__(self, state: State, src: PlayerID) -> STBool:
         return STBool(state.players[self.player].is_droisoned)
-
 
 @dataclass
 class IsAlive(Info):
@@ -316,7 +323,7 @@ def has_ability_of(
     character: type[Character]
 ) -> bool:
     """For checking if it is legal for a player to use a character's ability."""
-    # TODO: Philospoher and Boffin'd Demon logic go here.
+    # TODO: Philospoher, Alchemist and Boffin'd Demon logic go here.
     return isinstance(state.players[player_id].character, character)
 
 

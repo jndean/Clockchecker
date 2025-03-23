@@ -19,7 +19,9 @@ state = State(
             1: Empath.Ping(0)
         }),
         Player(name='Olivia', claim=Saint),
-        Player(name='Dan', claim=Slayer),
+        Player(name='Dan', claim=Slayer, day_info={
+            2: Slayer.Shot(Matthew, died=False),
+        }),
         Player(name='Tom', claim=Recluse),
         Player(name='Matthew', claim=Librarian, night_info={
             1: Librarian.Ping(You, Josh, Drunk)
@@ -33,11 +35,7 @@ state = State(
             1: Chef.Ping(2)
         }),
     ],
-    day_events={
-        1: Execution(You),
-        2: [Slayer.Shot(src=Dan, target=Matthew, died=False),
-            Execution(Dan)]
-    },
+    day_events={1: Execution(You), Execution(Dan)},
     night_deaths={2: Josh, 3: Olivia},
 )
 
@@ -125,8 +123,9 @@ python -m unittest
 At time of writing clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. The above unittest command today solves 24 puzzles in 8.57 seconds on a single thread.
 
 ## Example Character Implementations
-The hope is for characters to be easy write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the Clockchecker framework; some example characters taken from the `characters.py` file are below. 
-Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE`, `MAYBE`. For example, `info.IsCharacter(josef, IMP)` will evaluate to `MAYBE` if josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
+The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
+
+Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, IMP)` will evaluate to `MAYBE` if Josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
 
 <details open>
 <summary><b>Investigator</b></summary>
@@ -226,10 +225,11 @@ class Drunk(Character):
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
+        # Drunk can only 'lie' about being Townsfolk
+        if drunk.claim.category is not TOWNSFOLK:
+            return
+        drunk.droison_count += 1
         self.wake_pattern = drunk.claim.wake_pattern
-        """Drunk can only 'lie' about being Townsfolk"""
-        if drunk.claim.category is TOWNSFOLK:
-            yield state
 ```
 </details>
 <details>

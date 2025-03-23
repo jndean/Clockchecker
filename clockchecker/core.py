@@ -47,7 +47,7 @@ class Player:
     """
     name: str
     claim: type[Character]
-    night_info: dict[int, Info] = field(default_factory=dict)
+    night_info: dict[int, Info | list] = field(default_factory=dict)
     day_info: dict[int, Info] = field(default_factory=dict)
     character: Character | None = None
 
@@ -60,6 +60,26 @@ class Player:
 
     def __post_init__(self):
         self.character = self.claim()
+
+        # Reorganise info so it can be easily used in night order
+        self.external_night_info = defaultdict(list)
+        for night in list(self.night_info):
+            night_info = self.night_info[night]
+            if not isinstance(night_info, list):
+                night_info = [night_info]
+            del self.night_info[night]
+            for item in night_info:
+                # Filter out info that comes from another player's ability
+                char_name, _ = type(item).__qualname__.split('.')
+                item_char = getattr(characters, char_name)
+                if item_char is self.claim:
+                    assert night not in self.night_info, (
+                        "One info per night from own ability."
+                    )
+                    self.night_info[night] = item
+                else:
+                    self.external_night_info[(night, item_char)].append(item)
+        self.external_night_info = dict(self.external_night_info)
 
     def droison(self, state: State, src: PlayerID) -> None:
         self.droison_count += 1
@@ -116,7 +136,7 @@ class State:
             if isinstance(events_, events.Event):
                 self.day_events[day] = [events_]
 
-        # Events can entered in Player.day_info or in State.day_events, because
+        # Events can be entered in Player.day_info or in State.day_events, b/c
         # that feels nice. Move them all to one place before the solve starts.
         for player in self.players:
             for day, maybe_event in list(player.day_info.items()):
@@ -187,20 +207,44 @@ class State:
         if self.phase_order_index >= len(self.current_phase_order):
             yield self
             return
-        player = self.players[self.current_phase_order[self.phase_order_index]]
+        player_id = self.current_phase_order[self.phase_order_index]
+        character = self.players[player_id].character
 
         match self.current_phase:
             case Phase.SETUP:
-                substates = player.character.run_setup(self, player.id)
+                substates = character.run_setup(self, player_id)
             case Phase.NIGHT:
-                characters.record_if_player_woke_tonight(self, player.id)
-                substates = player.character.run_night(self, round_, player.id)
+                characters.record_if_player_woke_tonight(self, player_id)
+                substates = character.run_night(self, round_, player_id)                    
+                substates = State.run_external_night_info(
+                    substates, type(character), round_
+                )
             case Phase.DAY:
-                substates = player.character.run_day(self, round_, player.id)
+                substates = character.run_day(self, round_, player_id)
 
         for substate in substates:
             substate.phase_order_index += 1
             yield substate
+    
+    @staticmethod
+    def run_external_night_info(
+        states: StateGen,
+        character: type[Character],
+        night: int,
+    ) -> StateGen:
+        """
+        Check all information caused by this player's ability but reported by
+        another player (e.g. Nightwatchman, Evil Twin).
+        """
+        for state in states:
+            externals = state.external_info_registry.get((character, night), [])
+            for external_info, player_id in externals:
+                if not state.players[player_id].character.run_night_external(
+                    state, external_info, player_id
+                ):
+                    break
+            else:
+                yield state
 
     def run_event(self, round_: int, event: int) -> StateGen:
         events = self.day_events.get(round_, None)
@@ -239,6 +283,15 @@ class State:
             return
         del self.previously_alive
 
+        # Check good players are what they claim to be
+        for player in self.players:
+            if not (
+                player.character.is_liar 
+                or player.is_evil
+                or isinstance(player.character, player.claim)
+            ):
+                return
+
         self.current_phase = Phase.DAY
         self.current_phase_order = self.day_order
         self.phase_order_index = 0
@@ -261,12 +314,16 @@ class State:
         self.day = None
         yield self
 
-    def character_change(self, player_id: PlayerID, character: type[Character]):
+    def character_change(
+        self,
+        player_id: PlayerID,
+        character: type[Character]
+    ) -> StateGen:
         player = self.players[player_id]
+        player.character_history.append(player.character._world_str(self))
         player.character.maybe_deactivate_effects(
             self, player_id, characters.Reason.CHARACTER_CHANGE
         )
-        player.character_history.append(player.character._world_str(self))
         
         # Ammend night(/day/setup) order position
         if self.phase_order_index < len(self.current_phase_order):  # In phase
@@ -284,16 +341,18 @@ class State:
                 (old_idx == active_idx and player_id <= active_player_id)
             )
         
-        player.character = character()
-        player.character.first_night = (
-            self.night if self.night is not None else self.day + 1
+        player.character = character(
+            first_night=self.night if self.night is not None else self.day + 1
         )
         self.update_character_index()
 
+        for substate in player.character.run_setup(self, player_id):
+            if not substate.check_game_over():
+                yield substate
+
     def update_character_index(self):
-        # TODO: This fn should modify self.phase_order_index to compensate for change
+        # Night/day/setup order
         self.setup_order, self.night_order, self.day_order = [], [], []
-        self.death_in_town_callback_players = []
         for global_order, order in (
             (characters.GLOBAL_SETUP_ORDER, self.setup_order),
             (characters.GLOBAL_NIGHT_ORDER, self.night_order),
@@ -303,31 +362,52 @@ class State:
                 for player_id in range(len(self.players)):
                     if info.has_ability_of(self, player_id, character):
                         order.append(player_id)
+
+        # Death_in_town callback registration
+        self.death_in_town_callback_players = []
         for player_id, player in enumerate(self.players):
             if hasattr(player.character, "death_in_town"):
                 self.death_in_town_callback_players.append(player_id)
+        
+        # External info retrieval 
+        self.external_info_registry = defaultdict(list)
+        for player in self.players:
+            for (night, character), items in player.external_night_info.items():
+                for item in items:
+                    self.external_info_registry[(character, night)].append(
+                        (item, player.id)
+                    )
+        self.external_info_registry = dict(self.external_info_registry)
 
-    def death_in_town(self, player_id: PlayerID) -> StateGen:
+    def death_in_town(self, dead_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
-        player = self.players[player_id]
+        dead_player = self.players[dead_player_id]
 
-        # One day I might have to turn this into a proper stack of generators, 
-        # but for now all the characters can be implemented by modifying the 
-        # current state :)
-        for callback_id in self.death_in_town_callback_players:
-            callback = self.players[callback_id].character.death_in_town
-            callback(self, player_id, callback_id)
+        def do_death_callback(states: StateGen, caller: PlayerID) -> StateGen:
+            for state in states:
+                callback = state.players[caller].character.death_in_town
+                yield from callback(state, dead_player_id, caller)
+        substates = [self]
+        for caller in self.death_in_town_callback_players:
+            substates = do_death_callback(substates, caller)
 
-        # Game might end on Demon death
-        if player.character.category is characters.DEMON:
-            if not any(
-                not p.is_dead and p.character.category is characters.DEMON
-                for p in self.players
-            ):
-                # Evil Twin / Mastermind check would go here.
-                return
+        if dead_player.character.category is not characters.DEMON:
+            yield from substates
+        else:
+            # Game might end on Demon death
+            for substate in substates:
+                if not substate.check_game_over():
+                    yield substate
 
-        yield self
+    def check_game_over(self) -> bool:
+        # TODO: evil win condition. Doesn't actually come up much when solving.
+        all_demons_dead = not any(
+            p.character.category is characters.DEMON and not p.is_dead
+            for p in self.players
+        )
+        # TODO: Add Evil Twin / Mastermind check here.
+        game_over = all_demons_dead  
+        return game_over
 
 
     def __str__(self) -> str:
