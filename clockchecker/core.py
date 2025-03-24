@@ -172,8 +172,9 @@ class State:
         # Initialise data structures for game
         self.current_phase = Phase.SETUP
         self.phase_order_index = 0
-        self.update_character_index()
+        self.setup_order, self.night_order, self.day_order = [], [], []
         self.current_phase_order = self.setup_order
+        self.update_character_index()
         self.initial_characters = tuple(type(p.character) for p in self.players)
         self.night, self.day = None, None
         self.previously_alive = [True] * len(self.players)
@@ -334,11 +335,7 @@ class State:
             old_idx = list_find(global_order, type(player.character), 9999)
             new_idx = list_find(global_order, character, 9999)
             self.phase_order_index += (
-                new_idx < active_idx or 
-                (new_idx == active_idx and player_id <= active_player_id)
-            ) - (
-                old_idx < active_idx or 
-                (old_idx == active_idx and player_id <= active_player_id)
+                (new_idx <= active_idx) - (old_idx <= active_idx)
             )
         
         player.character = character(
@@ -352,7 +349,9 @@ class State:
 
     def update_character_index(self):
         # Night/day/setup order
-        self.setup_order, self.night_order, self.day_order = [], [], []
+        self.setup_order.clear()
+        self.night_order.clear()
+        self.day_order.clear()
         for global_order, order in (
             (characters.GLOBAL_SETUP_ORDER, self.setup_order),
             (characters.GLOBAL_NIGHT_ORDER, self.night_order),
@@ -496,6 +495,7 @@ def _check_valid_character_counts(
     for character in setup:
         bounds = character.modify_category_counts(bounds)
     actual_counts = Counter(character.category for character in setup)
+
     for (lo, hi), category in zip(bounds, characters.Categories):
         if not lo <= actual_counts[category] <= hi:
             return False

@@ -131,7 +131,7 @@ class Character:
         Take the character's night action. Most basic info roles can just 
         inherit this default implementation and implement their own Pings to go
         in night_info.
-        """	
+        """
         if self.default_info_check(
             state, state.players[me].night_info, night, me
         ):
