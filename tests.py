@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import unittest
 
 from clockchecker import *
@@ -25,22 +24,6 @@ def assert_solutions(
 class Puzzles(unittest.TestCase):
     def test_puzzle_1(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1erb5e2/can_the_sober_savant_solve_the_puzzle
-
-        # This puzzle requires a custom method for one of the savant statements
-        class DrunkBetweenTownsfolk(Info):
-            def __call__(self, state: State, src: PlayerID) -> STBool:
-                N = len(state.players)
-                result = FALSE
-                for player in range(N):
-                    found_drunk = IsCharacter(player, Drunk)(state, src)
-                    if found_drunk is FALSE:  # Allow MAYBE
-                        continue
-                    tf_neighbours = (
-                        IsCategory((player - 1) % N, TOWNSFOLK)(state, src) & 
-                        IsCategory((player + 1) % N, TOWNSFOLK)(state, src)
-                    )
-                    result |= found_drunk & tf_neighbours
-                return result
 
         You, Tim, Sula, Oscar, Matt, Anna = range(6)
         state = State([
@@ -818,26 +801,6 @@ class Puzzles(unittest.TestCase):
     def test_puzzle_15(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gv12ck/weekly_puzzle_15_wake_up_and_choose_violets
 
-        # This puzzle requires a custom method for one of the savant statements
-        @dataclass
-        class LongestRowOfTownsfolk(Info):
-            """This puzzle (15) has no misregistration, so ommit that logic."""
-            length: int
-            def __call__(self, state: State, src: PlayerID) -> STBool:
-                townsfolk = [
-                    info.IsCategory(player, TOWNSFOLK)(state, src)
-                    for player in range(len(state.players))
-                ]
-                assert not any(x is MAYBE for x in townsfolk), "Not Implemented"
-                longest, prev_not_tf = 0, -1
-                for player, is_tf in enumerate(townsfolk * 2):  # Wrap circle
-                    if is_tf is FALSE:
-                        longest = max(longest, player - prev_not_tf - 1)
-                        prev_not_tf = player
-                longest = min(longest, len(state.players))
-                return STBool(longest == self.length)
-
-
         You, Oscar, Sarah, Hannah, Fraser, Aoife, Adam, Jasmine = range(8)
         state = State(
             players=[
@@ -1598,7 +1561,7 @@ class Puzzles(unittest.TestCase):
                     2: Empath.Ping(1),
                     3: Empath.Ping(0),
                 }),
-                Player('Dan', claim=Juggler, 
+                Player('Dan', claim=Juggler,
                     day_info={
                         1: Juggler.Juggle({
                             You: Dreamer,

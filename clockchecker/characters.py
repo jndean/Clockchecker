@@ -879,7 +879,12 @@ class GenericDemon(Character):
         if night == 1 or demon.is_dead or demon.droison_count:
             yield state
             return
+        sunk_a_kill = False
         for target in range(len(state.players)):
+            if state.players[target].is_dead:
+                if sunk_a_kill:
+                    continue  # Dedupe sinking kill choice
+                sunk_a_kill = True
             new_state = state.fork()
             target_char = new_state.players[target].character
             yield from target_char.attacked_at_night(new_state, target, me)

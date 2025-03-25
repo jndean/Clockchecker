@@ -120,7 +120,7 @@ All currently solved puzzles are present as unit tests in tests.py. Run them all
 ```bash
 python -m unittest
 ```
-At time of writing clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. The above unittest command today solves 24 puzzles in 8.57 seconds on a single thread.
+At time of writing clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. The above unittest command today solves 32 puzzles in 10.1 seconds.
 
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
@@ -230,6 +230,7 @@ class Drunk(Character):
             return
         drunk.droison_count += 1
         self.wake_pattern = drunk.claim.wake_pattern
+        yield state
 ```
 </details>
 <details>
@@ -246,7 +247,7 @@ class ScarletWoman(Character):
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
-    def death_in_town(self, state: State, death: PlayerID, me: PlayerID):
+    def death_in_town(self, state: State, death: PlayerID, me: PlayerID) -> None:
         """Catch a Demon death. I don't allow catching Recluse deaths."""
         scarletwoman = state.players[me]
         dead_player = state.players[death]

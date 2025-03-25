@@ -346,3 +346,44 @@ def acts_like(
         return isinstance(player.claim, character)
     # TODO: Lunatic currently doesn't decide what demon they think they are.
     return False
+
+
+# ------------------ Custom Info For Specific Puzzles -------------------- #
+
+
+# Required for a Savant statement in Puzzle #1
+class DrunkBetweenTownsfolk(Info):
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        N = len(state.players)
+        result = FALSE
+        for player in range(N):
+            found_drunk = IsCharacter(player, characters.Drunk)(state, src)
+            if found_drunk is FALSE:  # Allow MAYBE
+                continue
+            tf_neighbours = (
+                IsCategory((player - 1) % N, characters.TOWNSFOLK)(state, src) &
+                IsCategory((player + 1) % N, characters.TOWNSFOLK)(state, src)
+            )
+            result |= found_drunk & tf_neighbours
+        return result
+
+
+# Required for a Savant statement in Puzzle #15
+@dataclass
+class LongestRowOfTownsfolk(Info):
+    length: int
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        townsfolk = [
+            IsCategory(player, characters.TOWNSFOLK)(state, src)
+            for player in range(len(state.players))
+        ]
+        assert not any(x is MAYBE for x in townsfolk), (
+            "Puzzle 15 has no misregistration, so ommit that logic for now."
+        )
+        longest, prev_not_tf = 0, -1
+        for player, is_tf in enumerate(townsfolk * 2):  # Wrap circle
+            if is_tf is FALSE:
+                longest = max(longest, player - prev_not_tf - 1)
+                prev_not_tf = player
+        longest = min(longest, len(state.players))
+        return STBool(longest == self.length)

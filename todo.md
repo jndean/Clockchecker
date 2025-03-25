@@ -2,8 +2,6 @@
  - Why are there Categories, why do Characters not instead inherit from 4 subclasses of Character? Then Category checks are performed by isinstance?
  	- Would be a good time to switch to proper ABCs?
 
- - Multithread the evaluator gen. Nothing fancy, just the initial character generator.
-
  - Could really do with a refactor that separates State into two things: a class for the initial immutable Puzzle definition (all the public info) and a class for the current mutable state of a World which is run out (like State currently is, with forking) and checked against the Puzzle.
 
  - Seperately track night number and a character's personal night number
