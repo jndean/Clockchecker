@@ -312,8 +312,6 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
         # characters.Politician, (TODO)
     ):
         return True
-    if character is characters.Marionette:
-        return False
     return player.is_evil
 
 

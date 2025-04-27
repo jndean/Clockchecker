@@ -21,11 +21,12 @@ from . import info
 
 
 # Configure world_gen multiprocessing
-NUM_PROCESSES = 4
+NUM_PROCESSES = 6
 
 # Set True to enable debug mode
-_DEBUG = os.environ.get('DEBUG', True)
+_DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
+_DEBUG_WORLD_KEY = (32, 0, 2, 1)
 
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ class Player:
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
-        ret = ' -> '.join(
+        ret = ' '.join(
             self.character_history 
             + [self.character._world_str(state)]
         )
@@ -169,11 +170,7 @@ class State:
         self.max_day = max(self.max_day, self.max_night - 1)
         self.finish_final_day |= (self.max_day < self.max_night)
 
-        # The root debug key is the empty tuple
-        if _DEBUG:
-            self.debug_key = ()
-
-    def begin_game(self):
+    def begin_game(self, allow_good_double_claims: bool) -> bool:
         """Called after player positions and characters have been chosen"""
         # Initialise data structures for game
         self.current_phase = Phase.SETUP
@@ -184,7 +181,20 @@ class State:
         self.initial_characters = tuple(type(p.character) for p in self.players)
         self.night, self.day = None, None
         self.previously_alive = [True] * len(self.players)
+
+        self.math_misregistration_bounds = [0, 0]  # Setup pings incl. in N1.
         self.vortox = False  # The vortox will set this during setup
+
+        if not allow_good_double_claims:
+            good_claims = set()
+            for player in self.players:
+                if info.behaves_evil(self, player.id):
+                    continue
+                if player.claim in good_claims:
+                    return False
+                good_claims.add(player.claim)
+        
+        return True
 
     def fork(self) -> State:
         """
@@ -199,13 +209,26 @@ class State:
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
             _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
         return ret
+    
+    def root_fork(self, fork_id) -> State:
+        """
+        Fork the root puzzle state. Due to multiprocessing, this method can't be
+        aware of all other forks that have been created, so an explicit fork_id
+        is required for deterministic debug keys.
+        """
+        ret = deepcopy(self)
+        if _DEBUG:
+            ret.debug_key = (fork_id,)
+            _DEBUG_STATE_FORK_COUNTS.clear()
+            _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
+        return ret
 
-    def _is_world(self, key: tuple[int]) -> bool:
+    def _is_world(self, key: tuple[int] = _DEBUG_WORLD_KEY) -> bool:
         """
         Use debug keys generated during forks to determine if this state is an
         upstream choice that leads to the keyed world.
         """
-        return (
+        return _DEBUG and (
             len(self.debug_key) <= len(key)
             and all(a == b for a, b in zip(self.debug_key, key))
         )
@@ -299,6 +322,8 @@ class State:
             ):
                 return
 
+        self.math_misregistration_bounds = [0, 0]
+
         self.current_phase = Phase.DAY
         self.current_phase_order = self.day_order
         self.phase_order_index = 0
@@ -327,7 +352,9 @@ class State:
         character: type[Character]
     ) -> StateGen:
         player = self.players[player_id]
+
         player.character_history.append(player.character._world_str(self))
+        player.character_history.append(self._change_str())
         player.character.maybe_deactivate_effects(
             self, player_id, characters.Reason.CHARACTER_CHANGE
         )
@@ -413,7 +440,19 @@ class State:
         # TODO: Add Evil Twin / Mastermind check here.
         game_over = all_demons_dead  
         return game_over
-
+    
+    def math_misregistration(self, result: info.STBool | None = None):
+        """
+        Modify bounds on possible Mathematician pings this night.
+        If misregistration is certain, no argument is needed. If it depends on
+        an STBool being FALSE (e.g. a Ping from a character ability), that can
+        be provided in `result`.
+        """
+        if result is info.TRUE:
+            return
+        self.math_misregistration_bounds[1] += 1
+        if result is None or result is info.FALSE:
+            self.math_misregistration_bounds[0] += 1
 
     def __str__(self) -> str:
         ret = [f'World{self.debug_key if _DEBUG else ""}(']
@@ -429,7 +468,15 @@ class State:
             )
         ret.append(')')
         return '\n'.join(ret)
-
+    
+    def _change_str(self) -> str:
+        match self.current_phase:
+            case Phase.DAY:
+                return f'-[D{self.day}]->'
+            case Phase.NIGHT:
+                return f'-[N{self.night}]->'
+            case Phase.SETUP:
+                return '-->'
 
 def _liar_placement_worker(
     num_players: int,
@@ -453,10 +500,12 @@ def _liar_placement_worker(
         ])
     )
     player_ids = list(range(num_players))
+    dbg_idx = 0
     for demons, minions, hidden_good in liar_combinations:
         liars = demons + minions + hidden_good
         for liar_positions in it.permutations(player_ids, len(liars)):
-            liar_queue.put((liars, liar_positions))
+            liar_queue.put((liars, liar_positions, dbg_idx))
+            dbg_idx += 1
 
     # Work Done sentinel per process
     for _ in range(NUM_PROCESSES):
@@ -468,6 +517,7 @@ def _world_checking_worker(
     possible_hidden_self: list[type[Character]],
     category_counts: tuple[int, int, int, int],
     world_init_check: Callable[[State], bool],
+    allow_good_double_claims: bool,
     liars_queue: Queue,
     solutions_queue: Queue,
 ):
@@ -478,20 +528,21 @@ def _world_checking_worker(
 
     while (liars := liars_queue.get()) is not None:
         # Sanity check character counts before creating a new world
-        liar_characters, liar_positions = liars
+        liar_characters, liar_positions, debug_idx = liars
         if not _check_valid_character_counts(
             puzzle, liar_characters, liar_positions,
             category_counts, possible_hidden_self,
         ):
             continue
         # Create the world and place the hidden characters
-        world = puzzle.fork()
+        world = puzzle.root_fork(debug_idx)
         for liar, position in zip(liar_characters, liar_positions):
             world.players[position].character = liar()
             world.players[position].is_evil = liar.category in (
                 characters.MINION, characters.DEMON
             )
-        world.begin_game()
+        if not world.begin_game(allow_good_double_claims):
+            continue
         if world_init_check is not None and not world_init_check(world):
             continue
         # Run the solver on the world
@@ -576,6 +627,7 @@ def world_gen(
     possible_hidden_self: list[Character],
     category_counts: tuple[int, int, int, int] | None = None,
     world_init_check: Callable[[State], bool] | None = None,
+    allow_good_double_claims: bool = True,
     deduplicate_initial_characters: bool = True,
 ) -> StateGen:
     """Generate worlds from the perspective of player 0."""
@@ -587,10 +639,6 @@ def world_gen(
     num_players = len(puzzle_state.players)
     if category_counts is None:
         category_counts = characters.DEFAULT_CATEGORY_COUNTS[num_players]
-
-    if _DEBUG:
-        _DEBUG_STATE_FORK_COUNTS.clear()
-        _DEBUG_STATE_FORK_COUNTS[()] = 0
 
     liars_queue, solutions_queue = Queue(maxsize=10), Queue(maxsize=10)
     liar_worker = Process(
@@ -610,10 +658,11 @@ def world_gen(
             target=_world_checking_worker,
             daemon=True,
             args=(
-                puzzle_state.fork(),
+                puzzle_state,
                 possible_hidden_self,
                 category_counts,
                 world_init_check,
+                allow_good_double_claims,
                 liars_queue,
                 solutions_queue,
             )

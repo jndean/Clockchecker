@@ -73,6 +73,68 @@ class Doomsayer:
                     state, self.died
                 )
 
+@dataclass
+class ExecutionByST(Execution):
+    """
+    A player is executed by the ST during the day. They might not die.
+    The reason for execution is not certain (e.g. breaking madness or nominating
+    the Virgin).
+    Inheriting from Execution lets things like Vortox easily check Executions.
+    """
+    # E.g. like nominating virgin
+    nominating: PlayerID | None = None
+    def __call__(self, state: State) -> StateGen:
+        raise NotImplementedError()
+
+@dataclass
+class UneventfulNomination(Event):
+    """
+    A player is nominated, and nothing extraordinary happens. 
+    I.e., no execution triggered by the Virgin, no death to a Witch curse etc.
+    A nomination that does trigger some ability should instead be represented by
+    an ExecutionByST or Dies event as appropriate.
+    """
+    nominator: PlayerID
+    player: PlayerID | None = None
+    def __call__(self, state: State) -> StateGen:
+        if info.has_ability_of(state, self.player, characters.Virgin):
+            yield from self._virgin_check(state)
+        else:
+            yield state
+
+    def _virgin_check(self, state: State) -> StateGen:
+        virgin = state.players[self.player]
+        if not isinstance(virgin.character, characters.Virgin):
+            raise NotImplementedError('Recording a Philo Virgin is spent.')
+        townsfolk_nominator = info.IsCategory(
+            self.nominator, characters.TOWNSFOLK
+        )(state, self.player)
+        if (
+            virgin.is_dead
+            or virgin.character.spent
+            or townsfolk_nominator is not info.TRUE
+        ):
+            virgin.character.spent = True
+            yield state
+        elif virgin.droison_count:
+            state.math_misregistration()
+            virgin.character.spent = True
+            yield state
+
+@dataclass
+class Dies(Event):
+    """
+    A player dies during the day without execution, e.g. Witch-cursed or Tinker.
+    """
+    after_nominating: bool
+    player: PlayerID | None = None
+    def __call__(self, state: State) -> StateGen:
+        dead_player = state.players[self.player]
+        if self.after_nominating:
+            if (witch := getattr(dead_player, 'witch_cursed', None)) is not None:
+                dead_player.character.death_explanation = f"cursed by {witch}"
+                yield from dead_player.character.killed(state, self.player)
+                return
 
 class NightEvent:
     """
@@ -88,19 +150,3 @@ class NightDeath(NightEvent):
 @dataclass
 class NightResurrection(NightEvent):
     player: PlayerID
-
-
-@dataclass
-class ExecutionByST(Execution):
-    """
-    A player is executed by the ST during the day. They might not die.
-    The reason for execution is not certain (e.g. breaing madness or nominating
-    the virgin).
-    Inheriting from Execution lets things like Vortox easily check Executions.
-    """
-    # E.g. like nominating virgin
-    nominating: PlayerID | None = None
-    def __call__(self, state: State) -> StateGen:
-        raise NotImplementedError()
-
-

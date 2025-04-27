@@ -416,7 +416,10 @@ class Puzzles(unittest.TestCase):
                 ),
                 2: Savant.Ping(
                     CharAttrEq(Sarah, 'red_herring', Sarah),
-                    CharAttrEq(Fraser, 'is_drunk_VI', True),
+                    (
+                        IsCharacter(Fraser, VillageIdiot)
+                        & CharAttrEq(Fraser, 'self_droison', True)
+                    ),
                 ),
                 3: Savant.Ping(
                     ExactlyN(N=2, args=[
@@ -1051,7 +1054,7 @@ class Puzzles(unittest.TestCase):
                     2: VillageIdiot.Ping(Mary, is_evil=True),
                 }),
                 Player('Mary', claim=Virgin, day_info={
-                    1: Virgin.NominatedWithoutExecution(Balthazar)
+                    1: UneventfulNomination(Balthazar)
                 }),
                 Player('Balthazar', claim=VillageIdiot, night_info={
                     1: VillageIdiot.Ping(Joseph, is_evil=True),
@@ -1252,7 +1255,7 @@ class Puzzles(unittest.TestCase):
                 }),
             ],
             day_events={1: [
-                Virgin.NominatedWithoutExecution(player=Sula, nominator=Adam),
+                UneventfulNomination(nominator=Adam, player=Sula),
                 Execution(You),
             ]},
             night_deaths={2: Olivia},
@@ -1595,4 +1598,244 @@ class Puzzles(unittest.TestCase):
         assert_solutions(self, worlds, solutions=(
             (Dreamer, Poisoner, Imp, Empath, Juggler, Saint, Undertaker, 
              FortuneTeller),
+        ))
+
+    def test_puzzle_33(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1jl7cuv/weekly_puzzle_33_twice_is_coincidence_thrice_is/
+
+        You, Olivia, Jasmine, Hannah, Tom, Oscar, Sula, Fraser = range(8)
+        state = State(
+            players= [
+                Player('You', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('Olivia', claim=Recluse),
+                Player('Jasmine', claim=Ravenkeeper, night_info={
+                    3: Ravenkeeper.Ping(Hannah, Washerwoman),
+                }),
+                Player('Hannah', claim=Washerwoman, night_info={
+                    1: Washerwoman.Ping(Sula, Fraser, Investigator),
+                }),
+                Player('Tom', claim=Librarian, night_info={
+                    1: Librarian.Ping(Olivia, Sula, Saint),
+                }),
+                Player('Oscar', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(Sula, Fraser, demon=False),
+                    2: FortuneTeller.Ping(Tom, Sula, demon=False),
+                    3: FortuneTeller.Ping(Hannah, Tom, demon=False),
+                }),
+                Player('Sula', claim=Saint),
+                Player('Fraser', claim=Investigator, night_info={
+                    1: Investigator.Ping(You, Jasmine, Poisoner),
+                }),
+            ],
+            day_events={1: Execution(You), 2: Execution(Fraser)},
+            night_deaths={2: Olivia, 3: Jasmine},
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[Imp],
+            possible_minions=[Poisoner, Baron, Spy, ScarletWoman],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+        )
+
+        assert_solutions(self, worlds, solutions=(
+            (Empath, Recluse, Ravenkeeper, Washerwoman, Imp, 
+             FortuneTeller, Poisoner, Investigator),
+        ))
+
+    def test_puzzle_34(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1joxqgy/weekly_puzzle_34_the_vortox_conjecture/
+        You, Fraser, Steph, Sula, Sarah, Josh, Aoife = range(7)
+        state = State(
+            players= [
+                Player('You', claim=Mathematician, night_info={
+                    1: Mathematician.Ping(1),
+                    2: Mathematician.Ping(0),
+                }),
+                Player('Fraser', claim=Sage, night_info={
+                    2: Sage.Ping(Sarah, Josh),
+                }),
+                Player('Steph', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(Aoife, NoDashii)),
+                }),
+                Player('Sula', claim=Clockmaker, night_info={
+                    1: Clockmaker.Ping(3),
+                }),
+                Player('Sarah', claim=Seamstress, night_info={
+                    1: Seamstress.Ping(Steph, Aoife, same=True),
+                }),
+                Player('Josh', claim=Juggler, 
+                    day_info={1: Juggler.Juggle({Steph: Artist, Sula: Clockmaker})},
+                    night_info={2: Juggler.Ping(0)},
+                ),
+                Player('Aoife', claim=SnakeCharmer, night_info={
+                    1: SnakeCharmer.Choice(Josh),
+                }),
+            ],
+            day_events={
+                1: [
+                    Dies(player=Steph, after_nominating=True), 
+                    Execution(Aoife),
+                ]
+            },
+            night_deaths={2: Fraser},
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[NoDashii, Vortox],
+            possible_minions=[Witch],
+            possible_hidden_good=[],
+            possible_hidden_self=[],
+        )
+
+        assert_solutions(self, worlds, solutions=(
+            (Mathematician, Sage, Artist, Vortox, Witch, Juggler, SnakeCharmer),
+        ))
+
+    def test_puzzle_35(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1jv7zh2/weekly_puzzle_35_typhon_season/
+
+        You, Tim, Sula, Fraser, Oscar, Olivia, Sarah, Jasmine = range(8)
+        state = State(
+            players= [
+                Player('You', claim=Librarian, night_info={
+                    1: Librarian.Ping(Sula, Oscar, Drunk),
+                }),
+                Player('Tim', claim=Clockmaker, night_info={
+                    1: Clockmaker.Ping(4),
+                }),
+                Player('Sula', claim=Undertaker, night_info={
+                    2: Undertaker.Ping(You, Spy),
+                }),
+                Player('Fraser', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(Sula, Oscar, demon=False),
+                    2: FortuneTeller.Ping(Sarah, Jasmine, demon=False),
+                }),
+                Player('Oscar', claim=Ravenkeeper, night_info={
+                    2: Ravenkeeper.Ping(Sula, Imp),
+                }),
+                Player('Olivia', claim=Saint),
+                Player('Sarah', claim=Investigator, night_info={
+                    1: Investigator.Ping(Olivia, Jasmine, Spy),
+                }),
+                Player('Jasmine', claim=Empath, night_info={
+                    1: Empath.Ping(2),
+                    2: Empath.Ping(2),
+                }),
+
+            ],
+            day_events={1: Execution(You)},
+            night_deaths={2: Oscar},
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[Imp, LordOfTyphon],
+            possible_minions=[Poisoner, Spy],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+        )
+
+        assert_solutions(self, worlds, solutions=(
+            (Librarian, Clockmaker, Undertaker, FortuneTeller, Spy,
+                LordOfTyphon, Poisoner, Drunk),
+        ))
+        
+    def test_puzzle_36(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1k1exb7/weekly_puzzle_36_what_is_your_weapon_of_choice/
+
+        You, Steph, Adam, Josh, Sula, Olivia, Fraser, Oscar = range(8)
+        state = State(
+            players= [
+                Player('You', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                }),
+                Player('Steph', claim=Saint),
+                Player('Adam', claim=Slayer, day_info={
+                    3: Slayer.Shot(Sula, died=False),
+                }),
+                Player('Josh', claim=Ravenkeeper, night_info={
+                    2: Ravenkeeper.Ping(Adam, ScarletWoman),
+                }),
+                Player('Sula', claim=Investigator, night_info={
+                    1: Investigator.Ping(Steph, Josh, Spy),
+                }),
+                Player('Olivia', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(Josh, Oscar, demon=False),
+                    2: FortuneTeller.Ping(Adam, Oscar, demon=False),
+                }),
+                Player('Fraser', claim=Recluse),
+                Player('Oscar', claim=Slayer, day_info={
+                    2: Slayer.Shot(Steph, died=False),
+                }),
+            ],
+            day_events={1: Execution(You), 2: Execution(Oscar)},
+            night_deaths={2: Josh, 3: Olivia},
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[Imp],
+            possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+            allow_good_double_claims=False,
+        )
+
+        assert_solutions(self, worlds, solutions=(
+            (Empath, Saint, Slayer, Ravenkeeper, Investigator,
+             FortuneTeller, Imp, Poisoner),
+        ))
+
+    def test_puzzle_37(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1k7n8hi/weekly_puzzle_37_new_super_marionette_bros_u/
+        You, Matt, Steph, Adam, Sula, Aoife, Fraser, Jasmine = range(8)
+        state = State(
+            players= [
+                Player('You', claim=Undertaker, night_info={
+                    2: Undertaker.Ping(Matt, Spy),
+                    3: Undertaker.Ping(Aoife, Marionette),
+                }),
+                Player('Matt', claim=Washerwoman, night_info={
+                    1: Washerwoman.Ping(You, Fraser, Undertaker),
+                }),
+                Player('Steph', claim=Chef, night_info={
+                    1: Chef.Ping(1),
+                }),
+                Player('Adam', claim=Ravenkeeper, night_info={
+                    2: Ravenkeeper.Ping(Fraser, Empath),
+                }),
+                Player('Sula', claim=Librarian, night_info={
+                    1: Librarian.Ping(Jasmine, Steph, Drunk),
+                }),
+                Player('Aoife', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(You, Jasmine, demon=True),
+                    2: FortuneTeller.Ping(Jasmine, Sula, demon=False),
+                }),
+                Player('Fraser', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                    2: Empath.Ping(1),
+                    3: Empath.Ping(1),
+                }),
+                Player('Jasmine', claim=Imp),
+            ],
+            day_events={1: Execution(Matt), 2: Execution(Aoife)},
+            night_deaths={2: Adam, 3: Sula},
+        )
+
+        worlds = world_gen(
+            state,
+            possible_demons=[Imp],
+            possible_minions=[Poisoner, Spy, ScarletWoman, Marionette],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+        )
+
+        assert_solutions(self, worlds, solutions=(
+            (Undertaker, Washerwoman, Chef, Drunk, Librarian,
+             FortuneTeller, Imp, Poisoner),
         ))
