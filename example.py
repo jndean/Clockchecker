@@ -2,58 +2,62 @@ import multiprocessing
 
 from clockchecker import *
 
+
 if __name__ == '__main__':
 	# In case your OS is whack.
 	multiprocessing.freeze_support()
 	multiprocessing.set_start_method('spawn')
 
 
-	# https://www.reddit.com/r/BloodOnTheClocktower/comments/1joxqgy/weekly_puzzle_34_the_vortox_conjecture/
-	You, Fraser, Steph, Sula, Sarah, Josh, Aoife = range(7)
+	# https://www.reddit.com/r/BloodOnTheClocktower/comments/1hb72qg/weekly_puzzle_18_starring_the_xaan/
+	You, Steph, Fraser, Dan, Aoife, Tim, Olivia, Sarah = range(8)
 	state = State(
-	    players= [
-	        Player('You', claim=Mathematician, night_info={
-	            1: Mathematician.Ping(1),
-	            2: Mathematician.Ping(0),
-	        }),
-	        Player('Fraser', claim=Sage, night_info={
-	            2: Sage.Ping(Sarah, Josh),
-	        }),
-	        Player('Steph', claim=Artist, day_info={
-	            1: Artist.Ping(IsCharacter(Aoife, NoDashii)),
-	        }),
-	        Player('Sula', claim=Clockmaker, night_info={
-	            1: Clockmaker.Ping(3),
-	        }),
-	        Player('Sarah', claim=Seamstress, night_info={
-	            1: Seamstress.Ping(Steph, Aoife, same=True),
-	        }),
-			Player('Josh', claim=Juggler, 
-				day_info={1: Juggler.Juggle({Steph: Artist, Sula: Clockmaker})},
-				night_info={2: Juggler.Ping(0)},
+		players= [
+			Player('You', claim=Librarian, night_info={
+				1: Librarian.Ping(Aoife, Tim, Drunk),
+			}),
+			Player('Steph', claim=Juggler, 
+				day_info={1: Juggler.Juggle({
+					Fraser: Leviathan,
+					Aoife: Balloonist,
+					Tim: Xaan,
+				})},
+				night_info={2: Juggler.Ping(2)},
 			),
-	        Player('Aoife', claim=SnakeCharmer, night_info={
-	            1: SnakeCharmer.Choice(Josh),
-	        }),
-	    ],
-	    day_events={
-			1: [
-				Dies(player=Steph, after_nominating=True),
-				Execution(Aoife)
-			]
-		},
-	    night_deaths={2: Fraser},
+			Player('Fraser', claim=SnakeCharmer, night_info={
+				1: SnakeCharmer.Choice(Olivia),
+				2: SnakeCharmer.Choice(Steph),
+				3: SnakeCharmer.Choice(Aoife),
+			}),
+			Player('Dan', claim=FortuneTeller, night_info={
+				1: FortuneTeller.Ping(Tim, Sarah, demon=False),
+				2: FortuneTeller.Ping(Steph, Aoife, demon=False),
+				3: FortuneTeller.Ping(Fraser, Olivia, demon=False),
+			}),
+            Player('Aoife', claim=Balloonist, night_info={
+                1: Balloonist.Ping(Olivia),
+                2: Balloonist.Ping(Aoife),
+                3: Balloonist.Ping(You),
+            }),
+			Player('Tim', claim=Saint),
+			Player('Olivia', claim=Investigator, night_info={
+				1: Investigator.Ping(Fraser, Aoife, Xaan),
+			}),
+			Player('Sarah', claim=Recluse),
+		],
+	)
+	puzzle = Puzzle(
+		state,
+		possible_demons=[Leviathan],
+		possible_minions=[Xaan],
+		possible_hidden_good=[Drunk],
+		possible_hidden_self=[Drunk],
 	)
 
-	worlds = world_gen(
-	    state,
-	    possible_demons=[NoDashii, Vortox],
-	    possible_minions=[Witch],
-	    possible_hidden_good=[],
-	    possible_hidden_self=[],
-	)
 
-	worlds = list(worlds)
-	for world in worlds:
-		print(world)
-	print(f'Found {len(worlds)} valid worlds')
+	with Solver() as solver:
+		count = 0
+		for world in solver.generate_worlds(puzzle):
+			print(world)
+			count += 1
+		print(f'Found {count} worlds')

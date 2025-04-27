@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
@@ -20,13 +20,10 @@ from . import events
 from . import info
 
 
-# Configure world_gen multiprocessing
-NUM_PROCESSES = 6
-
 # Set True to enable debug mode
 _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
-_DEBUG_WORLD_KEY = (32, 0, 2, 1)
+_DEBUG_WORLD_KEY = (106, 0, 0)
 
 
 if TYPE_CHECKING:
@@ -233,7 +230,7 @@ class State:
             and all(a == b for a, b in zip(self.debug_key, key))
         )
 
-    def run_next_player(self, round_: int) -> StateGen:
+    def run_next_player(self, round_: int | None) -> Generator[State]:
         if self.phase_order_index >= len(self.current_phase_order):
             yield self
             return
@@ -478,100 +475,79 @@ class State:
             case Phase.SETUP:
                 return '-->'
 
-def _liar_placement_worker(
-    num_players: int,
-    possible_demons: list[Character],
-    possible_minions: list[Character],
-    possible_hidden_good: list[Character],
-    category_counts: tuple[int, int, int, int],
-    liar_queue: Queue,
-):
-    """Generate all possible initial placements of the hidden roles."""
-    n_townsfolk, n_outsiders, n_minions, n_demons = category_counts
-    liar_combinations = it.product(
-        it.combinations(possible_demons, n_demons),
-        it.chain(*[
-            it.combinations(possible_minions, i)
-            for i in range(n_minions, len(possible_minions) + 1)
-        ]),
-        it.chain(*[
-            it.combinations(possible_hidden_good, i)
-            for i in range(len(possible_hidden_good) + 1)
-        ])
-    )
-    player_ids = list(range(num_players))
-    dbg_idx = 0
-    for demons, minions, hidden_good in liar_combinations:
-        liars = demons + minions + hidden_good
-        for liar_positions in it.permutations(player_ids, len(liars)):
-            liar_queue.put((liars, liar_positions, dbg_idx))
-            dbg_idx += 1
 
-    # Work Done sentinel per process
-    for _ in range(NUM_PROCESSES):
-        liar_queue.put(None)
+@dataclass
+class Puzzle:
+    state: State
+    possible_demons: list[Character]
+    possible_minions: list[Character]
+    possible_hidden_good: list[Character]
+    possible_hidden_self: list[Character]
+    category_counts: tuple[int, int, int, int] | None = None
+    world_init_check: Callable[[State], bool] | None = None
+    allow_good_double_claims: bool = True
+    deduplicate_initial_characters: bool = True
 
+    def __post_init__(self):
+        if self.category_counts is None:
+            self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
+                len(self.state.players)
+            ]
+        self._validate_inputs()
 
-def _world_checking_worker(
-    puzzle: State,
-    possible_hidden_self: list[type[Character]],
-    category_counts: tuple[int, int, int, int],
-    world_init_check: Callable[[State], bool],
-    allow_good_double_claims: bool,
-    liars_queue: Queue,
-    solutions_queue: Queue,
-):
-    """Accepts starting configurations and finds all possible solutions."""
-    event_counts = defaultdict(int, {
-        day: len(events) for day, events in puzzle.day_events.items()
-    })
+    def _validate_inputs(self):
+        """
+        When I enter a new puzzle and it is not solved correctly, half the time
+        it's because I have mis-entered the puzzle or forgotten to register
+        newly implemented characters in the night order or other such repeated
+        mistakes. This fn does a half-hearted job of catching such mistakes to
+        reduce debugging time during development.
+        """
 
-    while (liars := liars_queue.get()) is not None:
-        # Sanity check character counts before creating a new world
-        liar_characters, liar_positions, debug_idx = liars
-        if not _check_valid_character_counts(
-            puzzle, liar_characters, liar_positions,
-            category_counts, possible_hidden_self,
-        ):
-            continue
-        # Create the world and place the hidden characters
-        world = puzzle.root_fork(debug_idx)
-        for liar, position in zip(liar_characters, liar_positions):
-            world.players[position].character = liar()
-            world.players[position].is_evil = liar.category in (
-                characters.MINION, characters.DEMON
-            )
-        if not world.begin_game(allow_good_double_claims):
-            continue
-        if world_init_check is not None and not world_init_check(world):
-            continue
-        # Run the solver on the world
-        for solution in _run_game_gen(
-            [world],
-            len(puzzle.players),
-            puzzle.max_night,
-            puzzle.max_day,
-            puzzle.finish_final_day,
-            event_counts,
-        ):
-            solutions_queue.put(solution)
-    solutions_queue.put(None)
+        # Check all used characters are registered in the night order
+        used_characters = (
+            [type(p.character) for p in self.state.players]
+            + self.possible_demons + self.possible_minions
+            + self.possible_hidden_good + self.possible_hidden_self
+        )
+        registered_characters = (
+            characters.GLOBAL_NIGHT_ORDER
+            + characters.GLOBAL_DAY_ORDER 
+            + characters.INACTIVE_CHARACTERS
+        )
+        for character in used_characters:
+            if character not in registered_characters:
+                raise ValueError(
+                    f'Character {character.__name__} has not been placed in the '
+                    'night order. Did you forget?'
+                )
+        
+        # Check valid choices of hidden good characters
+        for character in self.possible_hidden_good:
+            if not character.is_liar:
+                raise ValueError(
+                    f"{character.__name__} can't be in possible_hidden_good"
+                )
+        for character in self.possible_demons:
+            if character.category is not characters.DEMON:
+                raise ValueError(f'{character.__name__} is not a Demon')
+        for character in self.possible_minions:
+            if character.category is not characters.MINION:
+                raise ValueError(f'{character.__name__} is not a Minion')
 
 
 def _check_valid_character_counts(
-    puzzle_state: State,
+    puzzle: Puzzle,
     liar_characters: Iterable[type[Character]],
     liar_positions: Iterable[int],
-    default_counts: CategoryBounds,
-    possible_hidden_self: Iterable[Character],
 ) -> bool:
     """Check that the starting player category counts are legal."""
-    setup = [p.claim for p in puzzle_state.players]
+    setup = [p.claim for p in puzzle.state.players]
     for liar, position in zip(liar_characters, liar_positions):
         setup[position] = liar
-        if position == 0 and liar not in possible_hidden_self:
+        if position == 0 and liar not in puzzle.possible_hidden_self:
             return False
-    T, O, M, D = default_counts
+    T, O, M, D = puzzle.category_counts
     bounds = ((T, T), (O, O), (M, M), (D, D))
     for character in setup:
         bounds = character.modify_category_counts(bounds)
@@ -597,9 +573,7 @@ def _run_game_gen(
     states flow. Only valid worlds are able to reach the end of the pipe.
     """	
     def apply_all(substates: StateGen, method: str, args: tuple[Any]):
-        """One stage in the validation pipeline."""
-        for ss in substates:
-            yield from getattr(ss, method)(*args)
+        return (s for S in substates for s in getattr(S, method)(*args))
 
     for player in range(n_players):
         states = apply_all(states, 'run_next_player', (None, ))
@@ -619,123 +593,134 @@ def _run_game_gen(
     yield from states
 
 
-def world_gen(
-    puzzle_state: State,
-    possible_demons: list[Character],
-    possible_minions: list[Character],
-    possible_hidden_good: list[Character],
-    possible_hidden_self: list[Character],
-    category_counts: tuple[int, int, int, int] | None = None,
-    world_init_check: Callable[[State], bool] | None = None,
-    allow_good_double_claims: bool = True,
-    deduplicate_initial_characters: bool = True,
-) -> StateGen:
-    """Generate worlds from the perspective of player 0."""
-    validate_inputs(
-        puzzle_state, possible_demons, possible_minions, 
-        possible_hidden_good, possible_hidden_self,
-    )
-
-    num_players = len(puzzle_state.players)
-    if category_counts is None:
-        category_counts = characters.DEFAULT_CATEGORY_COUNTS[num_players]
-
-    liars_queue, solutions_queue = Queue(maxsize=10), Queue(maxsize=10)
-    liar_worker = Process(
-        target=_liar_placement_worker,
-        daemon=True,
-        args=(
-            num_players,
-            possible_demons,
-            possible_minions,
-            possible_hidden_good,
-            category_counts,
-            liars_queue,
-        )
-    )
-    world_checking_workers = [
-        Process(
-            target=_world_checking_worker,
-            daemon=True,
-            args=(
-                puzzle_state,
-                possible_hidden_self,
-                category_counts,
-                world_init_check,
-                allow_good_double_claims,
-                liars_queue,
-                solutions_queue,
-            )
-        )
-        for _ in range(NUM_PROCESSES)
-    ]
-    for process in world_checking_workers + [liar_worker]:
-        process.start()
-
-    seen_solutions = set()
-    finish_count = 0
-    while True:
-        solution = solutions_queue.get()
-        if solution is None:  # Done sentinel
-            finish_count += 1
-            if finish_count == NUM_PROCESSES:
-                break
-        elif (
-            not deduplicate_initial_characters
-            or solution.initial_characters not in seen_solutions
-        ):
-            seen_solutions.add(solution.initial_characters)
-            yield solution
-
-    for process in world_checking_workers + [liar_worker]:
-        process.join()
-
-
-def validate_inputs(
-    public_state: State,
-    possible_demons: list[Character],
-    possible_minions: list[Character],
-    possible_hidden_good: list[Character],
-    possible_hidden_self: list[Character],
+def _liar_placement_worker(
+    puzzle_queue: Queue,
+    liar_queue: Queue,
+    num_processes: int,
 ):
-    """
-    When I enter a new puzzle and it is not solved correctly, half the time it's
-    because I have mis-entered the puzzle or forgotten to register newly
-    implemented characters in the night order or other such repeated mistakes.
-    This fn does a half-hearted job of catching such mistakes to reduce
-    debugging time during development.
-    """
+    """Generate all possible initial placements of the hidden roles."""
+    while (puzzle := puzzle_queue.get()) is not None:
+        n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
+        liar_combinations = it.product(
+            it.combinations(puzzle.possible_demons, n_demons),
+            it.chain(*[
+                it.combinations(puzzle.possible_minions, i)
+                for i in range(n_minions, len(puzzle.possible_minions) + 1)
+            ]),
+            it.chain(*[
+                it.combinations(puzzle.possible_hidden_good, i)
+                for i in range(len(puzzle.possible_hidden_good) + 1)
+            ])
+        )
+        player_ids = list(range(len(puzzle.state.players)))
+        dbg_idx = 0
+        for demons, minions, hidden_good in liar_combinations:
+            liars = demons + minions + hidden_good
+            for liar_positions in it.permutations(player_ids, len(liars)):
+                liar_queue.put((liars, liar_positions, dbg_idx))
+                dbg_idx += 1
 
-    # Check all used characters are registered in the night order
-    used_characters = (
-        [type(p.character) for p in public_state.players] + possible_demons + 
-        possible_minions + possible_hidden_good + possible_hidden_self
-    )
-    registered_characters = (
-        characters.GLOBAL_NIGHT_ORDER
-        + characters.GLOBAL_DAY_ORDER 
-        + characters.INACTIVE_CHARACTERS
-    )
-    for character in used_characters:
-        if character not in registered_characters:
-            raise ValueError(
-                f'Character {character.__name__} has not been placed in the '
-                'night order. Did you forget?'
+        # Work Done sentinel per process
+        for _ in range(num_processes):
+            liar_queue.put(None)
+
+
+def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
+    """Accepts starting configurations and finds all possible solutions."""
+
+    while (puzzle := puzzle_q.get()) is not None:
+        event_counts = defaultdict(int, {
+            day: len(events) for day, events in puzzle.state.day_events.items()
+        })
+
+        while (liars := liars_q.get()) is not None:
+            # Sanity check character counts before creating a new world
+            liar_characters, liar_positions, debug_idx = liars
+            if not _check_valid_character_counts(
+                puzzle, liar_characters, liar_positions,
+                # puzzle.category_counts, puzzle.possible_hidden_self,
+            ):
+                continue
+            # Create the world and place the hidden characters
+            world = puzzle.state.root_fork(debug_idx)
+            for liar, position in zip(liar_characters, liar_positions):
+                world.players[position].character = liar()
+                world.players[position].is_evil = liar.category in (
+                    characters.MINION, characters.DEMON
+                )
+            if not world.begin_game(puzzle.allow_good_double_claims):
+                continue
+            if (
+                puzzle.world_init_check is not None
+                and not puzzle.world_init_check(world)
+            ):
+                continue
+            # Run the solver on the world
+            for solution in _run_game_gen(
+                [world],
+                len(puzzle.state.players),
+                puzzle.state.max_night,
+                puzzle.state.max_day,
+                puzzle.state.finish_final_day,
+                event_counts,
+            ):
+                solutions_q.put(solution)
+        solutions_q.put(None)
+
+
+class Solver:
+    """Manages the worker threads"""
+    def __init__(self, num_processes=6):
+        self.puzzle_queue = Queue(maxsize=num_processes + 1)
+        self.liars_queue = Queue(maxsize=num_processes)
+        self.solutions_queue = Queue(maxsize=num_processes)
+        self.num_processes = num_processes
+
+        self.all_workers = [
+            Process(
+                target=_world_checking_worker,
+                daemon=True,
+                args=(self.puzzle_queue, self.liars_queue, self.solutions_queue)
             )
+            for _ in range(num_processes)
+        ]
+        self.all_workers.append(
+            Process(
+                target=_liar_placement_worker,
+                daemon=True,
+                args=(self.puzzle_queue, self.liars_queue, num_processes)
+            )
+        )
     
-    # Check valid choices of hidden good characters
-    for character in possible_hidden_good:
-        if not character.is_liar:
-            raise ValueError(
-                f"{character.__name__} can't be in possible_hidden_good"
-            )
-    for character in possible_demons:
-        if character.category is not characters.DEMON:
-            raise ValueError(f'{character.__name__} is not a Demon')
-    for character in possible_minions:
-        if character.category is not characters.MINION:
-            raise ValueError(f'{character.__name__} is not a Minion')
+    def __enter__(self):
+        for process in self.all_workers:
+            process.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for _ in range(self.num_processes + 1):
+            self.puzzle_queue.put(None)
+        for process in self.all_workers:
+            process.join()
+
+    def generate_worlds(self, puzzle: Puzzle) -> StateGen:
+        for _ in range(self.num_processes + 1):
+            self.puzzle_queue.put(puzzle)
         
+        seen_solutions = set()
+        finish_count = 0
+        while True:
+            solution = self.solutions_queue.get()
+            if solution is None:  # Done sentinel
+                finish_count += 1
+                if finish_count == self.num_processes:
+                    break
+            elif (
+                not puzzle.deduplicate_initial_characters
+                or solution.initial_characters not in seen_solutions
+            ):
+                seen_solutions.add(solution.initial_characters)
+                yield solution
 
 
 def list_find(X: list, item: Any, sentinel: int) -> int:

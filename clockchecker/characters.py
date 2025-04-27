@@ -457,9 +457,11 @@ class Balloonist(Character):
                 yield state
             return
 
-        same = info.SameCategory(character, prev_character)(state, me)
-        state.math_misregistration(same)
-        if same is not info.TRUE and balloonist.droison_count == 0:
+        differ = ~info.SameCategory(character, prev_character)(state, me)
+        if balloonist.droison_count:
+            state.math_misregistration(differ)
+            yield state
+        elif differ is not info.FALSE:
             yield state
 
 
@@ -1247,13 +1249,8 @@ class LordOfTyphon(GenericDemon):
     """
     @staticmethod
     def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
-        (tf_lo, tf_hi), (out_lo, out_hi), (min_lo, min_hi), dm = bounds
-        return (
-            (tf_lo - 99, tf_hi),
-            (out_lo - 99, out_hi + 99),
-            (min_lo + 1, min_hi + 1),
-            dm
-        )
+        tf, out, (min_lo, min_hi), dm = bounds
+        return ((-99, 99), (-99, 99), (min_lo + 1, min_hi + 1), dm)
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Check evil in a row, Typhon in middle."""
@@ -1465,7 +1462,7 @@ class NoDashii(GenericDemon):
         state.players[self.tf_neighbour1].undroison(state, src)
         state.players[self.tf_neighbour2].undroison(state, src)
 
-    def _world_str(self, state):
+    def _world_str(self, state: State) -> str:
         return 'NoDashii (Poisoned {} & {})'.format(
             state.players[self.tf_neighbour1].name,
             state.players[self.tf_neighbour2].name,
@@ -2358,6 +2355,101 @@ class Vortox(GenericDemon):
     def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
         state.vortox = False
 
+@dataclass
+class Xaan(Character):
+    """
+    On night X, all Townsfolk are poisoned until dusk. [X Outsiders]
+    """
+    category: ClassVar[Categories] = MINION
+    is_liar: ClassVar[bool] = True
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    X: int = 0
+    targets: list[PlayerID] | None = None
+
+    @staticmethod
+    def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+        tf, out, mn, dm = bounds
+        return ((-99, 99), (-99, 99), mn, dm)
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        if state.current_phase != core.Phase.SETUP:
+            raise NotImplementedError(
+                "Xaan created mid-game, X wasn't calculated at setup"
+            )
+        # Despite the recent ruling, I still allow misregistration during setup,
+        # and so create a world for each possible value of X. Can remove this
+        # later if the ruling survives the test of time.
+        outsiders = [
+            info.IsCategory(player, OUTSIDER)(state, me)
+            for player in range(len(state.players))
+        ]
+        X_lo = sum(outsider is info.TRUE for outsider in outsiders)
+        X_hi = sum(outsider is not info.FALSE for outsider in outsiders)
+        for X in range(X_lo, X_hi + 1):
+            new_state = state.fork()
+            new_state.players[me].character.X = X
+            yield new_state
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        """
+        On night X, create a world for every possible combination of poison
+        targets (i.e., handle a Spy misregistering as a TF or not).
+        """
+        xaan = state.players[me]
+        if xaan.is_dead or night != self.X:
+            self.targets = None
+            yield state
+            return
+
+        townsfolk = [
+            info.IsCategory(player, TOWNSFOLK)(state, me)
+            for player in range(len(state.players))
+        ]
+        maybes = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.MAYBE]
+        trues = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.TRUE]
+        if xaan.droison_count and trues:
+            # This is a best-effort at maintining Mathematician count, but
+            # technically should only really trigger if one of the targets
+            # doesn't misfire tonight. See TODO.
+            state.math_misregistration()
+
+        for maybe_subset in itertools.chain.from_iterable(
+            itertools.combinations(maybes, r)
+            for r in range(1, len(maybes) + 1)
+        ):
+            new_state = state.fork()
+            new_xaan = new_state.players[me].character
+            new_xaan.targets = trues + maybe_subset
+            new_xaan.maybe_activate_effects(new_state, me)
+            yield new_state
+
+        # No fork for most common case
+        xaan.character.targets = trues
+        xaan.character.maybe_activate_effects(state, me)
+        yield state
+
+    def end_day(self, state: State, day: int, me: PlayerID) -> bool:
+        xaan = state.players[me].character
+        if xaan.targets is not None:
+            xaan.maybe_deactivate_effects(state, me)
+            xaan.targets = None
+        return True
+
+    def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+        xaan = state.players[me].character
+        if xaan.targets is not None:
+            for target in xaan.targets:
+                state.players[target].droison(state, me)
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+        xaan = state.players[me].character
+        if xaan.targets is not None:
+            for target in xaan.targets:
+                state.players[target].undroison(state, me)
+
+    def _world_str(self, state: State) -> str:
+        return f'Xaan (X={self.X})'
 
 @dataclass
 class Zombuul(Character):
@@ -2380,11 +2472,13 @@ GLOBAL_SETUP_ORDER = [
     VillageIdiot,
     Drunk,
     Soldier,
+    Xaan,
     EvilTwin,  # Must go after any alignment changes
     LordOfTyphon,  # Goes last to check evils created by setup are in a line
 ]
 
 GLOBAL_NIGHT_ORDER = [
+    Xaan,
     Leviathan,
     Poisoner,
     Courtier,
@@ -2431,7 +2525,6 @@ GLOBAL_DAY_ORDER = [
     Alsaahir,
     Artist,
     Savant,
-    Saint,
     Mutant,
     Puzzlemaster,
     Klutz,
@@ -2447,6 +2540,7 @@ INACTIVE_CHARACTERS = [
     Marionette,
     Mayor,
     Recluse,
+    Saint,
     Slayer,
     Soldier,
     Spy,

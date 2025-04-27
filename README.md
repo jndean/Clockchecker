@@ -146,10 +146,10 @@ class Investigator(Character):
         player2: PlayerID
         character: type[Character]
 
-        def __call__(self, state: State, src: PlayerID) -> STBool:
+        def __call__(self, state: State, me: PlayerID) -> STBool:
             return (
-                info.IsCharacter(self.player1, self.character)(state, src) |
-                info.IsCharacter(self.player2, self.character)(state, src)
+                info.IsCharacter(self.player1, self.character)(state, me) |
+                info.IsCharacter(self.player2, self.character)(state, me)
             )
 ```
 </details>
@@ -302,7 +302,7 @@ class NoDashii(GenericDemon):
     tf_neighbour1: PlayerID | None = None
     tf_neighbour2: PlayerID | None = None
 
-    def run_setup(self, state: State, src: PlayerID) -> StateGen:
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # I allow the No Dashii to poison misregistering characters (e.g. Spy),
         # so there may be multiple possible combinations of neighbour pairs
         # depending on ST choices. Find them all and create a world for each.
@@ -313,8 +313,8 @@ class NoDashii(GenericDemon):
             (bkwd_candidates, -1),
         ):
             for step in range(1, N):
-                player = (src + direction * step) % N
-                is_tf = info.IsCategory(player, TOWNSFOLK)(state, src)
+                player = (me + direction * step) % N
+                is_tf = info.IsCategory(player, TOWNSFOLK)(state, me)
                 if is_tf is not info.FALSE:
                     candidates.append(player)
                 if is_tf is info.TRUE:
@@ -323,18 +323,18 @@ class NoDashii(GenericDemon):
         for fwd in fwd_candidates:
             for bkwd in bkwd_candidates:
                 new_state = state.fork()
-                new_nodashii = new_state.players[src].character
+                new_nodashii = new_state.players[me].character
                 new_nodashii.tf_neighbour1 = fwd
                 new_nodashii.tf_neighbour2 = bkwd
-                new_nodashii.maybe_activate_effects(new_state, src)
+                new_nodashii.maybe_activate_effects(new_state, me)
                 yield new_state
 
-    def _activate_effects_impl(self, state: State, src: PlayerID):
-        state.players[self.tf_neighbour1].droison(state, src)
-        state.players[self.tf_neighbour2].droison(state, src)
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        state.players[self.tf_neighbour1].droison(state, me)
+        state.players[self.tf_neighbour2].droison(state, me)
 
-    def _deactivate_effects_impl(self, state: State, src: PlayerID):
-        state.players[self.tf_neighbour1].undroison(state, src)
-        state.players[self.tf_neighbour2].undroison(state, src)
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        state.players[self.tf_neighbour1].undroison(state, me)
+        state.players[self.tf_neighbour2].undroison(state, me)
 ```
 </details>

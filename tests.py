@@ -5,13 +5,14 @@ from clockchecker import *
 
 def assert_solutions(
     testcase: unittest.TestCase, 
-    worlds: Generator[State],
+    puzzle: Puzzle,
     solutions: tuple[tuple[Character, ...]],
 ):
     """
     Checks that a given list of world states has character placements that 
     exactly match the allowed solutions
     """
+    worlds = list(testcase.solver.generate_worlds(puzzle))
     def to_string(answer: Iterable[Character]) -> str:
         return ', '.join(x.__name__ for x in answer)
     predictions = tuple(
@@ -19,9 +20,22 @@ def assert_solutions(
         for world in worlds
     )
     testcase.assertEqual(sorted(predictions), sorted(map(to_string, solutions)))
+    return worlds
 
 
 class Puzzles(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.solver = Solver()
+        cls.solver.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls.solver.__exit__(None, None, None)
+
     def test_puzzle_1(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1erb5e2/can_the_sober_savant_solve_the_puzzle
 
@@ -57,8 +71,7 @@ class Puzzles(unittest.TestCase):
                 1: Seamstress.Ping(Sula, Oscar, same=False)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -66,7 +79,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Savant, Goblin, Steward, Drunk, Noble, Leviathan),
         ))
 
@@ -111,8 +124,7 @@ class Puzzles(unittest.TestCase):
                 3: Balloonist.Ping(Steph),
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -120,7 +132,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Drunk, Knight, FortuneTeller, Saint, Goblin, 
                 Leviathan, Clockmaker, Balloonist),
         ))
@@ -153,15 +165,15 @@ class Puzzles(unittest.TestCase):
                 }),
             ],
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk],
         )
-        assert_solutions(self, worlds, solutions=(
+
+        assert_solutions(self, puzzle, solutions=(
             (Slayer, Baron, Recluse, Investigator, Imp, Drunk, Empath),
         ))
 
@@ -192,15 +204,15 @@ class Puzzles(unittest.TestCase):
                 1: Empath.Ping(0)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk],
         )
-        assert_solutions(self, worlds, solutions=(
+
+        assert_solutions(self, puzzle, solutions=(
             (Slayer, Librarian, Imp, Spy, Chef, Recluse, Washerwoman, Empath),
         ))
 
@@ -249,15 +261,15 @@ class Puzzles(unittest.TestCase):
             },
             night_deaths={2: Hannah, 3: Tim},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[LordOfTyphon],
             possible_minions=[Marionette, Poisoner],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk, Marionette],
         )
-        assert_solutions(self, worlds, solutions=(
+
+        assert_solutions(self, puzzle, solutions=(
             (Investigator, Drunk, Marionette, LordOfTyphon, Poisoner, Recluse, 
                 Juggler, Dreamer),
             (Investigator, Drunk, Poisoner, LordOfTyphon, Marionette, Recluse, 
@@ -290,8 +302,7 @@ class Puzzles(unittest.TestCase):
                 1: Seamstress.Ping(Tom, Hannah, same=False)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -299,7 +310,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Alsaahir, Noble, Knight, Investigator, Empath, Leviathan, Goblin),
             (Alsaahir, Noble, Knight, Investigator, Goblin, Steward, Leviathan),
         ))
@@ -330,8 +341,7 @@ class Puzzles(unittest.TestCase):
                 1: Knight.Ping(You, Steph)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -339,7 +349,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Juggler, Leviathan, Seamstress, Steward, Goblin, Noble, Knight),
             (Juggler, Empath, Seamstress, Leviathan, Goblin, Noble, Knight),
             (Juggler, Goblin, Seamstress, Steward, Investigator, Leviathan, Knight),
@@ -391,14 +401,15 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Fraser, died=True)},
             night_deaths={2: Steph},
         )
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[NoDashii, Vortox, Pukka],
             possible_minions=[Marionette],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk, Marionette],
         )
-        assert_solutions(self, worlds, solutions=(
+
+        assert_solutions(self, puzzle, solutions=(
             (Marionette, Saint, Noble, Seamstress, Investigator, Juggler, Drunk,
              Empath, Vortox),
         ))
@@ -465,8 +476,7 @@ class Puzzles(unittest.TestCase):
                 3: VillageIdiot.Ping(You, is_evil=False),
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -474,7 +484,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Savant, VillageIdiot, FortuneTeller, Goblin, 
                 Leviathan, Shugenja, Mutant, VillageIdiot),
         ))
@@ -506,8 +516,7 @@ class Puzzles(unittest.TestCase):
                 1: Seamstress.Ping(Steph, Anna, same=False)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner],
@@ -515,7 +524,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Seamstress, Imp, Poisoner) +  (Seamstress,) * 4,
             (Seamstress, Poisoner, Imp) +  (Seamstress,) * 4,
         ))
@@ -563,8 +572,7 @@ class Puzzles(unittest.TestCase):
                 3: [You, Josh, Anna]
             },
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp, Po],
             possible_minions=[Goblin],
@@ -572,7 +580,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
         
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
            (Acrobat, Balloonist, Gossip, Drunk, Imp, Juggler, Goblin),
         ))
 
@@ -607,7 +615,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Josh)},
             night_deaths={2: Matthew},
         )
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
@@ -615,7 +623,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Slayer, Ravenkeeper, Imp, FortuneTeller, Chef, Poisoner, 
                 Washerwoman),
         ))
@@ -650,8 +658,7 @@ class Puzzles(unittest.TestCase):
                 ]
             },
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Vortox],
             possible_minions=[Spy, ScarletWoman],
@@ -659,7 +666,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Dreamer, Clockmaker, Lunatic, Slayer, Spy, Vortox),
         ))
 
@@ -699,8 +706,7 @@ class Puzzles(unittest.TestCase):
                 ]
             },
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Vortox],
             possible_minions=[Spy, ScarletWoman],
@@ -708,7 +714,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Librarian, Vortox, Lunatic, Mayor, Slayer, Dreamer, Clockmaker, 
                 ScarletWoman),
         ))
@@ -742,15 +748,15 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Aoife, died=True)},
             night_deaths={2: Tim,},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Baron, Spy, ScarletWoman, Poisoner],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk],
         )
-        assert_solutions(self, worlds, solutions=((
+
+        assert_solutions(self, puzzle, solutions=((
             Investigator, Clockmaker, Baron, Drunk, FortuneTeller, Imp, Recluse
         ),))
 
@@ -789,14 +795,15 @@ class Puzzles(unittest.TestCase):
             },
             night_deaths={2: Brett},
         )
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, ScarletWoman, Marionette],
             possible_hidden_good=[],
             possible_hidden_self=[Marionette],
         )
-        assert_solutions(self, worlds, solutions=((
+
+        assert_solutions(self, puzzle, solutions=((
             Slayer, Washerwoman, Undertaker, 
             FortuneTeller, Empath, Imp, Poisoner
         ),))
@@ -869,8 +876,7 @@ class Puzzles(unittest.TestCase):
                 ],
             },
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[NoDashii, Vortox],
             possible_minions=[EvilTwin],
@@ -878,7 +884,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
         
-        assert_solutions(self, worlds, solutions=((
+        assert_solutions(self, puzzle, solutions=((
             Savant, Klutz, Juggler, SnakeCharmer, Clockmaker,
             Seamstress, Vortox, EvilTwin
         ),))
@@ -916,8 +922,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Hannah),  2: Execution(Fraser)},
             night_deaths={2: You, 3: Olivia},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, ScarletWoman, Baron],
@@ -925,7 +930,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=((
+        assert_solutions(self, puzzle, solutions=((
             Saint, Empath, FortuneTeller, Poisoner, Imp, Washerwoman, 
             Investigator, Chef
         ),))
@@ -967,16 +972,15 @@ class Puzzles(unittest.TestCase):
             },
             night_deaths={2: Adam, 3: Hannah},
         )
-
-        worlds = list(world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[ScarletWoman],
             possible_hidden_good=[],
             possible_hidden_self=[],
-        ))
+        )
 
-        assert_solutions(self, worlds, solutions=(
+        worlds = assert_solutions(self, puzzle, solutions=(
             (Puzzlemaster, Imp, Empath, ScarletWoman, Undertaker, Washerwoman,
                  Investigator, Slayer),
             (Puzzlemaster, Chef, Empath, Imp, Undertaker, Washerwoman,
@@ -988,6 +992,58 @@ class Puzzles(unittest.TestCase):
         ))
         for world in worlds:
             self.assertEqual(world.players[You].character.puzzle_drunk, Steph)
+
+    def test_puzzle_18(self):
+        # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hb72qg/weekly_puzzle_18_starring_the_xaan/
+        
+        You, Steph, Fraser, Dan, Aoife, Tim, Olivia, Sarah = range(8)
+        state = State(
+            players= [
+                Player('You', claim=Librarian, night_info={
+                    1: Librarian.Ping(Aoife, Tim, Drunk),
+                }),
+                Player('Steph', claim=Juggler, 
+                    day_info={1: Juggler.Juggle({
+                        Fraser: Leviathan,
+                        Aoife: Balloonist,
+                        Tim: Xaan,
+                    })},
+                    night_info={2: Juggler.Ping(2)},
+                ),
+                Player('Fraser', claim=SnakeCharmer, night_info={
+                    1: SnakeCharmer.Choice(Olivia),
+                    2: SnakeCharmer.Choice(Steph),
+                    3: SnakeCharmer.Choice(Aoife),
+                }),
+                Player('Dan', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(Tim, Sarah, demon=False),
+                    2: FortuneTeller.Ping(Steph, Aoife, demon=False),
+                    3: FortuneTeller.Ping(Fraser, Olivia, demon=False),
+                }),
+                Player('Aoife', claim=Balloonist, night_info={
+                    1: Balloonist.Ping(Olivia),
+                    2: Balloonist.Ping(Aoife),
+                    3: Balloonist.Ping(You),
+                }),
+                Player('Tim', claim=Saint),
+                Player('Olivia', claim=Investigator, night_info={
+                    1: Investigator.Ping(Fraser, Aoife, Xaan),
+                }),
+                Player('Sarah', claim=Recluse),
+            ],
+        )
+        puzzle = Puzzle(
+            state,
+            possible_demons=[Leviathan],
+            possible_minions=[Xaan],
+            possible_hidden_good=[Drunk],
+            possible_hidden_self=[Drunk],
+        )
+
+        assert_solutions(self, puzzle, solutions=(
+            (Drunk, Juggler, Leviathan, FortuneTeller, Balloonist, Saint, Xaan, 
+                Recluse),
+        ))
 
     def test_puzzle_19(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hgdsmp/weekly_puzzle_19_he_could_be_you_he_could_be_me/
@@ -1021,8 +1077,7 @@ class Puzzles(unittest.TestCase):
             },
             night_deaths={2: Matt},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
@@ -1030,7 +1085,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Librarian, Spy, Recluse, Slayer, Imp, 
                 Ravenkeeper, Washerwoman, Empath),
         ))
@@ -1067,8 +1122,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You)},
             night_deaths={2: Gabriel},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
@@ -1076,7 +1130,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=((
+        assert_solutions(self, puzzle, solutions=((
             Investigator, VillageIdiot, Saint, VillageIdiot, Baron, Imp, Drunk,
         ),))
 
@@ -1118,8 +1172,7 @@ class Puzzles(unittest.TestCase):
                 night_info={2: Juggler.Ping(0)},
             ),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Leviathan],
             possible_minions=[Goblin],
@@ -1127,7 +1180,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Juggler, Juggler, Drunk, Juggler, Goblin, 
                 Juggler, Juggler, Leviathan),
         ))
@@ -1164,8 +1217,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Oscar), 2: Execution(Fraser)},
             night_deaths={2: Sarah, 3: Anna},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Baron, Spy, Poisoner, ScarletWoman],
@@ -1173,7 +1225,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=((
+        assert_solutions(self, puzzle, solutions=((
             Drunk, Investigator, Slayer, Imp, Saint, Recluse, Librarian, Baron
         ),))
 
@@ -1209,8 +1261,7 @@ class Puzzles(unittest.TestCase):
             ],
             night_deaths={2: Aoife},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Goblin],
@@ -1218,7 +1269,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Chef, Washerwoman, Investigator, FortuneTeller,
              Goblin, Lunatic, Librarian, Imp),
         ))
@@ -1260,8 +1311,7 @@ class Puzzles(unittest.TestCase):
             ]},
             night_deaths={2: Olivia},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner],
@@ -1269,7 +1319,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Investigator, Klutz, FortuneTeller, Washerwoman, Virgin,
              Librarian, Imp, Poisoner),
         ))
@@ -1304,8 +1354,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You), 2: Execution(Dan)},
             night_deaths={2: Josh, 3: Olivia},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
@@ -1313,7 +1362,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Empath, Saint, Slayer, Imp, Poisoner, Soldier, Undertaker, Chef),
         ))
 
@@ -1356,8 +1405,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Adam), 2: Execution(Aoife)},
             night_deaths={2: You, 3: Sarah},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Pukka, NoDashii],
             possible_minions=[ScarletWoman],
@@ -1365,7 +1413,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
         
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Chambermaid, Drunk, ScarletWoman, Librarian, Clockmaker,
                 Empath, NoDashii, Oracle),
         ))
@@ -1411,8 +1459,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Jasmine)},
             night_deaths={2: You},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner],
@@ -1420,7 +1467,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
         
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Dreamer, Poisoner, Imp, Dreamer, Dreamer, Dreamer, Drunk, Dreamer),
         ))
         
@@ -1446,8 +1493,7 @@ class Puzzles(unittest.TestCase):
                 1: Seamstress.Ping(Finn, Ben, same=True)
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Spy],
@@ -1455,7 +1501,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
         
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Drunk, Spy, Artist, Clockmaker, Imp, Seamstress),
         ))
   
@@ -1481,14 +1527,14 @@ class Puzzles(unittest.TestCase):
                 1: Noble.Ping(Lav, Callum, Sarah),
             }),
         ])
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Spy],
             possible_hidden_good=[Drunk],
             possible_hidden_self=[Drunk],
         )
+        worlds = self.solver.generate_worlds(puzzle)
         self.assertEqual(len(list(worlds)), 0)  # Atheist game! TODO: return the Atheist world
 
         
@@ -1524,8 +1570,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You), 2: Execution(Sarah)},
             night_deaths={2: Tim, 3: Olivia},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
@@ -1533,10 +1578,9 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Chef, Empath, Drunk, Imp, Recluse, Baron, FortuneTeller),
         ))
-
 
     def test_puzzle_32(self):
         # https://www.reddit.com/r/BloodOnTheClocktower/comments/1je8z17/weekly_puzzle_32_prepare_for_juggle_and_make_it/
@@ -1586,8 +1630,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You), 2: Execution(Dan)},
             night_deaths={2: Tim, 3: Fraser},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Baron],
@@ -1595,7 +1638,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Dreamer, Poisoner, Imp, Empath, Juggler, Saint, Undertaker, 
              FortuneTeller),
         ))
@@ -1632,8 +1675,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You), 2: Execution(Fraser)},
             night_deaths={2: Olivia, 3: Jasmine},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Baron, Spy, ScarletWoman],
@@ -1641,7 +1683,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Empath, Recluse, Ravenkeeper, Washerwoman, Imp, 
              FortuneTeller, Poisoner, Investigator),
         ))
@@ -1683,8 +1725,7 @@ class Puzzles(unittest.TestCase):
             },
             night_deaths={2: Fraser},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[NoDashii, Vortox],
             possible_minions=[Witch],
@@ -1692,7 +1733,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Mathematician, Sage, Artist, Vortox, Witch, Juggler, SnakeCharmer),
         ))
 
@@ -1731,8 +1772,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You)},
             night_deaths={2: Oscar},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp, LordOfTyphon],
             possible_minions=[Poisoner, Spy],
@@ -1740,7 +1780,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Librarian, Clockmaker, Undertaker, FortuneTeller, Spy,
                 LordOfTyphon, Poisoner, Drunk),
         ))
@@ -1776,8 +1816,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(You), 2: Execution(Oscar)},
             night_deaths={2: Josh, 3: Olivia},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
@@ -1786,7 +1825,7 @@ class Puzzles(unittest.TestCase):
             allow_good_double_claims=False,
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Empath, Saint, Slayer, Ravenkeeper, Investigator,
              FortuneTeller, Imp, Poisoner),
         ))
@@ -1826,8 +1865,7 @@ class Puzzles(unittest.TestCase):
             day_events={1: Execution(Matt), 2: Execution(Aoife)},
             night_deaths={2: Adam, 3: Sula},
         )
-
-        worlds = world_gen(
+        puzzle = Puzzle(
             state,
             possible_demons=[Imp],
             possible_minions=[Poisoner, Spy, ScarletWoman, Marionette],
@@ -1835,7 +1873,7 @@ class Puzzles(unittest.TestCase):
             possible_hidden_self=[Drunk],
         )
 
-        assert_solutions(self, worlds, solutions=(
+        assert_solutions(self, puzzle, solutions=(
             (Undertaker, Washerwoman, Chef, Drunk, Librarian,
              FortuneTeller, Imp, Poisoner),
         ))
