@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterable, Mapping
 from collections import Counter, defaultdict
+from contextlib import nullcontext
 from copy import copy, deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
@@ -117,7 +118,6 @@ class State:
     players: list[Player]
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
-    finish_final_day: bool = False
 
     def __post_init__(self):
         """
@@ -154,18 +154,6 @@ class State:
             # # Also, because typing out puzzles is hard :)
             for item in player.night_info.values():
                 assert not isinstance(item, events.Event), f"{type(item)=}"
-
-        self.max_day = max(
-            max((max(p.day_info, default=0) for p in self.players)),
-            max(self.day_events, default=0),
-        )
-        self.max_night = max(
-            self.max_day,
-            max((max(p.night_info, default=0) for p in self.players)),
-            max(self.night_deaths, default=0),
-        )
-        self.max_day = max(self.max_day, self.max_night - 1)
-        self.finish_final_day |= (self.max_day < self.max_night)
 
     def begin_game(self, allow_good_double_claims: bool) -> bool:
         """Called after player positions and characters have been chosen"""
@@ -478,22 +466,39 @@ class State:
 
 @dataclass
 class Puzzle:
-    state: State
-    possible_demons: list[Character]
-    possible_minions: list[Character]
-    possible_hidden_good: list[Character]
-    possible_hidden_self: list[Character]
+    players: list[Player]
+    demons: list[Character]
+    minions: list[Character]
+    hidden_good: list[Character]
+    hidden_self: list[Character]
+    day_events: dict[int, list[Event]] = field(default_factory=dict)
+    night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
     category_counts: tuple[int, int, int, int] | None = None
     world_init_check: Callable[[State], bool] | None = None
     allow_good_double_claims: bool = True
     deduplicate_initial_characters: bool = True
+    finish_final_day: bool = False
 
     def __post_init__(self):
         if self.category_counts is None:
             self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
-                len(self.state.players)
+                len(self.players)
             ]
         self._validate_inputs()
+
+        self._max_day = max(
+            max((max(p.day_info, default=0) for p in self.players)),
+            max(self.day_events, default=0),
+        )
+        self._max_night = max(
+            self._max_day,
+            max((max(p.night_info, default=0) for p in self.players)),
+            max(self.night_deaths, default=0),
+        )
+        self._max_day = max(self._max_day, self._max_night - 1)
+        self.finish_final_day |= (self._max_day < self._max_night)
+
+        self._state = State(self.players, self.day_events, self.night_deaths)
 
     def _validate_inputs(self):
         """
@@ -506,9 +511,9 @@ class Puzzle:
 
         # Check all used characters are registered in the night order
         used_characters = (
-            [type(p.character) for p in self.state.players]
-            + self.possible_demons + self.possible_minions
-            + self.possible_hidden_good + self.possible_hidden_self
+            [type(p.character) for p in self.players]
+            + self.demons + self.minions
+            + self.hidden_good + self.hidden_self
         )
         registered_characters = (
             characters.GLOBAL_NIGHT_ORDER
@@ -523,15 +528,15 @@ class Puzzle:
                 )
         
         # Check valid choices of hidden good characters
-        for character in self.possible_hidden_good:
+        for character in self.hidden_good:
             if not character.is_liar:
                 raise ValueError(
-                    f"{character.__name__} can't be in possible_hidden_good"
+                    f"{character.__name__} can't be in hidden_good"
                 )
-        for character in self.possible_demons:
+        for character in self.demons:
             if character.category is not characters.DEMON:
                 raise ValueError(f'{character.__name__} is not a Demon')
-        for character in self.possible_minions:
+        for character in self.minions:
             if character.category is not characters.MINION:
                 raise ValueError(f'{character.__name__} is not a Minion')
 
@@ -542,10 +547,10 @@ def _check_valid_character_counts(
     liar_positions: Iterable[int],
 ) -> bool:
     """Check that the starting player category counts are legal."""
-    setup = [p.claim for p in puzzle.state.players]
+    setup = [p.claim for p in puzzle.players]
     for liar, position in zip(liar_characters, liar_positions):
         setup[position] = liar
-        if position == 0 and liar not in puzzle.possible_hidden_self:
+        if position == 0 and liar not in puzzle.hidden_self:
             return False
     T, O, M, D = puzzle.category_counts
     bounds = ((T, T), (O, O), (M, M), (D, D))
@@ -602,17 +607,17 @@ def _liar_placement_worker(
     while (puzzle := puzzle_queue.get()) is not None:
         n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
         liar_combinations = it.product(
-            it.combinations(puzzle.possible_demons, n_demons),
+            it.combinations(puzzle.demons, n_demons),
             it.chain(*[
-                it.combinations(puzzle.possible_minions, i)
-                for i in range(n_minions, len(puzzle.possible_minions) + 1)
+                it.combinations(puzzle.minions, i)
+                for i in range(n_minions, len(puzzle.minions) + 1)
             ]),
             it.chain(*[
-                it.combinations(puzzle.possible_hidden_good, i)
-                for i in range(len(puzzle.possible_hidden_good) + 1)
+                it.combinations(puzzle.hidden_good, i)
+                for i in range(len(puzzle.hidden_good) + 1)
             ])
         )
-        player_ids = list(range(len(puzzle.state.players)))
+        player_ids = list(range(len(puzzle.players)))
         dbg_idx = 0
         for demons, minions, hidden_good in liar_combinations:
             liars = demons + minions + hidden_good
@@ -630,7 +635,7 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
 
     while (puzzle := puzzle_q.get()) is not None:
         event_counts = defaultdict(int, {
-            day: len(events) for day, events in puzzle.state.day_events.items()
+            day: len(events) for day, events in puzzle.day_events.items()
         })
 
         while (liars := liars_q.get()) is not None:
@@ -638,11 +643,10 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
             liar_characters, liar_positions, debug_idx = liars
             if not _check_valid_character_counts(
                 puzzle, liar_characters, liar_positions,
-                # puzzle.category_counts, puzzle.possible_hidden_self,
             ):
                 continue
             # Create the world and place the hidden characters
-            world = puzzle.state.root_fork(debug_idx)
+            world = puzzle._state.root_fork(debug_idx)
             for liar, position in zip(liar_characters, liar_positions):
                 world.players[position].character = liar()
                 world.players[position].is_evil = liar.category in (
@@ -658,10 +662,10 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
             # Run the solver on the world
             for solution in _run_game_gen(
                 [world],
-                len(puzzle.state.players),
-                puzzle.state.max_night,
-                puzzle.state.max_day,
-                puzzle.state.finish_final_day,
+                len(puzzle.players),
+                puzzle._max_night,
+                puzzle._max_day,
+                puzzle.finish_final_day,
                 event_counts,
             ):
                 solutions_q.put(solution)
@@ -670,7 +674,7 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
 
 class Solver:
     """Manages the worker threads"""
-    def __init__(self, num_processes=6):
+    def __init__(self, num_processes=10):
         self.puzzle_queue = Queue(maxsize=num_processes + 1)
         self.liars_queue = Queue(maxsize=num_processes)
         self.solutions_queue = Queue(maxsize=num_processes)
@@ -691,10 +695,12 @@ class Solver:
                 args=(self.puzzle_queue, self.liars_queue, num_processes)
             )
         )
+        self._running = False
     
     def __enter__(self):
         for process in self.all_workers:
             process.start()
+        self._running = True
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -702,25 +708,28 @@ class Solver:
             self.puzzle_queue.put(None)
         for process in self.all_workers:
             process.join()
+        self._running = False
 
     def generate_worlds(self, puzzle: Puzzle) -> StateGen:
-        for _ in range(self.num_processes + 1):
-            self.puzzle_queue.put(puzzle)
-        
-        seen_solutions = set()
-        finish_count = 0
-        while True:
-            solution = self.solutions_queue.get()
-            if solution is None:  # Done sentinel
-                finish_count += 1
-                if finish_count == self.num_processes:
-                    break
-            elif (
-                not puzzle.deduplicate_initial_characters
-                or solution.initial_characters not in seen_solutions
-            ):
-                seen_solutions.add(solution.initial_characters)
-                yield solution
+
+        with nullcontext() if self._running else self:
+            for _ in range(self.num_processes + 1):
+                self.puzzle_queue.put(puzzle)
+            
+            seen_solutions = set()
+            finish_count = 0
+            while True:
+                solution = self.solutions_queue.get()
+                if solution is None:  # Done sentinel
+                    finish_count += 1
+                    if finish_count == self.num_processes:
+                        break
+                elif (
+                    not puzzle.deduplicate_initial_characters
+                    or solution.initial_characters not in seen_solutions
+                ):
+                    seen_solutions.add(solution.initial_characters)
+                    yield solution
 
 
 def list_find(X: list, item: Any, sentinel: int) -> int:

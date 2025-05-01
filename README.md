@@ -1,5 +1,5 @@
 # Clockchecker 🕰️
-Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). Clockchecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation is for implementing new characters to be as easy as possible.
+Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). Clockchecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation behind the design of clockchecker is for implementing new characters to be as easy as possible, because hobbies are supposed to be fun.
  
 ## Puzzle Solving Examples
 <p align="center">
@@ -13,39 +13,36 @@ Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](
 from clockchecker import *
 
 You, Olivia, Dan, Tom, Matthew, Josh, Sula, Fraser = range(8)
-state = State(
+puzzle = Puzzle(
     players=[
-        Player(name='You', claim=Empath, night_info={
+        Player('You', claim=Empath, night_info={
             1: Empath.Ping(0)
         }),
-        Player(name='Olivia', claim=Saint),
-        Player(name='Dan', claim=Slayer, day_info={
+        Player('Olivia', claim=Saint),
+        Player('Dan', claim=Slayer, day_info={
             2: Slayer.Shot(Matthew, died=False),
         }),
-        Player(name='Tom', claim=Recluse),
-        Player(name='Matthew', claim=Librarian, night_info={
+        Player('Tom', claim=Recluse),
+        Player('Matthew', claim=Librarian, night_info={
             1: Librarian.Ping(You, Josh, Drunk)
         }),
-        Player(name='Josh', claim=Soldier),
-        Player(name='Sula', claim=Undertaker, night_info={
+        Player('Josh', claim=Soldier),
+        Player('Sula', claim=Undertaker, night_info={
             2: Undertaker.Ping(You, Empath),
             3: Undertaker.Ping(Dan, Slayer),
         }),
-        Player(name='Fraser', claim=Chef, night_info={
+        Player('Fraser', claim=Chef, night_info={
             1: Chef.Ping(2)
         }),
     ],
-    day_events={1: Execution(You), Execution(Dan)},
+    day_events={1: Execution(You), 2: Execution(Dan)},
     night_deaths={2: Josh, 3: Olivia},
+    demons=[Imp],
+    minions=[Poisoner, Spy, Baron, ScarletWoman],
+    hidden_good=[Drunk],
+    hidden_self=[Drunk],
 )
-
-for world in world_gen(
-    state,
-    possible_demons=[Imp],
-    possible_minions=[Poisoner, Spy, Baron, ScarletWoman],
-    possible_hidden_good=[Drunk],
-    possible_hidden_self=[Drunk],
-):
+for world in Solver().generate_worlds(puzzle):
     print(world)
  ```
 </td></tr>
@@ -63,46 +60,44 @@ for world in world_gen(
 from clockchecker import *
 
 You, Oscar, Anna, Josh, Fraser, Tom, Aoife, Steph = range(8)
-state = State(
+puzzle = Puzzle(
     players=[
-        Player(name='You', claim=Librarian, night_info={
+        Player('You', claim=Librarian, night_info={
             1: Librarian.Ping(Fraser, Steph, Lunatic)
         }),
-        Player(name='Oscar', claim=Investigator, night_info={
+        Player('Oscar', claim=Investigator, night_info={
             1: Investigator.Ping(Josh, Fraser, Spy)
         }),
-        Player(name='Anna', claim=Empath, night_info={
+        Player('Anna', claim=Empath, night_info={
             1: Empath.Ping(1)
         }),
-        Player(name='Josh', claim=Mayor),
-        Player(name='Fraser', claim=Slayer),
-        Player(name='Tom', claim=Dreamer, night_info={
+        Player('Josh', claim=Mayor),
+        Player('Fraser', claim=Slayer),
+        Player('Tom', claim=Dreamer, night_info={
             1: Dreamer.Ping(Steph, Lunatic, Spy)
         }),
-        Player(name='Aoife', claim=Clockmaker, night_info={
+        Player('Aoife', claim=Clockmaker, night_info={
             1: Clockmaker.Ping(3)
         }),
-        Player(name='Steph', claim=Courtier, night_info={
+        Player('Steph', claim=Courtier, night_info={
             1: Courtier.Choice(Vortox)
         }),
     ],
     day_events={
         1: [
-            Doomsayer.Call(caller=Tom, died=Josh),
-            Slayer.Shot(src=Fraser, target=Steph, died=False),
-            Doomsayer.Call(caller=Steph, died=Oscar),
-            Doomsayer.Call(caller=Fraser, died=Aoife),
+            Doomsayer.Call(player=Tom, died=Josh),
+            Slayer.Shot(player=Fraser, target=Steph, died=False),
+            Doomsayer.Call(player=Steph, died=Oscar),
+            Doomsayer.Call(player=Fraser, died=Aoife),
         ]
     },
+    demons=[Vortox],
+    minions=[Spy, ScarletWoman],
+    hidden_good=[Lunatic],
+    hidden_self=[],
 )
 
-for world in  world_gen(
-    state,
-    possible_demons=[Vortox],
-    possible_minions=[Spy, ScarletWoman],
-    possible_hidden_good=[Lunatic],
-    possible_hidden_self=[],
-):
+for world in Solver().generate_worlds(puzzle):
     print(world)
  ```
 </td></tr>
@@ -116,11 +111,11 @@ Run the example script (which usually just contains whatever puzzle I was implem
 ```bash
 python example.py
 ```
-All currently solved puzzles are present as unit tests in tests.py. Run them all with
+All currently solved puzzles are present in the `puzzles.py` file. They are run as unit tests, you can run them all with the following
 ```bash
 python -m unittest
 ```
-At time of writing clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. The above unittest command today solves 32 puzzles in 10.1 seconds.
+Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. At time of writing the above unittest command today solves 38 puzzles in 13 seconds.
 
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
