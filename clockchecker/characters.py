@@ -138,13 +138,11 @@ class Character:
         inherit this default implementation and implement their own Pings to go
         in night_info.
         """
-        if self.default_info_check(
-            state, state.players[me].night_info, night, me
-        ):
+        if self.default_info_check(state, me):
             yield state
 
     def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
-        if self.default_info_check(state, state.players[me].day_info, day, me):
+        if self.default_info_check(state, me):
             yield state
 
     def end_day(self, state: State, day: int, me: PlayerID) -> bool:
@@ -158,16 +156,21 @@ class Character:
     def default_info_check(
         self: Character, 
         state: State,
-        all_info: dict[int, Info],
-        info_index: int, 
         me: PlayerID,
         even_if_dead: bool = False,
     ) -> bool:
         """Most info roles can inherit this pattern for their info check."""
-        player = state.players[me]
-        ping = all_info.get(info_index, None)
+        if state.night is not None:
+            ping = state.get_night_info(me, state.night)
+        elif state.day is not None:
+            ping = state.get_day_info(me, state.day)
+        else:
+            raise ValueError('What time is it?')
+
         if ping is None or info.behaves_evil(state, me) or self.is_liar:
             return True
+
+        player = state.players[me]
         if player.is_dead and not even_if_dead:
             return False
 
@@ -337,7 +340,7 @@ class Acrobat(Character):
         acrobat = state.players[me]
         if acrobat.is_evil:
             raise NotImplementedError("Evil Acrobat")
-        if (choice := acrobat.night_info.get(night, None)) is None:
+        if (choice := state.get_night_info(me, night)) is None:
             yield state
         elif acrobat.is_dead:
             return
@@ -436,7 +439,7 @@ class Balloonist(Character):
         it ever actually comes up :)
         """
         balloonist = state.players[me]
-        ping = balloonist.night_info.get(night, None)
+        ping = state.get_night_info(me, night)
         if (
             balloonist.is_dead
             or balloonist.is_evil
@@ -635,7 +638,7 @@ class Courtier(Character):
             # Yield all choices like a poisoner, plus the non-choice
             raise NotImplementedError("Todo: Evil Courtier")
 
-        choice = courtier.night_info.get(night, None)
+        choice = state.get_night_info(me, night)
         if choice is None:
             yield state; return
         if courtier.is_dead or self.spent:
@@ -850,11 +853,11 @@ class FortuneTeller(Character):
         player2: PlayerID
         demon: bool
         def __call__(self, state: State, me: PlayerID) -> STBool:
+            red_herring = state.players[me].character.red_herring
             real_result = (
                 info.IsCategory(self.player1, DEMON)(state, me)
                 | info.IsCategory(self.player2, DEMON)(state, me)
-                | info.CharAttrEq(me, 'red_herring', self.player1)(state, me)
-                | info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
+                | info.STBool(red_herring in (self.player1, self.player2))
             )
             return real_result == info.STBool(self.demon)
 
@@ -893,7 +896,7 @@ class Gambler(Character):
         if gambler.is_evil:
             raise NotImplementedError("Evil Gambler")
         
-        ping = gambler.night_info.get(night, None)
+        ping = state.get_night_info(me, night)
         if gambler.is_dead or ping is None:
             yield state
             return
@@ -1383,7 +1386,7 @@ class NightWatchman(Character):
             raise NotImplementedError(
                 "When to spend if evil, or vortox giving incorrect ping source."
             )
-        ping = nightwatchman.night_info.get(night, None)
+        ping = state.get_night_info(me, night)
         if ping is None:
             yield state; return
         if nightwatchman.is_dead or self.spent:
@@ -1766,13 +1769,9 @@ class Ravenkeeper(Character):
         yield from super().apply_death(state, me, src)
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
-        """
-        Override Reason: Even if dead.
-        The Ping checks the death was on the same night.
-        """
-        if self.default_info_check(
-            state, state.players[me].night_info, night, me, even_if_dead=True
-        ):
+        """Override Reason: Even if dead."""
+        # The Ping checks the death was on the same night.
+        if self.default_info_check(state, me, even_if_dead=True):
             yield state
 
 @dataclass
@@ -1826,13 +1825,9 @@ class Sage(Character):
         yield from super().apply_death(state, me, src)
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
-        """
-        Override Reason: Even if dead.
-        The Ping checks the death was on the same night.
-        """
-        if self.default_info_check(
-            state, state.players[me].night_info, night, me, even_if_dead=True
-        ):
+        """Override Reason: Even if dead."""
+        # The Ping checks the death was on the same night.
+        if self.default_info_check(state, me, even_if_dead=True):
             yield state
 
 @dataclass
@@ -1858,14 +1853,14 @@ class Savant(Character):
     def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
         """ Override Reason: Novel Vortox effect on Savant, see Savant.Ping."""
         savant = state.players[me]
+        ping = state.get_day_info(me, day)
         if (
             savant.is_dead
             or savant.is_evil
-            or day not in savant.day_info
+            or ping is None
         ):
             yield state
             return
-        ping = savant.day_info[day]
         result = ping(state, me)
         if savant.droison_count:
             state.math_misregistration(result)
@@ -2006,7 +2001,7 @@ class SnakeCharmer(Character):
         snakecharmer = state.players[me]
         if snakecharmer.is_evil:
             raise NotImplementedError('Evil Snakecharmer!')
-        choice = snakecharmer.night_info.get(night, None)
+        choice = state.get_night_info(me, night)
         if choice is None:
             yield state; return
         if not isinstance(choice, SnakeCharmer.Choice):

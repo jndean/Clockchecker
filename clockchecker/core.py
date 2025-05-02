@@ -4,7 +4,7 @@ from collections.abc import Generator, Iterable, Mapping
 from collections import Counter, defaultdict
 from contextlib import nullcontext
 from copy import copy, deepcopy
-from dataclasses import dataclass, field, InitVar
+from dataclasses import dataclass, field
 import enum
 import itertools as it
 import os
@@ -12,7 +12,7 @@ from multiprocessing import Queue, Process
 from typing import Any, Callable, Generator, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .characters import Character, CategoryBounds
+    from .characters import Character
     from .events import Event
     from .info import PlayerID, Info
 
@@ -60,7 +60,6 @@ class Player:
     is_dead: bool = False
     woke_tonight: bool = False
     droison_count: int = 0
-
     character_history: list[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -85,6 +84,12 @@ class Player:
                 else:
                     self.external_night_info[(night, item_char)].append(item)
         self.external_night_info = dict(self.external_night_info)
+    
+    def _extract_info(self):
+        night_info, day_info = self.night_info, self.day_info
+        del self.night_info
+        del self.day_info
+        return night_info, day_info
 
     def droison(self, state: State, src: PlayerID) -> None:
         self.droison_count += 1
@@ -114,7 +119,7 @@ class Player:
 
 @dataclass
 class State:
-    # The list of players starts with You as player 0 and proceeds clockwise
+    puzzle: Puzzle
     players: list[Player]
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
@@ -155,6 +160,9 @@ class State:
             for item in player.night_info.values():
                 assert not isinstance(item, events.Event), f"{type(item)=}"
 
+        if _DEBUG:
+            self.debug_key = ()  # The root debug key
+
     def begin_game(self, allow_good_double_claims: bool) -> bool:
         """Called after player positions and characters have been chosen"""
         # Initialise data structures for game
@@ -181,32 +189,31 @@ class State:
         
         return True
 
-    def fork(self) -> State:
+    def fork(self, fork_id: int | None = None) -> State:
         """
         Create a unique key for each set of possible branches in the state space
         so that (mainly for debugging) we can trace an output world back through
         the branches that created it. Thankfully the solver is deterministic.
         """
+        # deepcopy everything except the puzzle definition, which is shared
+        puzzle, self.puzzle = self.puzzle, None
         ret = deepcopy(self)
+        self.puzzle, ret.puzzle = puzzle, puzzle
         if _DEBUG:
-            fork_count = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
+            if fork_id is None:
+                fork_count = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
+                _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
+            else:
+                _DEBUG_STATE_FORK_COUNTS.clear()
             ret.debug_key = self.debug_key + (fork_count,)
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
-            _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
         return ret
     
-    def root_fork(self, fork_id) -> State:
-        """
-        Fork the root puzzle state. Due to multiprocessing, this method can't be
-        aware of all other forks that have been created, so an explicit fork_id
-        is required for deterministic debug keys.
-        """
-        ret = deepcopy(self)
-        if _DEBUG:
-            ret.debug_key = (fork_id,)
-            _DEBUG_STATE_FORK_COUNTS.clear()
-            _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
-        return ret
+    def get_night_info(self, player: PlayerID, night: int):
+        return self.puzzle._night_info[player].get(night, None)
+    
+    def get_day_info(self, player: PlayerID, day: int):
+        return self.puzzle._day_info[player].get(day, None)
 
     def _is_world(self, key: tuple[int] = _DEBUG_WORLD_KEY) -> bool:
         """
@@ -498,7 +505,10 @@ class Puzzle:
         self._max_day = max(self._max_day, self._max_night - 1)
         self.finish_final_day |= (self._max_day < self._max_night)
 
-        self._state = State(self.players, self.day_events, self.night_deaths)
+        self._state = State(self, self.players, self.day_events, self.night_deaths)
+        self._night_info, self._day_info = zip(*(
+            player._extract_info() for player in self.players
+        ))
 
     def _validate_inputs(self):
         """
@@ -523,8 +533,8 @@ class Puzzle:
         for character in used_characters:
             if character not in registered_characters:
                 raise ValueError(
-                    f'Character {character.__name__} has not been placed in the '
-                    'night order. Did you forget?'
+                    f'Character {character.__name__} has not been placed in the'
+                    ' night order. Did you forget?'
                 )
         
         # Check valid choices of hidden good characters
@@ -646,7 +656,7 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
             ):
                 continue
             # Create the world and place the hidden characters
-            world = puzzle._state.root_fork(debug_idx)
+            world = puzzle._state.fork(debug_idx)
             for liar, position in zip(liar_characters, liar_positions):
                 world.players[position].character = liar()
                 world.players[position].is_evil = liar.category in (

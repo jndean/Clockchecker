@@ -120,7 +120,7 @@ Clockchecker is written purely in Python (3.13), because it is supposed to be fu
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
 
-Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, IMP)` will evaluate to `MAYBE` if Josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
+Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, Imp)` will evaluate to `MAYBE` if Josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
 
 <details open>
 <summary><b>Investigator</b></summary>
@@ -168,11 +168,11 @@ class FortuneTeller(Character):
         player2: PlayerID
         demon: bool
         def __call__(self, state: State, me: PlayerID) -> STBool:
+            red_herring = state.players[me].character.red_herring
             real_result = (
                 info.IsCategory(self.player1, DEMON)(state, me)
                 | info.IsCategory(self.player2, DEMON)(state, me)
-                | info.CharAttrEq(me, 'red_herring', self.player1)(state, me)
-                | info.CharAttrEq(me, 'red_herring', self.player2)(state, me)
+                | info.STBool(red_herring in (self.player1, self.player2))
             )
             return real_result == info.STBool(self.demon)
 

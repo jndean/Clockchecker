@@ -8,44 +8,43 @@ if __name__ == '__main__':
 	multiprocessing.freeze_support()
 	multiprocessing.set_start_method('spawn')
 
-	# https://www.reddit.com/r/BloodOnTheClocktower/comments/1joxqgy/weekly_puzzle_34_the_vortox_conjecture/
-	You, Fraser, Steph, Sula, Sarah, Josh, Aoife = range(7)
+	# https://www.reddit.com/r/BloodOnTheClocktower/comments/1kccbp9/weekly_puzzle_38_snakes_on_a_plane/
+	You, Hannah, Dan, Adam, Tim, Fraser, Sula, Matt = range(8)
 	puzzle = Puzzle(
         players=[
-            Player('You', claim=Mathematician, night_info={
-                1: Mathematician.Ping(1),
-                2: Mathematician.Ping(0),
+            Player('You', claim=Recluse),
+            Player('Hannah', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+                3: Empath.Ping(1),
             }),
-            Player('Fraser', claim=Sage, night_info={
-                2: Sage.Ping(Sarah, Josh),
+            Player('Dan', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Fraser, Poisoner),
             }),
-            Player('Steph', claim=Artist, day_info={
-                1: Artist.Ping(IsCharacter(Aoife, NoDashii)),
+            Player('Adam', claim=Investigator, night_info={
+                1: Investigator.Ping(Tim, Sula, Baron),
             }),
-            Player('Sula', claim=Clockmaker, night_info={
-                1: Clockmaker.Ping(3),
+            Player('Tim', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Matt),
+                2: SnakeCharmer.Choice(Sula),
+                3: SnakeCharmer.Choice(Hannah),
             }),
-            Player('Sarah', claim=Seamstress, night_info={
-                1: Seamstress.Ping(Steph, Aoife, same=True),
+            Player('Fraser', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Sula),
+                2: SnakeCharmer.Choice(Hannah),
+                3: SnakeCharmer.Choice(Adam),
             }),
-            Player('Josh', claim=Juggler, 
-                day_info={1: Juggler.Juggle({Steph: Artist, Sula: Clockmaker})},
-                night_info={2: Juggler.Ping(0)},
-            ),
-            Player('Aoife', claim=SnakeCharmer, night_info={
-                1: SnakeCharmer.Choice(Josh),
+            Player('Sula', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Tim, False),
+                2: FortuneTeller.Ping(Fraser, Matt, False),
             }),
+			Player('Matt', claim=Saint),
         ],
-        day_events={
-            1: [
-                Dies(player=Steph, after_nominating=True), 
-                Execution(Aoife),
-            ]
-        },
-        night_deaths={2: Fraser},
-        demons=[NoDashii, Vortox],
-        minions=[Witch],
-        hidden_good=[],
+        day_events={1: Execution(You), 2: Execution(Sula)},
+        night_deaths={2: Dan, 3: Matt},
+        demons=[Imp],
+        minions=[Baron, Spy, Poisoner, ScarletWoman],
+        hidden_good=[Drunk],
         hidden_self=[],
     )
 
