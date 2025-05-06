@@ -107,15 +107,20 @@ for world in Solver().generate_worlds(puzzle):
 </p>
 
 ## Usage
-Run the example script (which usually just contains whatever puzzle I was implementing most recently) with:
+The example script demonstrates the way the solver is intended to be used for solving a new puzzle. It usually just contains whatever puzzle I was implementing most recently, since that's how I test them. Run the example with:
 ```bash
 python example.py
 ```
-All currently solved puzzles are present in the `puzzles.py` file. They are run as unit tests, you can run them all with the following
+All currently solved puzzles are present in the `puzzles.py` file, you can choose to print and solve one by name using:
+```bash
+python puzzles.py 24
+python puzzles.py 30left
+```
+I store all previously solved puzzles so they can be run as unit tests, you can solve all puzzles with the following
 ```bash
 python -m unittest
 ```
-Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. At time of writing the above unittest command today solves 38 puzzles in 13 seconds.
+Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on and easy to reason over, rather than efficient to run. At time of writing the above unittest command solves 39 puzzles in 12.8 seconds.
 
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.

@@ -549,6 +549,36 @@ class Puzzle:
         for character in self.minions:
             if character.category is not characters.MINION:
                 raise ValueError(f'{character.__name__} is not a Minion')
+    
+    def __str__(self) -> str:
+        ret = ['Puzzle(\n  \033[0;4mPlayers\033[0m']
+        names = [player.name for player in self.players]
+        for player_id, player in enumerate(self.players):
+            ret.append(f'    \033[33;1m{player.name} claims '
+                       f'{player.claim.__name__}\033[0m')
+            for c, all_info in (('N', self._night_info), ('D', self._day_info)):
+                for night, info_item in all_info[player_id].items():
+                    info_str = info.pretty_print(info_item, names)
+                    ret.append(f'      {c}{night}: {info_str}')
+        ret.extend([
+            '\n  \033[0;4mPossible Hidden Characters\033[0m',
+            f'    Demons: [{", ".join(d.__name__ for d in self.demons)}]',
+            f'    Minions: [{", ".join(d.__name__ for d in self.minions)}]',
+            f'    Good: [{", ".join(d.__name__ for d in self.hidden_good)}]',
+            f'    You: [{", ".join(d.__name__ for d in self.hidden_self)}]',
+        ])
+        if self.day_events:
+            ret.append('\n  \033[0;4mDay Events\033[0m')
+            for d, evs in self.day_events.items():
+                for ev in evs:
+                    ret.append(f'    D{d}: {info.pretty_print(ev, names)}')
+        if self.night_deaths:
+            ret.append('\n  \033[0;4mNight Deaths\033[0m')
+            for d, deaths in self.night_deaths.items():
+                for death in deaths:
+                    ret.append(f'    N{d}: {info.pretty_print(death, names)}')
+        ret.append(')')
+        return '\n'.join(ret)
 
 
 def _check_valid_character_counts(

@@ -8,7 +8,7 @@ from typing import ClassVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .core import State, StateGen, Player
-    from .info import PlayerID, Info, ExternalInfo, STBool
+    from .info import PlayerID, ExternalInfo, STBool
 
 from . import core
 from . import events
@@ -333,7 +333,7 @@ class Acrobat(Character):
 
     @dataclass
     class Choice(info.NotInfo):
-        player: info.Info
+        player: PlayerID
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
         """Override Reason: Die on droisoned player choice"""
@@ -1114,7 +1114,7 @@ class Juggler(Character):
 
     @dataclass
     class Juggle(events.Event):
-        juggle: dict[PlayerID, Character]
+        juggle: dict[PlayerID, type[Character]]
         player: PlayerID | None = None
         def __call__(self, state: State) -> StateGen:
             juggler = state.players[self.player]
@@ -2221,7 +2221,7 @@ class Washerwoman(Character):
     class Ping(info.Info):
         player1: PlayerID
         player2: PlayerID
-        character: Character
+        character: type[Character]
         def __call__(self, state: State, src: PlayerID) -> STBool:
             return (
                 info.IsCharacter(self.player1, self.character)(state, src) |

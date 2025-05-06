@@ -4,13 +4,13 @@ from clockchecker import *
 
 
 if __name__ == '__main__':
-	# In case your OS is whack.
-	multiprocessing.freeze_support()
-	multiprocessing.set_start_method('spawn')
+    # In case your OS is whack.
+    multiprocessing.freeze_support()
+    multiprocessing.set_start_method('spawn')
 
-	# https://www.reddit.com/r/BloodOnTheClocktower/comments/1kccbp9/weekly_puzzle_38_snakes_on_a_plane/
-	You, Hannah, Dan, Adam, Tim, Fraser, Sula, Matt = range(8)
-	puzzle = Puzzle(
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kccbp9/weekly_puzzle_38_snakes_on_a_plane/
+    You, Hannah, Dan, Adam, Tim, Fraser, Sula, Matt = range(8)
+    puzzle = Puzzle(
         players=[
             Player('You', claim=Recluse),
             Player('Hannah', claim=Empath, night_info={
@@ -38,7 +38,7 @@ if __name__ == '__main__':
                 1: FortuneTeller.Ping(You, Tim, False),
                 2: FortuneTeller.Ping(Fraser, Matt, False),
             }),
-			Player('Matt', claim=Saint),
+            Player('Matt', claim=Saint),
         ],
         day_events={1: Execution(You), 2: Execution(Sula)},
         night_deaths={2: Dan, 3: Matt},
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         hidden_self=[],
     )
 
+    print(puzzle, '\n\nSolving...\n')
 
-	for world in Solver().generate_worlds(puzzle):
-		print(world)
-
+    for world in Solver().generate_worlds(puzzle):
+        print(world)

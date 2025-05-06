@@ -1822,33 +1822,35 @@ def puzzle_nqt38():
 
 
 if __name__ == '__main__':
-    # If you run this file, it will solve a puzzle of your choice
+    # Running this file will solve a puzzle of your choice, because why not?
     import argparse
     import sys
 
     PREFIX = 'puzzle_nqt'
     puzzle_names = [p[len(PREFIX):] for p in dir() if p.startswith(PREFIX)]
     parser = argparse.ArgumentParser()
-    parser.add_argument('puzzle_name', choices=puzzle_names)
+    parser.add_argument('puzzle_name', choices=puzzle_names, nargs='?', default='1')
     args = parser.parse_args(sys.argv[1:])
 
     make_puzzle = globals()[f'{PREFIX}{args.puzzle_name}']
-    puzzle, solutions, condition = make_puzzle()
+    puzzle, solutions, solve_condition = make_puzzle()
+
+    print(puzzle)
+    print('\nSolving...')
 
     with Solver() as solver:
         worlds = list(solver.generate_worlds(puzzle))
 
-    for world in worlds:
-        print(world)
-
     success = (set(w.initial_characters for w in worlds) == set(solutions))
-    if condition is not None:
+    if solve_condition is not None:
         for world in worlds:
-            success &= condition(world)
+            success &= solve_condition(world)
     if success:
-        print(f'Success. Found {len(worlds)} worlds.')
+        print(f'Success, found the following {len(worlds)} worlds.\n')
     else:
         print('\033[31;1mERROR - Mismatch with desired Solutions:\033[0m')
         for solution in solutions:
             print(solution)
     
+    for world in worlds:
+        print(world)

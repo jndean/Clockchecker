@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, fields
 import enum
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .characters import Character
     from .core import State
+    from .events import Event
 
 from . import characters
+from . import events
 
 
 PlayerID = int
@@ -181,7 +183,7 @@ class IsAlive(Info):
 
 @dataclass
 class IsCharacter(Info):
-    player: int
+    player: PlayerID
     character: type[Character]
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
@@ -220,7 +222,7 @@ class CharAttrEq(Info):
 @dataclass
 class ExactlyN(Info):
     N: int
-    args: Sequence[Info | STBool]
+    args: Sequence[Info] | Sequence[STBool]
     def __call__(self, state: State, src: PlayerID) -> STBool:
         if isinstance(self.args[0], Info):
             # Args not yet evaluated against the state
@@ -346,10 +348,72 @@ def acts_like(
     return False
 
 
+def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
+    """For printing human-readable str representations of Info."""
+
+    if isinstance(info, InfoOp):
+        if info.b is None:
+            return f'~{pretty_print(info.a, names)}'
+        op_symbols = {'and': '&', 'or': '|', 'xor': '^', 'eq': '=='}
+        return '{} {} {}'.format(
+            pretty_print(info.a, names),
+            op_symbols[info.op],
+            pretty_print(info.b, names)
+        )
+    
+    elif isinstance(info, characters.Savant.Ping):
+        return ('Savant.Ping:\n'
+                f'            {pretty_print(info.a, names)}\n'
+                f'            {pretty_print(info.b, names)}')
+
+    elif isinstance(info, characters.Juggler.Juggle):
+        items = [
+            f'{names[pid]:}: {character.__name__}'
+            for pid, character in info.juggle.items()
+        ]
+        if len(items) > 3:
+            return (f'Juggler.Juggle({names[info.player]}, {{\n' + 
+                    ',\n'.join(f'      {item}' for item in items)
+                    + '\n    })')
+        return f'Juggler.Juggle({names[info.player]}, {{{', '.join(items)}}})'
+    elif isinstance(info, events.NightDeath):
+        return names[info.player]
+
+    ret = []
+    for field in fields(info):
+        value = getattr(info, field.name)
+
+        type_, *or_none = field.type.split(' | ')
+        if or_none and or_none != ['None']:
+            type_ = field.type
+
+        if value is None:
+            ret.append(f'{field.name}={str(value)}')
+        elif type_ == 'PlayerID':
+            ret.append(names[value])
+        elif type_ in 'info.Info':
+            ret.append(pretty_print(value, names))
+        elif type_ == 'type[Character]':
+            ret.append(value.__name__)
+        elif type_ == 'characters.Categories':
+            ret.append(value.name)
+        elif type_ == 'int':
+            ret.append(str(value))
+        elif type_.startswith('Sequence'):
+            ret.append(f'[{', '.join([
+                pretty_print(x, names) for x in value
+            ])}]')
+        else:
+            ret.append(f'{field.name}={str(value)}')
+
+    return f'{type(info).__qualname__}({', '.join(ret)})'
+
+
 # ------------------ Custom Info For Specific Puzzles -------------------- #
 
 
 # Required for a Savant statement in Puzzle #1
+@dataclass
 class DrunkBetweenTownsfolk(Info):
     def __call__(self, state: State, src: PlayerID) -> STBool:
         N = len(state.players)
