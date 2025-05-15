@@ -36,9 +36,7 @@ def puzzle_nqt1():
                 1: Seamstress.Ping(Sula, Oscar, same=False)
             }),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[Drunk],
+        hidden_characters=[Leviathan, Goblin, Drunk],
         hidden_self=[],
     )
     solutions=(
@@ -89,9 +87,7 @@ def puzzle_nqt2():
                 3: Balloonist.Ping(Steph),
             }),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[Drunk],
+        hidden_characters=[Leviathan, Goblin, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -127,9 +123,7 @@ def puzzle_nqt3a():
                 1: Empath.Ping(0)
             }),
         ],
-        demons=[Imp],
-        minions=[Baron, Spy, Poisoner, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -165,9 +159,7 @@ def puzzle_nqt3b():
                 1: Empath.Ping(0)
             }),
         ],
-        demons=[Imp],
-        minions=[Baron, Spy, Poisoner, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -220,9 +212,7 @@ def puzzle_nqt4():
             2: Execution(Dan, died=True),
         },
         night_deaths={2: Hannah, 3: Tim},
-        demons=[LordOfTyphon],
-        minions=[Marionette, Poisoner],
-        hidden_good=[Drunk],
+        hidden_characters=[LordOfTyphon, Marionette, Poisoner, Drunk],
         hidden_self=[Drunk, Marionette],
     )
     solutions=(
@@ -260,9 +250,7 @@ def puzzle_nqt5a():
                 1: Seamstress.Ping(Tom, Hannah, same=False)
             }),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[],
+        hidden_characters=[Leviathan, Goblin],
         hidden_self=[],
     )
     solutions=(
@@ -298,9 +286,7 @@ def puzzle_nqt5b():
                 1: Knight.Ping(You, Steph)
             }),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[],
+        hidden_characters=[Leviathan, Goblin],
         hidden_self=[],
     )
     solutions=(
@@ -355,9 +341,7 @@ def puzzle_nqt6():
         ],
         day_events={1: Execution(Fraser, died=True)},
         night_deaths={2: Steph},
-        demons=[NoDashii, Vortox, Pukka],
-        minions=[Marionette],
-        hidden_good=[Drunk],
+        hidden_characters=[NoDashii, Vortox, Pukka, Marionette, Drunk],
         hidden_self=[Drunk, Marionette],
     )
     solutions=(
@@ -429,9 +413,7 @@ def puzzle_nqt7():
                 3: VillageIdiot.Ping(You, is_evil=False),
             }),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[Mutant],
+        hidden_characters=[Leviathan, Goblin, Mutant],
         hidden_self=[],
     )
     solutions=(
@@ -469,9 +451,7 @@ def puzzle_nqt8():
                 1: Seamstress.Ping(Steph, Anna, same=False)
             }),
         ],
-        demons=[Imp],
-        minions=[Poisoner],
-        hidden_good=[],
+        hidden_characters=[Imp, Poisoner],
         hidden_self=[],
     )
     solutions=(
@@ -523,9 +503,7 @@ def puzzle_nqt9():
             2: Sula,
             3: [You, Josh, Anna]
         },
-        demons=[Imp, Po],
-        minions=[Goblin],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Po, Goblin, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -563,9 +541,7 @@ def puzzle_nqt10():
         ],
         day_events={1: Execution(Josh)},
         night_deaths={2: Matthew},
-        demons=[Imp],
-        minions=[Poisoner, Spy, Baron, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -602,9 +578,7 @@ def puzzle_nqt12a():
                 Doomsayer.Call(player=You, died=Sarah),
             ]
         },
-        demons=[Vortox],
-        minions=[Spy, ScarletWoman],
-        hidden_good=[Lunatic],
+        hidden_characters=[Vortox, Spy, ScarletWoman, Lunatic],
         hidden_self=[],
     )
     solutions=(
@@ -648,9 +622,7 @@ def puzzle_nqt12b():
                 Doomsayer.Call(player=Fraser, died=Aoife),
             ]
         },
-        demons=[Vortox],
-        minions=[Spy, ScarletWoman],
-        hidden_good=[Lunatic],
+        hidden_characters=[Vortox, Spy, ScarletWoman, Lunatic],
         hidden_self=[],
     )
     solutions=(
@@ -687,9 +659,7 @@ def puzzle_nqt13():
         ],
         day_events={1: Execution(Aoife, died=True)},
         night_deaths={2: Tim,},
-        demons=[Imp],
-        minions=[Baron, Spy, ScarletWoman, Poisoner],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, ScarletWoman, Poisoner, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -732,9 +702,7 @@ def puzzle_nqt14():
             ]
         },
         night_deaths={2: Brett},
-        demons=[Imp],
-        minions=[Poisoner, Spy, ScarletWoman, Marionette],
-        hidden_good=[],
+        hidden_characters=[Imp, Poisoner, Spy, ScarletWoman, Marionette],
         hidden_self=[Marionette],
     )
     solutions=(
@@ -810,9 +778,7 @@ def puzzle_nqt15():
                 Klutz.Choice(player=Oscar, choice=Sarah),
             ],
         },
-        demons=[NoDashii, Vortox],
-        minions=[EvilTwin],
-        hidden_good=[Mutant],
+        hidden_characters=[NoDashii, Vortox, EvilTwin, Mutant],
         hidden_self=[],
     )
     solutions=(
@@ -854,9 +820,7 @@ def puzzle_nqt16():
         ],
         day_events={1: Execution(Hannah),  2: Execution(Fraser)},
         night_deaths={2: You, 3: Olivia},
-        demons=[Imp],
-        minions=[Poisoner, Spy, ScarletWoman, Baron],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, ScarletWoman, Baron, Drunk],
         hidden_self=[],
     )
     solutions=(
@@ -902,9 +866,7 @@ def puzzle_nqt17():
             3: Execution(Sarah),
         },
         night_deaths={2: Adam, 3: Hannah},
-        demons=[Imp],
-        minions=[ScarletWoman],
-        hidden_good=[],
+        hidden_characters=[Imp, ScarletWoman],
         hidden_self=[],
     )
     solutions=(
@@ -962,9 +924,7 @@ def puzzle_nqt18():
             }),
             Player('Sarah', claim=Recluse),
         ],
-        demons=[Leviathan],
-        minions=[Xaan],
-        hidden_good=[Drunk],
+        hidden_characters=[Leviathan, Xaan, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1005,9 +965,7 @@ def puzzle_nqt19():
             2: Slayer.Shot(player=Jasmine, target=Oscar, died=True),
         },
         night_deaths={2: Matt},
-        demons=[Imp],
-        minions=[Poisoner, Spy, Baron, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1047,9 +1005,7 @@ def puzzle_nqt20():
         ],
         day_events={1: Execution(You)},
         night_deaths={2: Gabriel},
-        demons=[Imp],
-        minions=[Baron, Spy, Poisoner, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1097,9 +1053,7 @@ def puzzle_nqt21():
                 night_info={2: Juggler.Ping(0)},
             ),
         ],
-        demons=[Leviathan],
-        minions=[Goblin],
-        hidden_good=[Drunk],
+        hidden_characters=[Leviathan, Goblin, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1139,9 +1093,7 @@ def puzzle_nqt22():
         ],
         day_events={1: Execution(Oscar), 2: Execution(Fraser)},
         night_deaths={2: Sarah, 3: Anna},
-        demons=[Imp],
-        minions=[Baron, Spy, Poisoner, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1181,9 +1133,7 @@ def puzzle_nqt23():
             }),
         ],
         night_deaths={2: Aoife},
-        demons=[Imp],
-        minions=[Goblin],
-        hidden_good=[Lunatic],
+        hidden_characters=[Imp, Goblin, Lunatic],
         hidden_self=[],
     )
     solutions=(
@@ -1231,9 +1181,7 @@ def puzzle_nqt24():
             ]
         },
         night_deaths={2: Olivia},
-        demons=[Imp],
-        minions=[Poisoner],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1271,9 +1219,7 @@ def puzzle_nqt26():
         ],
         day_events={1: Execution(You), 2: Execution(Dan)},
         night_deaths={2: Josh, 3: Olivia},
-        demons=[Imp],
-        minions=[Poisoner, Spy, Baron, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1320,9 +1266,7 @@ def puzzle_nqt28():
         ],
         day_events={1: Execution(Adam), 2: Execution(Aoife)},
         night_deaths={2: You, 3: Sarah},
-        demons=[Pukka, NoDashii],
-        minions=[ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Pukka, NoDashii, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1371,9 +1315,7 @@ def puzzle_nqt29():
         ],
         day_events={1: Execution(Jasmine)},
         night_deaths={2: You},
-        demons=[Imp],
-        minions=[Poisoner],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1405,9 +1347,7 @@ def puzzle_nqt30left():
                 1: Seamstress.Ping(Finn, Ben, same=True)
             }),
         ],
-        demons=[Imp],
-        minions=[Spy],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Spy, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1439,9 +1379,7 @@ def puzzle_nqt30right():
                 1: Noble.Ping(Lav, Callum, Sarah),
             }),
         ],
-        demons=[Imp],
-        minions=[Spy],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Spy, Drunk],
         hidden_self=[Drunk],
     )
     solutions = () # Atheist game! TODO: return the Atheist world
@@ -1479,9 +1417,7 @@ def puzzle_nqt31():
         ],
         day_events={1: Execution(You), 2: Execution(Sarah)},
         night_deaths={2: Tim, 3: Olivia},
-        demons=[Imp],
-        minions=[Poisoner, Spy, Baron, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1537,9 +1473,7 @@ def puzzle_nqt32():
         ],
         day_events={1: Execution(You), 2: Execution(Dan)},
         night_deaths={2: Tim, 3: Fraser},
-        demons=[Imp],
-        minions=[Poisoner, Baron],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Baron, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1580,9 +1514,7 @@ def puzzle_nqt33():
         ],
         day_events={1: Execution(You), 2: Execution(Fraser)},
         night_deaths={2: Olivia, 3: Jasmine},
-        demons=[Imp],
-        minions=[Poisoner, Baron, Spy, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Baron, Spy, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1628,9 +1560,7 @@ def puzzle_nqt34():
             ]
         },
         night_deaths={2: Fraser},
-        demons=[NoDashii, Vortox],
-        minions=[Witch],
-        hidden_good=[],
+        hidden_characters=[NoDashii, Vortox, Witch],
         hidden_self=[],
     )
     solutions=(
@@ -1673,9 +1603,7 @@ def puzzle_nqt35():
         ],
         day_events={1: Execution(You)},
         night_deaths={2: Oscar},
-        demons=[Imp, LordOfTyphon],
-        minions=[Poisoner, Spy],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, LordOfTyphon, Poisoner, Spy, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1715,9 +1643,7 @@ def puzzle_nqt36():
         ],
         day_events={1: Execution(You), 2: Execution(Oscar)},
         night_deaths={2: Josh, 3: Olivia},
-        demons=[Imp],
-        minions=[Poisoner, Spy, Baron, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
         hidden_self=[Drunk],
         allow_good_double_claims=False,
     )
@@ -1762,9 +1688,7 @@ def puzzle_nqt37():
         ],
         day_events={1: Execution(Matt), 2: Execution(Aoife)},
         night_deaths={2: Adam, 3: Sula},
-        demons=[Imp],
-        minions=[Poisoner, Spy, ScarletWoman, Marionette],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Poisoner, Spy, ScarletWoman, Marionette, Drunk],
         hidden_self=[Drunk],
     )
     solutions=(
@@ -1809,9 +1733,7 @@ def puzzle_nqt38():
         ],
         day_events={1: Execution(You), 2: Execution(Sula)},
         night_deaths={2: Dan, 3: Matt},
-        demons=[Imp],
-        minions=[Baron, Spy, Poisoner, ScarletWoman],
-        hidden_good=[Drunk],
+        hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[],
     )
     solutions=(
@@ -1821,10 +1743,132 @@ def puzzle_nqt38():
     return puzzle, solutions, None
 
 
+def puzzle_nqt38_alt():
+    # This version of NQT Puzzle 38 was posted to the discord, but not Reddit
+    # once it was discovered that there is an unintended second solution that 
+    # relies on the Mathematician's counting of Philosophers waking to abilities
+    # they never gained due to being poisoned on the night they choose.
+    # https://discord.com/channels/569683781800296501/854891541969109033/1367073812063191081
+    You, Sarah, Hannah, Jasmine, Josh, Dan, Aoife, Fraser = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Sarah', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(3)
+            }),
+            Player('Hannah', claim=Philosopher, night_info={
+                1: [
+                    Philosopher.Choice(Chambermaid),
+                    Chambermaid.Ping(Aoife, Fraser, 1),
+                ],
+                2: Chambermaid.Ping(Josh, Fraser, 2),
+            }),
+            Player('Jasmine', claim=Juggler,
+                day_info={1: Juggler.Juggle({Hannah: Vortox, Josh: NoDashii})},
+                night_info={2: Juggler.Ping(2)}
+            ),
+            Player('Josh', claim=Chef, night_info={
+                1: Chef.Ping(1)
+            }),
+            Player('Dan', claim=Mathematician, night_info={
+                1: Mathematician.Ping(2),
+                2: Mathematician.Ping(1),
+            }),
+            Player('Aoife', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(Hannah, Josh, 2),
+            }),
+            Player('Fraser', claim=Oracle, night_info={
+                2: Oracle.Ping(2)
+            }),
+        ],
+        day_events={1: [
+            Dies(player=You, after_nominating=True),
+            Execution(Aoife),
+        ]},
+        night_deaths={2: Sarah},
+        hidden_characters=[NoDashii, Vortox, Witch, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions=(
+        (Empath, Clockmaker, Philosopher, Juggler, Chef, Vortox, Drunk, Witch),
+        (Empath, Clockmaker, Philosopher, NoDashii, Chef, Mathematician, Witch,
+            Drunk)
+    )
+    return puzzle, solutions, None
+
+
+def puzzle_nqt39():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kg6y94/weekly_puzzle_39_squid_game/
+    You, Jasmine, Matt, Aoife, Fraser, Tom, Sula, Hannah = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+            }),
+            Player('Jasmine', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        You: Witch,
+                        Aoife: Witch,
+                        Tom: Witch,
+                        Fraser: Sage,
+                        Hannah: Klutz,
+                    })
+                },
+                night_info={2: Juggler.Ping(3)}
+            ),
+            Player('Matt', claim=Philosopher, night_info={
+                1: [
+                    Philosopher.Choice(Seamstress),
+                    Seamstress.Ping(Aoife, Tom, same=False),
+                ]
+            }),
+            Player('Aoife', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Matt, Hannah, same=False)
+            }),
+            Player('Fraser', claim=Sage, night_info={
+                2: Sage.Ping(Jasmine, Matt)
+            }),
+            Player('Tom', claim=Artist, day_info={
+                1: Artist.Ping(
+                    IsCharacter(Jasmine, Mutant)
+                    | IsCharacter(Matt, Mutant)
+                    | IsCharacter(Aoife, Mutant)
+                )
+            }),
+            Player('Sula', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+                2: Mathematician.Ping(1),
+            }),
+            Player('Hannah', claim=Klutz),
+        ],
+        day_events={
+            1: [
+                Dies(player=Tom, after_nominating=True),
+                Execution(Aoife),
+            ],
+            2: Execution(Sula)
+        },
+        night_deaths={2: Fraser, 3: You},
+        hidden_characters=[NoDashii, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions=(
+        (Oracle, NoDashii, Mutant, Seamstress, Sage, Artist, 
+            Mathematician, Witch),
+    )
+    return puzzle, solutions, None
+
+
 if __name__ == '__main__':
     # Running this file will solve a puzzle of your choice, because why not?
     import argparse
+    import multiprocessing
     import sys
+    multiprocessing.freeze_support()
+    multiprocessing.set_start_method('spawn')
 
     PREFIX = 'puzzle_nqt'
     puzzle_names = [p[len(PREFIX):] for p in dir() if p.startswith(PREFIX)]

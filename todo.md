@@ -2,6 +2,8 @@
  - Why are there Categories, why do Characters not instead inherit from 4 subclasses of Character? Then Category checks are performed by isinstance?
  	- Would be a good time to switch to proper ABCs?
 
+ - EASY: Move day_events, nihgt_deaths from State to Puzzle
+
  - Could really do with a refactor that separates State into two things: a class for the initial immutable Puzzle definition (all the public info) and a class for the current mutable state of a World which is run out (like State currently is, with forking) and checked against the Puzzle.
 
  - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
@@ -21,6 +23,7 @@
    - NoDashii to update poisoned neighbours
    - Vigormortis to update poisoned neighbours of killed minions
    - Xaan to poison new townsfolk
+   - Philo to drunk new players with the same role
 
 
 # Active Bugs To Fix:

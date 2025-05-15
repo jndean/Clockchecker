@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, fields
 import enum
+import itertools
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -298,6 +299,22 @@ def circle_distance(a: PlayerID, b: PlayerID, n_players: int) -> int:
         return min(a - b, n_players + b - a)
     return min(b - a, n_players + a - b)
 
+def all_registration_combinations(
+    registrations: Sequence[STBool]
+) -> Generator[list[int]]:
+    """
+    Given a list of registrations, return every possible combination of indices
+    into that list such that the index of a TRUE is always included and the
+    index of a MAYBE may be included.
+    """
+    trues = [i for i, reg in enumerate(registrations) if reg is TRUE]
+    maybes = [i for i, reg in enumerate(registrations) if reg is MAYBE]
+    for maybe_combination in itertools.chain.from_iterable(
+        itertools.combinations(maybes, r)
+        for r in range(len(maybes)+1)
+    ):
+        yield trues + list(maybe_combination)
+
 
 def behaves_evil(state: State, player_id: PlayerID) -> bool:
     """
@@ -323,8 +340,17 @@ def has_ability_of(
     character: type[Character]
 ) -> bool:
     """For checking if it is legal for a player to use a character's ability."""
-    # TODO: Philospoher, Alchemist and Boffin'd Demon logic go here.
-    return isinstance(state.players[player_id].character, character)
+    actual_character = state.players[player_id].character
+    if (
+        isinstance(actual_character, characters.Philosopher)
+        and actual_character.active_ability is not None
+    ):
+        # This method says Philo doeosn't have Philo ability after making a
+        # sober choice. This is convenient when computing night order.
+        return isinstance(actual_character.active_ability, character)
+
+    # TODO: Alchemist and Boffin'd Demon
+    return isinstance(actual_character, character)
 
 
 def acts_like(
@@ -343,7 +369,7 @@ def acts_like(
         characters.Drunk,
         characters.Marionette,
     ):
-        return isinstance(player.claim, character)
+        return player.claim is character
     # TODO: Lunatic currently doesn't decide what demon they think they are.
     return False
 
@@ -375,7 +401,7 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
             return (f'Juggler.Juggle({names[info.player]}, {{\n' + 
                     ',\n'.join(f'      {item}' for item in items)
                     + '\n    })')
-        return f'Juggler.Juggle({names[info.player]}, {{{', '.join(items)}}})'
+        return f'Juggler.Juggle({names[info.player]}, {{{", ".join(items)}}})'
     elif isinstance(info, events.NightDeath):
         return names[info.player]
 
@@ -400,14 +426,15 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
         elif type_ == 'int':
             ret.append(str(value))
         elif type_.startswith('Sequence'):
-            ret.append(f'[{', '.join([
-                pretty_print(x, names) for x in value
-            ])}]')
+            ret.append(f'[{", ".join([pretty_print(x, names) for x in value])}]')
         else:
             ret.append(f'{field.name}={str(value)}')
 
-    return f'{type(info).__qualname__}({', '.join(ret)})'
+    return f'{type(info).__qualname__}({", ".join(ret)})'
 
+
+def info_creator(info: Info) -> type[Character]:
+    return getattr(characters, type(info).__qualname__.split('.')[0])
 
 # ------------------ Custom Info For Specific Puzzles -------------------- #
 

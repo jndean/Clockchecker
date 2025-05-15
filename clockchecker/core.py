@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Iterator, Iterable, Mapping
 from collections import Counter, defaultdict
 from contextlib import nullcontext
 from copy import copy, deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
 from multiprocessing import Queue, Process
-from typing import Any, Callable, Generator, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .characters import Character
@@ -24,11 +24,15 @@ from . import info
 # Set True to enable debug mode
 _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
-_DEBUG_WORLD_KEY = (106, 0, 0)
+_DEBUG_WORLD_KEYS = [
+    # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
+    # (699, 0, 0, 1),
+    # (217, 0, 0, 1),
+]
 
 
 if TYPE_CHECKING:
-    StateGen = Generator[State]
+    StateGen = Iterator[State]
 
 
 class Phase(enum.Enum):
@@ -62,35 +66,6 @@ class Player:
     droison_count: int = 0
     character_history: list[str] = field(default_factory=list)
 
-    def __post_init__(self):
-        self.character = self.claim()
-
-        # Reorganise info so it can be easily used in night order
-        self.external_night_info = defaultdict(list)
-        for night in list(self.night_info):
-            night_info = self.night_info[night]
-            if not isinstance(night_info, list):
-                night_info = [night_info]
-            del self.night_info[night]
-            for item in night_info:
-                # Filter out info that comes from another player's ability
-                char_name, _ = type(item).__qualname__.split('.')
-                item_char = getattr(characters, char_name)
-                if item_char is self.claim:
-                    assert night not in self.night_info, (
-                        "One info per night from own ability."
-                    )
-                    self.night_info[night] = item
-                else:
-                    self.external_night_info[(night, item_char)].append(item)
-        self.external_night_info = dict(self.external_night_info)
-    
-    def _extract_info(self):
-        night_info, day_info = self.night_info, self.day_info
-        del self.night_info
-        del self.day_info
-        return night_info, day_info
-
     def droison(self, state: State, src: PlayerID) -> None:
         self.droison_count += 1
         self.character.maybe_deactivate_effects(
@@ -116,13 +91,47 @@ class Player:
             ret += ' 💀'
         return ret
 
+    def __post_init__(self):
+        self.character = self.claim()
+
+        # Reorganise info so it can be easily used in night order
+        self.external_night_info = defaultdict(list)
+        all_claims = set([self.claim])
+        existing_night_info = list(self.night_info.items())
+        self.night_info: Mapping[tuple[int, type[Character]], info.Info] = {}
+        for night, night_info in existing_night_info:
+            if not isinstance(night_info, list):
+                night_info = [night_info]
+            for item in night_info:
+                # Because typing out puzzles is hard :)
+                assert not isinstance(item, events.Event), f"{type(item)=}"
+
+                if isinstance(item, characters.Philosopher.Choice):
+                    all_claims.add(item.character)
+
+                if (character := info.info_creator(item)) in all_claims:
+                    assert (night, character) not in self.night_info, (
+                        "One info per night from own ability (for now?)."
+                    )
+                    self.night_info[(night, character)] = item
+                else:
+                    self.external_night_info[(night, character)].append(item)
+
+        self.external_night_info = dict(self.external_night_info)
+    
+    def _extract_info(self):
+        night_info, day_info = self.night_info, self.day_info
+        del self.night_info
+        del self.day_info
+        return night_info, day_info
+
 
 @dataclass
 class State:
     puzzle: Puzzle
     players: list[Player]
-    day_events: dict[int, list[Event]] = field(default_factory=dict)
-    night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
+    day_events: dict[int, list[Event]]
+    night_deaths: dict[int, list[PlayerID]]
 
     def __post_init__(self):
         """
@@ -145,9 +154,9 @@ class State:
             if isinstance(events_, events.Event):
                 self.day_events[day] = [events_]
 
-        # Events can be entered in Player.day_info or in State.day_events, b/c
-        # that feels nice. Move them all to one place before the solve starts.
         for player in self.players:
+            # Events can be entered in Player.day_info or in State.day_events,
+            # b/c that feels nice. Move them all to one place before solving.
             for day, maybe_event in list(player.day_info.items()):
                 if isinstance(maybe_event, events.Event):
                     del player.day_info[day]
@@ -156,21 +165,17 @@ class State:
                         self.day_events[day].insert(0, maybe_event)
                     else:
                         self.day_events[day] = [maybe_event]
-            # # Also, because typing out puzzles is hard :)
-            for item in player.night_info.values():
-                assert not isinstance(item, events.Event), f"{type(item)=}"
 
         if _DEBUG:
             self.debug_key = ()  # The root debug key
 
     def begin_game(self, allow_good_double_claims: bool) -> bool:
         """Called after player positions and characters have been chosen"""
-        # Initialise data structures for game
         self.current_phase = Phase.SETUP
         self.phase_order_index = 0
         self.setup_order, self.night_order, self.day_order = [], [], []
         self.current_phase_order = self.setup_order
-        self.update_character_index()
+        self.update_character_orders()
         self.initial_characters = tuple(type(p.character) for p in self.players)
         self.night, self.day = None, None
         self.previously_alive = [True] * len(self.players)
@@ -201,50 +206,74 @@ class State:
         self.puzzle, ret.puzzle = puzzle, puzzle
         if _DEBUG:
             if fork_id is None:
-                fork_count = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
+                fork_id = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
                 _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
             else:
                 _DEBUG_STATE_FORK_COUNTS.clear()
-            ret.debug_key = self.debug_key + (fork_count,)
+            ret.debug_key = self.debug_key + (fork_id,)
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
+            if _DEBUG_WORLD_KEYS and not ret._is_world():
+                ret.debug_cull = True
         return ret
     
-    def get_night_info(self, player: PlayerID, night: int):
-        return self.puzzle._night_info[player].get(night, None)
+    def get_night_info(
+        self,
+        character: type[Character],
+        player: PlayerID,
+        night: int,
+    ):
+        return self.puzzle._night_info[player].get((night, character), None)
     
     def get_day_info(self, player: PlayerID, day: int):
         return self.puzzle._day_info[player].get(day, None)
 
-    def _is_world(self, key: tuple[int] = _DEBUG_WORLD_KEY) -> bool:
+    def _is_world(self, key: tuple[int] | None = None) -> bool:
         """
         Use debug keys generated during forks to determine if this state is an
         upstream choice that leads to the keyed world.
         """
-        return _DEBUG and (
-            len(self.debug_key) <= len(key)
-            and all(a == b for a, b in zip(self.debug_key, key))
+        if not _DEBUG:
+            return False
+        keys = [key] if key is not None else _DEBUG_WORLD_KEYS
+        return any(
+            (
+                len(self.debug_key) <= len(_key)
+                and all(a == b for a, b in zip(self.debug_key, _key))
+            )
+            for _key in keys
         )
-
-    def run_next_player(self, round_: int | None) -> Generator[State]:
+            
+    def run_next_player(self, round_: int | None) -> StateGen:
+        assert self.phase_order_index >= 0, "Broken phase order"
         if self.phase_order_index >= len(self.current_phase_order):
             yield self
             return
-        player_id = self.current_phase_order[self.phase_order_index]
-        character = self.players[player_id].character
+        pid = self.current_phase_order[self.phase_order_index]
+        player = self.players[pid]
+        character = player.character
+        
+        # if self._is_world():
+        #     print(
+        #         f'Running {self.current_phase.name} {round_} for '
+        #         f'{player.name} ({type(character).__name__})'
+        #     )
 
         match self.current_phase:
             case Phase.SETUP:
-                substates = character.run_setup(self, player_id)
+                substates = character.run_setup(self, pid)
             case Phase.NIGHT:
-                characters.record_if_player_woke_tonight(self, player_id)
-                substates = character.run_night(self, round_, player_id)                    
+                if characters.Chambermaid.player_wakes_tonight(self, pid):
+                    player.woke()
+                substates = character.run_night(self, round_, pid)                    
                 substates = State.run_external_night_info(
                     substates, type(character), round_
                 )
             case Phase.DAY:
-                substates = character.run_day(self, round_, player_id)
+                substates = character.run_day(self, round_, pid)
 
         for substate in substates:
+            if hasattr(substate, 'debug_cull'):
+                continue
             substate.phase_order_index += 1
             yield substate
     
@@ -284,6 +313,8 @@ class State:
         yield self
 
     def end_night(self) -> StateGen:
+        if self.phase_order_index < len(self.night_order):
+            raise RuntimeError(f'Not enough run_next_player frames for night')
         for player in self.players:
             player.woke_tonight = False
 
@@ -344,36 +375,48 @@ class State:
         character: type[Character]
     ) -> StateGen:
         player = self.players[player_id]
-
         player.character_history.append(player.character._world_str(self))
         player.character_history.append(self._change_str())
+
         player.character.maybe_deactivate_effects(
             self, player_id, characters.Reason.CHARACTER_CHANGE
         )
-        
-        # Ammend night(/day/setup) order position
-        if self.phase_order_index < len(self.current_phase_order):  # In phase
-            active_player_id = self.current_phase_order[self.phase_order_index]
-            active_character = type(self.players[active_player_id].character)
-            global_order = GLOBAL_PHASE_ORDERS[self.current_phase]
-            active_idx = global_order.index(active_character)
-            old_idx = list_find(global_order, type(player.character), 9999)
-            new_idx = list_find(global_order, character, 9999)
-            self.phase_order_index += (
-                (new_idx <= active_idx) - (old_idx <= active_idx)
-            )
-        
-        player.character = character(
-            first_night=self.night if self.night is not None else self.day + 1
+        self.update_phase_order_index_before_character_change(
+            type(player.character), character
         )
-        self.update_character_index()
+        next_night = self.night if self.night is not None else self.day + 1
+        player.character = character(first_night=next_night)
+        self.update_character_orders()
 
         for substate in player.character.run_setup(self, player_id):
             if not substate.check_game_over():
                 yield substate
 
-    def update_character_index(self):
-        # Night/day/setup order
+    def update_phase_order_index_before_character_change(
+        self,
+        old_character: type[Character],
+        new_character: type[Character],
+    ):
+        """Modify the night(/day/setup) order position pre-character change."""
+        if self.phase_order_index >= len(self.current_phase_order):
+            return  # Phase is already over
+        
+        global_order = GLOBAL_PHASE_ORDERS[self.current_phase]
+        active_player_id = self.current_phase_order[self.phase_order_index]
+        active_idx = characters.get_player_phase_order_idx(
+            global_order, self, active_player_id,
+        )
+        old_idx = characters.get_character_phase_order_idx(
+            global_order, old_character
+        )
+        new_idx = characters.get_character_phase_order_idx(
+            global_order, new_character
+        )
+        self.phase_order_index += (new_idx <= active_idx)
+        self.phase_order_index -= (old_idx <= active_idx)
+
+    def update_character_orders(self):
+        """Recompute the Night/Day/Setup order."""
         self.setup_order.clear()
         self.night_order.clear()
         self.day_order.clear()
@@ -382,10 +425,13 @@ class State:
             (characters.GLOBAL_NIGHT_ORDER, self.night_order),
             (characters.GLOBAL_DAY_ORDER, self.day_order),
         ):
-            for character in global_order:
-                for player_id in range(len(self.players)):
-                    if info.has_ability_of(self, player_id, character):
-                        order.append(player_id)
+            idxs = sorted([
+                (characters.get_player_phase_order_idx(global_order, self, pid),
+                    pid)
+                for pid in range(len(self.players))
+            ])
+            # Large sentinel value indicates not in night order
+            order.extend([player for idx, player in idxs if idx < 999])
 
         # Death_in_town callback registration
         self.death_in_town_callback_players = []
@@ -402,6 +448,10 @@ class State:
                         (item, player.id)
                     )
         self.external_info_registry = dict(self.external_info_registry)
+    
+    def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
+        assert self.current_phase is Phase.NIGHT
+        return player in self.current_phase_order[self.phase_order_index + 1:]
 
     def death_in_town(self, dead_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
@@ -474,10 +524,8 @@ class State:
 @dataclass
 class Puzzle:
     players: list[Player]
-    demons: list[Character]
-    minions: list[Character]
-    hidden_good: list[Character]
-    hidden_self: list[Character]
+    hidden_characters: InitVar[list[type[Character]]]
+    hidden_self: list[type[Character]]
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
     category_counts: tuple[int, int, int, int] | None = None
@@ -486,11 +534,19 @@ class Puzzle:
     deduplicate_initial_characters: bool = True
     finish_final_day: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self, hidden_characters):
         if self.category_counts is None:
             self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
                 len(self.players)
             ]
+        self.demons, self.minions, self.hidden_good = [], [], []
+        for character in hidden_characters:
+            if character.category is characters.DEMON:
+                self.demons.append(character)
+            elif character.category is characters.MINION:
+                self.minions.append(character)
+            else:
+                self.hidden_good.append(character)
         self._validate_inputs()
 
         self._max_day = max(
@@ -499,7 +555,10 @@ class Puzzle:
         )
         self._max_night = max(
             self._max_day,
-            max((max(p.night_info, default=0) for p in self.players)),
+            max((
+                max((n for n, _ in p.night_info), default=0)
+                for p in self.players
+            )),
             max(self.night_deaths, default=0),
         )
         self._max_day = max(self._max_day, self._max_night - 1)
@@ -557,15 +616,18 @@ class Puzzle:
             ret.append(f'    \033[33;1m{player.name} claims '
                        f'{player.claim.__name__}\033[0m')
             for c, all_info in (('N', self._night_info), ('D', self._day_info)):
-                for night, info_item in all_info[player_id].items():
+                for day, info_item in all_info[player_id].items():
+                    if isinstance(day, tuple):
+                        day = day[0]
                     info_str = info.pretty_print(info_item, names)
-                    ret.append(f'      {c}{night}: {info_str}')
+                    ret.append(f'      {c}{day}: {info_str}')
         ret.extend([
             '\n  \033[0;4mPossible Hidden Characters\033[0m',
-            f'    Demons: [{", ".join(d.__name__ for d in self.demons)}]',
-            f'    Minions: [{", ".join(d.__name__ for d in self.minions)}]',
-            f'    Good: [{", ".join(d.__name__ for d in self.hidden_good)}]',
-            f'    You: [{", ".join(d.__name__ for d in self.hidden_self)}]',
+            f'    Other Players: [{", ".join(
+                character.__name__ for character in 
+                self.demons + self.minions + self.hidden_good
+            )}]',
+            f'    You: [{", ".join(c.__name__ for c in self.hidden_self)}]',
         ])
         if self.day_events:
             ret.append('\n  \033[0;4mDay Events\033[0m')
@@ -624,7 +686,7 @@ def _run_game_gen(
         states = apply_all(states, 'run_next_player', (None, ))
     states = apply_all(states, 'end_setup', ())
     for round_ in range(1, max_night + 1):
-        for player in range(n_players):
+        for player in range(n_players + 1):
             states = apply_all(states, 'run_next_player', (round_, ))
         states = apply_all(states, 'end_night', ())
         if round_ <= max_day:
@@ -715,6 +777,8 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
 class Solver:
     """Manages the worker threads"""
     def __init__(self, num_processes=10):
+        if num_processes is None:
+            num_processes = max(os.cpu_count() - 1, 1)
         self.puzzle_queue = Queue(maxsize=num_processes + 1)
         self.liars_queue = Queue(maxsize=num_processes)
         self.solutions_queue = Queue(maxsize=num_processes)
@@ -770,10 +834,3 @@ class Solver:
                 ):
                     seen_solutions.add(solution.initial_characters)
                     yield solution
-
-
-def list_find(X: list, item: Any, sentinel: int) -> int:
-    try:
-        return X.index(item)
-    except ValueError:
-        return sentinel

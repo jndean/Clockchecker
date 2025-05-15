@@ -1,10 +1,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 import enum
 import itertools
 from typing import ClassVar, TYPE_CHECKING
+
+from clockchecker.info import PlayerID
 
 if TYPE_CHECKING:
     from .core import State, StateGen, Player
@@ -161,7 +164,7 @@ class Character:
     ) -> bool:
         """Most info roles can inherit this pattern for their info check."""
         if state.night is not None:
-            ping = state.get_night_info(me, state.night)
+            ping = state.get_night_info(type(self), me, state.night)
         elif state.day is not None:
             ping = state.get_day_info(me, state.day)
         else:
@@ -340,7 +343,7 @@ class Acrobat(Character):
         acrobat = state.players[me]
         if acrobat.is_evil:
             raise NotImplementedError("Evil Acrobat")
-        if (choice := state.get_night_info(me, night)) is None:
+        if (choice := state.get_night_info(Acrobat, me, night)) is None:
             yield state
         elif acrobat.is_dead:
             return
@@ -439,7 +442,7 @@ class Balloonist(Character):
         it ever actually comes up :)
         """
         balloonist = state.players[me]
-        ping = state.get_night_info(me, night)
+        ping = state.get_night_info(Balloonist, me, night)
         if (
             balloonist.is_dead
             or balloonist.is_evil
@@ -516,36 +519,55 @@ class Chambermaid(Character):
                 and info.IsAlive(self.player1)(state, src) is not info.FALSE
                 and info.IsAlive(self.player2)(state, src) is not info.FALSE
             )
-            wake_count = (
-                state.players[self.player1].woke_tonight +
-                state.players[self.player2].woke_tonight
+            wake_count = sum(
+                state.players[player].woke_tonight
+                or (
+                    # Handle Chambermaid-Mathematician Jinx,
+                    # or multiple players having Chambermaid ability.
+                    state.player_upcoming_in_night_order(player)
+                    and Chambermaid.player_wakes_tonight(state, player)
+                )
+                for player in (self.player1, self.player2)
             )
             return info.STBool(valid_choices and wake_count == self.count)
 
-def record_if_player_woke_tonight(state: State, pid: PlayerID) -> None:
-    # Special cases not yet implemented:
-    # - Chambermaid doesn't wake if there aren't valid choices
-    # - Demon doesn't wake to their ability when exorcised
-    # - Others, definitely
-    player = state.players[pid]
-    character = player.character
-    match character.wake_pattern:
-        case WakePattern.NEVER | WakePattern.MANUAL:
-            woke = False
-        case WakePattern.FIRST_NIGHT:
-            woke = state.night == character.first_night
-        case WakePattern.EACH_NIGHT:
-            woke = True
-        case WakePattern.EACH_NIGHT_STAR:
-            woke = state.night != character.first_night
-        case WakePattern.EACH_NIGHT_UNTIL_SPENT:
-            woke = not character.spent
-        case _:
-            raise ValueError(
-                f'{type(character).__name__} has {character.wake_pattern=}'
-            )
-    if woke and not player.is_dead:
-        player.woke()
+    @staticmethod
+    def player_wakes_tonight(
+        state: State,
+        player_id: PlayerID,
+        character_override: type[Character] | None = None,
+    ) -> bool:
+        """
+        Called on each player by State at the start of their turn in the night
+        order, to decide whether or not that player will later register as
+        having woken up. MANUAL wake patterns have to be implemented in the
+        waking character's run_night method.
+        """
+        # Special cases not yet implemented:
+        # - Chambermaid doesn't wake if there aren't valid choices
+        # - Demon doesn't wake to their ability when exorcised
+        # - Others, definitely.
+        player = state.players[player_id]
+        character = (
+            player.character if character_override is None
+            else character_override
+        )
+        match character.wake_pattern:
+            case WakePattern.NEVER | WakePattern.MANUAL:
+                woke = False
+            case WakePattern.FIRST_NIGHT:
+                woke = state.night == character.first_night
+            case WakePattern.EACH_NIGHT:
+                woke = True
+            case WakePattern.EACH_NIGHT_STAR:
+                woke = state.night != character.first_night
+            case WakePattern.EACH_NIGHT_UNTIL_SPENT:
+                woke = not character.spent
+            case _:
+                raise ValueError(
+                    f'{type(character).__name__} has {character.wake_pattern=}'
+                )
+        return woke and not player.is_dead
 
 @dataclass
 class Chef(Character):
@@ -561,14 +583,9 @@ class Chef(Character):
         count: int
         def __call__(self, state: State, src: PlayerID) -> STBool:
             N = len(state.players)
-            trues, maybes = 0, 0
-            evils = [info.IsEvil(i)(state, src) for i in range(N)]
-            evils += [evils[0]]  # So that the following zip wraps the circle
-            for a, b in zip(evils[:-1], evils[1:]):
-                pair = a & b
-                maybes += pair is info.MAYBE
-                trues += pair is info.TRUE
-            return info.STBool(trues <= self.count <= trues + maybes)
+            evils = [info.IsEvil(i % N)(state, src) for i in range(N + 1)]
+            evil_pairs = [a & b for a, b in zip(evils[:-1], evils[1:])]
+            return info.ExactlyN(self.count, evil_pairs)(state, src)
 
 @dataclass
 class Clockmaker(Character):
@@ -638,7 +655,7 @@ class Courtier(Character):
             # Yield all choices like a poisoner, plus the non-choice
             raise NotImplementedError("Todo: Evil Courtier")
 
-        choice = state.get_night_info(me, night)
+        choice = state.get_night_info(Courtier, me, night)
         if choice is None:
             yield state; return
         if courtier.is_dead or self.spent:
@@ -713,6 +730,12 @@ class Drunk(Character):
     is_liar: ClassVar[bool] = True
     # wake_pattern is decided during run_setup
 
+    self_droison: bool = True
+
+    # TODO: Drunk goes through the motions of the claimed character to determine
+    # e.g. if it is spent and should no longer be waking.
+    spent: bool = False
+
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
         # Drunk can only 'lie' about being Townsfolk
@@ -725,11 +748,15 @@ class Drunk(Character):
         self.maybe_activate_effects(state, me, setup_reason)
         self.wake_pattern = drunk.claim.wake_pattern
         yield state
-    
+
+    # def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+    #     yield state
+
     def _activate_effects_impl(self, state: State, me: PlayerID):
         state.players[me].droison_count += 1
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        """Need to be able to undroison self on character change."""
         state.players[me].droison_count -= 1
 
 @dataclass
@@ -896,7 +923,7 @@ class Gambler(Character):
         if gambler.is_evil:
             raise NotImplementedError("Evil Gambler")
         
-        ping = state.get_night_info(me, night)
+        ping = state.get_night_info(Gambler, me, night)
         if gambler.is_dead or ping is None:
             yield state
             return
@@ -1157,7 +1184,7 @@ class Klutz(Character):
         def __call__(self, state: State) -> StateGen:
             klutz = state.players[self.player]
             assert klutz.is_dead, "Unlikely the puzzle says that."
-            if not isinstance(klutz.character, Klutz):
+            if not info.has_ability_of(state, self.player, Klutz):
                 if info.behaves_evil(state, self.player):
                     yield state
                 return
@@ -1386,7 +1413,7 @@ class NightWatchman(Character):
             raise NotImplementedError(
                 "When to spend if evil, or vortox giving incorrect ping source."
             )
-        ping = state.get_night_info(me, night)
+        ping = state.get_night_info(NightWatchman, me, night)
         if ping is None:
             yield state; return
         if nightwatchman.is_dead or self.spent:
@@ -1491,6 +1518,132 @@ class Oracle(Character):
                     for player in range(len(state.players))
                 ]
             )(state, src)
+
+@dataclass
+class Philosopher(Character):
+    """
+    Once per game, at night, choose a good character: gain that ability.
+    If this character is in play, they are drunk.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    # Wake pattern is replaced upon Character choice
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    droisoned_choice: type[Character] | None = None
+    active_ability: Character | None = None
+    drunk_targets: list[PlayerID] | None = None
+
+    @dataclass
+    class Choice(info.NotInfo):
+        character: type[Character]
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        philo = state.players[me]
+        if philo.is_evil:
+            raise NotImplementedError('Evil Philosopher')
+
+        if self.active_ability is not None:
+            yield from self.active_ability.run_night(state, night, me)
+            return
+        if philo.is_dead:
+            yield state; return  # I miss GOTOs, and I'm not ashamed to say it.
+
+        if self.droisoned_choice is not None:
+            ping = state.get_night_info(self.droisoned_choice, me, night)
+            if (
+                ping is not None
+                or Chambermaid.player_wakes_tonight(
+                    state, me, character_override=self.droisoned_choice
+                )
+            ):
+                state.math_misregistration()
+            yield state; return
+
+        choice = state.get_night_info(Philosopher, me, night)
+        if choice is None:
+            yield state; return
+
+        if philo.droison_count:
+            self.droisoned_choice = choice.character
+            state.math_misregistration()
+            yield state; return
+
+        # Updating the phase order index is very specifically done before
+        # setting the active ability or updating the night order
+        state.update_phase_order_index_before_character_change(
+            Philosopher, choice.character
+        )
+        self.active_ability = choice.character(first_night=state.night)
+        state.update_character_orders()  # Night order changes
+        self.wake_pattern = choice.character.wake_pattern
+        self.is_liar = choice.character.is_liar  # Philo-Mutant...?
+
+        for substate in self.active_ability.run_setup(state, me):
+            drunk_combinations = list(
+                info.all_registration_combinations([
+                    info.IsCharacter(player, choice.character)(substate, me)
+                    for player in range(len(state.players))
+                ])
+            )
+            for drunk_targets in drunk_combinations:
+                new_state = (
+                    substate if len(drunk_combinations) == 1
+                    else state.fork()
+                )
+                new_philo = new_state.players[me].character
+                new_philo.drunk_targets = drunk_targets
+                new_philo.maybe_activate_effects(new_state, me)
+                yield new_state
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        if self.active_ability is None:
+            return super().run_setup(state, me)
+        return self.active_ability.run_setup(state, me)
+
+    def run_day(self, state: State, day: int, me: PlayerID) -> StateGen:
+        if self.active_ability is None:
+            return super().run_day(state, day, me)
+        return self.active_ability.run_day(state, day, me)
+
+    def end_day(self, state: State, day: int, me: PlayerID) -> bool:
+        if self.active_ability is None:
+            return True
+        return self.active_ability.end_day(state, day, me)
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.active_ability is None:
+            return
+        for player in self.drunk_targets:
+            state.players[player].droison(state, me)
+        self.active_ability._activate_effects_impl(state, me)
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.active_ability is None:
+            return
+        for player in self.drunk_targets:
+            state.players[player].undroison(state, me)
+        self.active_ability._deactivate_effects_impl(state, me)
+
+    def apply_death(self, *args, **kwargs) -> StateGen:
+        if self.active_ability is None:
+            return super().apply_death(*args, **kwargs)
+        return self.active_ability.apply_death(*args, **kwargs)
+
+    def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
+        if self.active_ability is None:
+            return super().executed(state, me, died)
+        return self.active_ability.executed(state, me, died)
+
+    def killed(self, *args, **kwargs) -> StateGen:
+        if self.active_ability is None:
+            return super().killed(*args, **kwargs)
+        return self.active_ability.killed(*args, **kwargs)
+
+    def cant_die(self, state: State, me: PlayerID) -> bool:
+        if self.active_ability is None:
+            return super().cant_die(state, me)
+        return self.active_ability.cant_die(state, me)
 
 @dataclass
 class Po(GenericDemon):
@@ -2001,7 +2154,7 @@ class SnakeCharmer(Character):
         snakecharmer = state.players[me]
         if snakecharmer.is_evil:
             raise NotImplementedError('Evil Snakecharmer!')
-        choice = state.get_night_info(me, night)
+        choice = state.get_night_info(SnakeCharmer, me, night)
         if choice is None:
             yield state; return
         if not isinstance(choice, SnakeCharmer.Choice):
@@ -2044,7 +2197,6 @@ class SnakeCharmer(Character):
         if self.self_droison:
             state.players[me].undroison(state, me)
 
-        
  
 @dataclass
 class Soldier(Character):
@@ -2105,7 +2257,7 @@ class Saint(Character):
         if droisoned:
             state.math_misregistration()
         if droisoned or not died:
-            yield from super().executed(self, state, me, died)
+            return super().executed(self, state, me, died)
 
 
 @dataclass
@@ -2473,6 +2625,7 @@ GLOBAL_SETUP_ORDER = [
 ]
 
 GLOBAL_NIGHT_ORDER = [
+    Philosopher,
     Xaan,
     Leviathan,
     Poisoner,
@@ -2541,3 +2694,23 @@ INACTIVE_CHARACTERS = [
     Spy,
     Virgin,
 ]
+
+
+def get_character_phase_order_idx(
+    global_order: Sequence[type[Character]],
+    character: type[Character],
+) -> int:
+    try:
+        return global_order.index(character)
+    except ValueError:
+        return 999999
+
+def get_player_phase_order_idx(
+    global_order: Sequence[type[Character]],
+    state: State,
+    player: PlayerID,
+) -> int:
+    for i, character in enumerate(global_order):
+        if info.acts_like(state, player, character):
+            return i
+    return 999999

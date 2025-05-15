@@ -37,9 +37,7 @@ puzzle = Puzzle(
     ],
     day_events={1: Execution(You), 2: Execution(Dan)},
     night_deaths={2: Josh, 3: Olivia},
-    demons=[Imp],
-    minions=[Poisoner, Spy, Baron, ScarletWoman],
-    hidden_good=[Drunk],
+    hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
     hidden_self=[Drunk],
 )
 for world in Solver().generate_worlds(puzzle):
@@ -91,9 +89,7 @@ puzzle = Puzzle(
             Doomsayer.Call(player=Fraser, died=Aoife),
         ]
     },
-    demons=[Vortox],
-    minions=[Spy, ScarletWoman],
-    hidden_good=[Lunatic],
+    hidden_characters=[Vortox, Spy, ScarletWoman, Lunatic],
     hidden_self=[],
 )
 
@@ -111,12 +107,12 @@ The example script demonstrates the way the solver is intended to be used for so
 ```bash
 python example.py
 ```
-All currently solved puzzles are present in the `puzzles.py` file, you can choose to print and solve one by name using:
+Solved puzzles are recorded in the `puzzles.py` file, you can choose to print and solve one by name, e.g.:
 ```bash
 python puzzles.py 24
 python puzzles.py 30left
 ```
-I store all previously solved puzzles so they can be run as unit tests, you can solve all puzzles with the following
+I record all (most) previously solved puzzles so that they can be run as unit tests during development. You can ru these tests and solve all puzzles using
 ```bash
 python -m unittest
 ```
@@ -125,7 +121,7 @@ Clockchecker is written purely in Python (3.13), because it is supposed to be fu
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
 
-Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, Imp)` will evaluate to `MAYBE` if Josef is the Recluse, allowing the propogation of uncertainty due to Storyteller decisions.
+Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, Imp)` will evaluate to `MAYBE` if Josef is the Recluse. Logical operator overloads are implemented on STBools (e.g., `(TRUE | MAYBE) = TRUE`, `(TRUE & MAYBE) = MAYBE`, `(FALSE == MAYBE) = MAYBE`, etc), allowing the propogation of uncertainty due to Storyteller decisions using fairly legible code.
 
 <details open>
 <summary><b>Investigator</b></summary>

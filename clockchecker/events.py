@@ -134,7 +134,7 @@ class Dies(Event):
             if (witch := getattr(dead_player, 'witch_cursed', None)) is not None:
                 dead_player.character.death_explanation = f"cursed by {witch}"
                 yield from dead_player.character.killed(state, self.player)
-                return
+            return
 
 class NightEvent:
     """
