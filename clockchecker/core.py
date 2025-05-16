@@ -26,8 +26,6 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    # (699, 0, 0, 1),
-    # (217, 0, 0, 1),
 ]
 
 
@@ -252,11 +250,11 @@ class State:
         player = self.players[pid]
         character = player.character
         
-        # if self._is_world():
-        #     print(
-        #         f'Running {self.current_phase.name} {round_} for '
-        #         f'{player.name} ({type(character).__name__})'
-        #     )
+        if self._is_world():
+            print(
+                f'Running {self.current_phase.name} {round_} for '
+                f'{player.name} ({type(character).__name__})'
+            )
 
         match self.current_phase:
             case Phase.SETUP:
@@ -434,10 +432,10 @@ class State:
             order.extend([player for idx, player in idxs if idx < 999])
 
         # Death_in_town callback registration
-        self.death_in_town_callback_players = []
+        self.pre_death_in_town_callback_players = []
         for player_id, player in enumerate(self.players):
-            if hasattr(player.character, "death_in_town"):
-                self.death_in_town_callback_players.append(player_id)
+            if hasattr(player.character, "pre_death_in_town"):
+                self.pre_death_in_town_callback_players.append(player_id)
         
         # External info retrieval 
         self.external_info_registry = defaultdict(list)
@@ -452,26 +450,27 @@ class State:
     def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
         assert self.current_phase is Phase.NIGHT
         return player in self.current_phase_order[self.phase_order_index + 1:]
-
-    def death_in_town(self, dead_player_id: PlayerID) -> StateGen:
+    
+    def pre_death_in_town(self, dying_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
-        dead_player = self.players[dead_player_id]
-
+        if not self.pre_death_in_town_callback_players:
+            yield self; return
         def do_death_callback(states: StateGen, caller: PlayerID) -> StateGen:
             for state in states:
-                callback = state.players[caller].character.death_in_town
-                yield from callback(state, dead_player_id, caller)
-        substates = [self]
-        for caller in self.death_in_town_callback_players:
-            substates = do_death_callback(substates, caller)
+                callback = state.players[caller].character.pre_death_in_town
+                yield from callback(state, dying_player_id, caller)
+        for caller in self.pre_death_in_town_callback_players:
+            yield from do_death_callback([self], caller)
 
-        if dead_player.character.category is not characters.DEMON:
-            yield from substates
-        else:
-            # Game might end on Demon death
-            for substate in substates:
-                if not substate.check_game_over():
-                    yield substate
+    def post_death_in_town(self, dead_player_id: PlayerID) -> StateGen:
+        """Called immediately after a player died."""
+        dead_character = self.players[dead_player_id].character
+        if (
+            dead_character.category is characters.DEMON
+            and self.check_game_over()
+        ):
+            return
+        yield self
 
     def check_game_over(self) -> bool:
         # TODO: evil win condition. Doesn't actually come up much when solving.
@@ -623,10 +622,10 @@ class Puzzle:
                     ret.append(f'      {c}{day}: {info_str}')
         ret.extend([
             '\n  \033[0;4mPossible Hidden Characters\033[0m',
-            f'    Other Players: [{", ".join(
+            '    Other Players: [{}]'.format(", ".join(
                 character.__name__ for character in 
                 self.demons + self.minions + self.hidden_good
-            )}]',
+            )),
             f'    You: [{", ".join(c.__name__ for c in self.hidden_self)}]',
         ])
         if self.day_events:

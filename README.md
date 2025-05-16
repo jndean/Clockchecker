@@ -112,7 +112,7 @@ Solved puzzles are recorded in the `puzzles.py` file, you can choose to print an
 python puzzles.py 24
 python puzzles.py 30left
 ```
-I record all (most) previously solved puzzles so that they can be run as unit tests during development. You can ru these tests and solve all puzzles using
+I record all (most) previously solved puzzles so that they can be run as unit tests during development. You can run these tests and solve all puzzles using
 ```bash
 python -m unittest
 ```
@@ -121,7 +121,7 @@ Clockchecker is written purely in Python (3.13), because it is supposed to be fu
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
 
-Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, Imp)` will evaluate to `MAYBE` if Josef is the Recluse. Logical operator overloads are implemented on STBools (e.g., `(TRUE | MAYBE) = TRUE`, `(TRUE & MAYBE) = MAYBE`, `(FALSE == MAYBE) = MAYBE`, etc), allowing the propogation of uncertainty due to Storyteller decisions using fairly legible code.
+Reasoning over the output of character information is done using `STBool`s (StoryTeller bools) which can have value `TRUE`, `FALSE` or `MAYBE`. For example, `info.IsCharacter(Josef, Imp)` will evaluate to `MAYBE` if Josef is the Recluse. Logical operator overloads are implemented on STBools (e.g., `(TRUE | MAYBE) := TRUE`, `(TRUE & MAYBE) := MAYBE`, `(FALSE == MAYBE) := MAYBE`, etc), allowing the propogation of uncertainty due to Storyteller decisions using fairly legible code.
 
 <details open>
 <summary><b>Investigator</b></summary>
@@ -247,7 +247,10 @@ class ScarletWoman(Character):
         """Catch a Demon death. I don't allow catching Recluse deaths."""
         scarletwoman = state.players[me]
         dead_player = state.players[death]
-        living_players = sum(not p.is_dead for p in state.players)
+        living_players = sum(
+            not p.is_dead and p.character.category is not TRAVELLER
+            for p in state.players
+        )
         if (
             not scarletwoman.is_dead
             and scarletwoman.droison_count == 0

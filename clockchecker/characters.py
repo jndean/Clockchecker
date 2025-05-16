@@ -242,9 +242,10 @@ class Character:
         src: PlayerID | None = None,
     ) -> StateGen:
         """Trigger consequences of a confirmed death."""
-        state.players[me].is_dead = True
-        self.maybe_deactivate_effects(state, me, Reason.DEATH)
-        yield from state.death_in_town(me)
+        for substate in state.pre_death_in_town(me):
+            substate.players[me].is_dead = True
+            self.maybe_deactivate_effects(substate, me, Reason.DEATH)
+            yield from substate.post_death_in_town(me)
 
     def attacked_at_night(
         self: Character,
@@ -831,7 +832,7 @@ class EvilTwin(Character):
             new_state.players[me].character.twin = player_id
             yield new_state
 
-    def death_in_town(
+    def pre_death_in_town(
         self,
         state: State,
         death: PlayerID,
@@ -1086,7 +1087,7 @@ class Imp(GenericDemon):
             # is poisoned, Math will incrememnt but SW won't have misfired.
             # Oh well.
             if character is ScarletWoman and character.catches_death(
-                state, imp, player, True
+                state, imp, player
             ):
                 scarletwomen.append(player.id)
             elif character.category is MINION and not player.is_dead:
@@ -2031,41 +2032,40 @@ class ScarletWoman(Character):
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
-    def death_in_town(
+    def pre_death_in_town(
         self,
         state: State,
-        death: PlayerID,
+        about_to_die: PlayerID,
         me: PlayerID
     ) -> StateGen:
         """Catch a Demon death. I don't allow catching Recluse deaths."""
         scarletwoman = state.players[me]
-        dead_player = state.players[death]
-        if self.catches_death(state, dead_player, scarletwoman):
+        dying_player = state.players[about_to_die]
+        if self.catches_death(state, dying_player, scarletwoman):
             if state.night is not None:
                 scarletwoman.woke()
-            yield from state.character_change(me, type(dead_player.character))
+            yield from state.character_change(me, type(dying_player.character))
         else:
             yield state
 
     def catches_death(
         self,
         state: State,
-        dead: Player,
+        dying: Player,
         scarletwoman: Player,
-        death_not_yet_applied: bool = False,
     ) -> bool:
         """
         Trigger condition is also checked by Imp, so has its own method.
         WARNING: This method may mutate `state` by incremening the Math number.
         """
         living_players = sum(
-            not p.is_dead and not p.character.category is TRAVELLER
+            not p.is_dead and p.character.category is not TRAVELLER
             for p in state.players
         )
-        living_player_threshold = 4 + death_not_yet_applied
+        living_player_threshold = 5
         would_catch = (
             not scarletwoman.is_dead
-            and dead.character.category is DEMON
+            and dying.character.category is DEMON
             and living_players >= living_player_threshold
         )
         if would_catch and scarletwoman.droison_count:
