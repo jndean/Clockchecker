@@ -50,7 +50,7 @@ for world in Solver().generate_worlds(puzzle):
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td><img src="README_imgs/solution26.png" width=450px></td></tr>
+<tr><td><img src="README_imgs/solution26.png"></td></tr>
 </table>
 
 </details>
@@ -107,7 +107,7 @@ for world in Solver().generate_worlds(puzzle):
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td><img src="README_imgs/solution12b.png" width=450px></td></tr>
+<tr><td><img src="README_imgs/solution12b.png"></td></tr>
 </table>
 </details>
 <details>
@@ -183,7 +183,7 @@ for world in Solver().generate_worlds(puzzle):
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td><img src="README_imgs/solution1.png" width=450px></td></tr>
+<tr><td><img src="README_imgs/solution1.png"></td></tr>
 </table>
 </details>
 <details>
@@ -241,7 +241,7 @@ for world in Solver().generate_worlds(puzzle):
  ```
 </td></tr>
 <tr><th>Output</th></tr>
-<tr><td><img src="README_imgs/solution41.png" width=450px></td></tr>
+<tr><td><img src="README_imgs/solution41.png"></td></tr>
 </table>
 </details>
  
