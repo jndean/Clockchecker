@@ -58,7 +58,10 @@
 
 	- For external info (Like Nightwatchman pings or Evil Twin sightings), if there are multuple instances of an external-info generating character then the first one will trigger the check for all such character info, possibly before the second instance of the character gets to make their choice so the world will be incorrectly rejects. This will be relevant if the Philosopher is ever implemented and chooses in-play abilities.
 
+	- If there are two Scarlet Women, I think both of them will catch an executed demon.
+
+
 
 # Things we don't and won't handle:
 
- - Order not specified by night order. E.g. if there are two poisoners in town then either could go first, but we only try one ordering. Or if there are two Scarlet Women, we only generate a world where one of them caught the demon.
+ - Order not specified by night order. E.g. if there are two poisoners in town then either could go first, but we only try one ordering.

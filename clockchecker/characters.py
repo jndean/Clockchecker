@@ -1082,13 +1082,10 @@ class Imp(GenericDemon):
         scarletwomen, other_minions = [], []
         for player in state.players:
             character = player.character
-            # BUG: technically this is a bug because SW.catches_death() can
-            # incremement the Math number, so if there are 2 SW only one of whom
-            # is poisoned, Math will incrememnt but SW won't have misfired.
-            # Oh well.
-            if character is ScarletWoman and character.catches_death(
-                state, imp, player
-            ):
+            sw_catch, sw_misreg = ScarletWoman.catches_death(state, imp, player)
+            if sw_misreg is not info.FALSE:
+                raise NotImplementedError('SW inc Math or not inc Math')
+            if sw_catch is info.TRUE:
                 scarletwomen.append(player.id)
             elif character.category is MINION and not player.is_dead:
                 other_minions.append(player.id)
@@ -1753,6 +1750,15 @@ class Poisoner(Character):
             f'{", ".join(state.players[p].name for p in self.target_history)})'
         )
 
+@dataclass
+class PoppyGrower(Character):
+    """
+    Each night, choose a player (not yourself):
+    tomorrow, you may only vote if they are voting too.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
 class Pukka(Character):
@@ -2038,40 +2044,66 @@ class ScarletWoman(Character):
         about_to_die: PlayerID,
         me: PlayerID
     ) -> StateGen:
-        """Catch a Demon death. I don't allow catching Recluse deaths."""
+        """Catch a Demon death."""
         scarletwoman = state.players[me]
         dying_player = state.players[about_to_die]
-        if self.catches_death(state, dying_player, scarletwoman):
-            if state.night is not None:
-                scarletwoman.woke()
-            yield from state.character_change(me, type(dying_player.character))
+        catches, misfire = self.catches_death(state, dying_player, scarletwoman)
+
+        if catches is not info.FALSE:
+
+            # On MAYBE, spawn an extra world where no catch happened
+            if catches is info.MAYBE:
+                substate = state.fork()
+                substate.math_misregistration(~misfire)
+                yield substate
+
+            possible_demons = set([type(dying_player.character)])
+            # Recluse could have registered as any Demon on the script
+            if info.has_ability_of(state, about_to_die, Recluse):
+                possible_demons.update(state.puzzle.demons)
+                
+            # Yield worlds where the SW catches the death
+            for demon in possible_demons:
+                substate = state.fork()
+                if substate.night is not None:
+                    substate.players[me].woke()
+                yield from substate.character_change(me, demon)
+
         else:
             yield state
 
+    @staticmethod
     def catches_death(
-        self,
         state: State,
         dying: Player,
         scarletwoman: Player,
-    ) -> bool:
+    ) -> tuple[STBool, STBool]:
         """
         Trigger condition is also checked by Imp, so has its own method.
-        WARNING: This method may mutate `state` by incremening the Math number.
+        Returns: 
+            - STBool specifying if SW will catch
+            - STBool specifying if a fumble would be due to poison. This is so
+              the caller can increment Math number appropriately.
         """
-        living_players = sum(
+        is_sw = info.IsCharacter(scarletwoman.id, ScarletWoman)(
+            state, scarletwoman.id
+        )
+        if is_sw is info.FALSE:
+            return info.FALSE, info.FALSE
+
+        living_player_count = sum(
             not p.is_dead and p.character.category is not TRAVELLER
             for p in state.players
         )
-        living_player_threshold = 5
-        would_catch = (
-            not scarletwoman.is_dead
-            and dying.character.category is DEMON
-            and living_players >= living_player_threshold
+        ability_active = info.STBool(
+            living_player_count >= 5 and not scarletwoman.is_dead
         )
-        if would_catch and scarletwoman.droison_count:
-            state.math_misregistration()
-            return False
-        return would_catch
+        demon_dying = info.IsCategory(dying.id, DEMON)(state, scarletwoman.id)
+
+        would_catch = is_sw & demon_dying & ability_active
+        if would_catch is not info.FALSE and scarletwoman.droison_count:
+            return info.FALSE, ~would_catch
+        return would_catch, info.FALSE
 
 @dataclass
 class Seamstress(Character):
@@ -2687,6 +2719,7 @@ INACTIVE_CHARACTERS = [
     Lunatic,
     Marionette,
     Mayor,
+    PoppyGrower,
     Recluse,
     Saint,
     Slayer,

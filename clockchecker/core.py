@@ -726,7 +726,7 @@ def _liar_placement_worker(
                 liar_queue.put((liars, liar_positions, dbg_idx))
                 dbg_idx += 1
 
-        # Work Done sentinel per process
+        # WorkDone sentinel per process
         for _ in range(num_processes):
             liar_queue.put(None)
 

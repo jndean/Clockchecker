@@ -3,6 +3,11 @@ Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](
  
 ## Puzzle Solving Examples
 <p align="center">
+
+
+<details>
+<summary><b>Puzzle 26 - A Basic Example</b></summary>
+ 
 <table>
 <tr><th>Puzzle 26</th></tr>
 <tr><td><p align="center"><img src="README_imgs/puzzle26.png" width=600px></p></td></tr>
@@ -47,6 +52,10 @@ for world in Solver().generate_worlds(puzzle):
 <tr><th>Output</th></tr>
 <tr><td><img src="README_imgs/solution26.png" width=450px></td></tr>
 </table>
+
+</details>
+<details>
+<summary><b>Puzzle 12b - Example of interesting Day Events, and role changes.</b></summary>
 
 <table>
 <tr><th>Puzzle 12b</th></tr>
@@ -100,6 +109,142 @@ for world in Solver().generate_worlds(puzzle):
 <tr><th>Output</th></tr>
 <tr><td><img src="README_imgs/solution12b.png" width=450px></td></tr>
 </table>
+</details>
+<details>
+<summary><b>Puzzle 1 - Using composable Info objects to build arbitrary Savant statements.</b></summary>
+
+<table>
+<tr><th>Puzzle 1</th></tr>
+<tr><td><p align="center"><img src="README_imgs/puzzle1.webp" width=600px></p></td></tr>
+<tr><th>Solver Script</th></tr>
+<tr><td>
+ 
+ ```python3
+from clockchecker import *
+
+# 5 of the 6 Savant statements we can handle by composing existing Info primitives, however
+# for one of them it's easier to create this custom object implementing the Info interface.
+@dataclass
+class DrunkBetweenTownsfolk(Info):
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        N = len(state.players)
+        result = FALSE
+        for player in range(N):
+            found_drunk = IsCharacter(player, characters.Drunk)(state, src)
+            if found_drunk is FALSE:  # Allows MAYBE
+                continue
+            tf_neighbours = (
+                IsCategory((player - 1) % N, TOWNSFOLK)(state, src) &
+                IsCategory((player + 1) % N, TOWNSFOLK)(state, src)
+            )
+            result |= found_drunk & tf_neighbours
+        return result
+
+# Now solve the puzzle
+You, Tim, Sula, Oscar, Matt, Anna = range(6)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Savant, day_info={
+            1: Savant.Ping(
+                IsInPlay(Investigator), 
+                IsEvil(Tim) | IsEvil(Anna)
+            ),
+            2: Savant.Ping(
+                Chef.Ping(1), 
+                DrunkBetweenTownsfolk()
+            ),
+            3: Savant.Ping(
+                IsCategory(Tim, MINION) | IsCategory(Sula, MINION),
+                ~IsInPlay(Noble)
+            ),
+        }),
+        Player('Tim', claim=Knight, night_info={
+            1: Knight.Ping(Sula, Anna)
+        }),
+        Player('Sula', claim=Steward, night_info={
+            1: Steward.Ping(Matt)
+        }),
+        Player('Oscar', claim=Investigator, night_info={
+            1: Investigator.Ping(Sula, Anna, Goblin)
+        }),
+        Player('Matt', claim=Noble, night_info={
+            1: Noble.Ping(Tim, Sula, Oscar)
+        }),
+        Player('Anna', claim=Seamstress, night_info={
+            1: Seamstress.Ping(Sula, Oscar, same=False)
+        }),
+    ],
+    hidden_characters=[Leviathan, Goblin, Drunk],
+    hidden_self=[],
+)
+
+for world in Solver().generate_worlds(puzzle):
+    print(world)
+ ```
+</td></tr>
+<tr><th>Output</th></tr>
+<tr><td><img src="README_imgs/solution1.png" width=450px></td></tr>
+</table>
+</details>
+<details>
+<summary><b>Puzzle 41 - Katharine's favourite 🧙‍♀️ (an evil perspective puzzle) </b></summary>
+
+<table>
+<tr><th>Puzzle 41</th></tr>
+<tr><td><p align="center"><img src="README_imgs/puzzle41.webp" width=600px></p></td></tr>
+<tr><th>Solver Script</th></tr>
+<tr><td>
+ 
+ ```python3
+from clockchecker import *
+
+You, Amelia, Edd, Riley, Josef, Gina, Katharine, Chris = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Imp),
+        Player('Amelia', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(Edd, Josef, False),
+            2: FortuneTeller.Ping(Josef, You, False),
+            3: FortuneTeller.Ping(Amelia, You, False),
+        }),
+        Player('Edd', claim=Seamstress, night_info={
+            1: Seamstress.Ping(Katharine, Chris, same=True),
+        }),
+        Player('Riley', claim=Slayer, day_info={
+            1: Slayer.Shot(Katharine, died=False),
+        }),
+        Player('Josef', claim=Chef, night_info={
+            1: Chef.Ping(1),
+        }),
+        Player('Gina', claim=Noble, night_info={
+            1: Noble.Ping(Edd, Riley, Chris),
+        }),
+        Player('Katharine', claim=PoppyGrower),
+        Player('Chris', claim=Artist, day_info={
+            1: Artist.Ping(~IsCategory(Riley, TOWNSFOLK)),
+        }),
+    ],
+    day_events={
+        1: [
+            Dies(after_nominating=True, player=Gina),
+            Execution(Riley),
+        ],
+        2: Execution(Edd)
+    },
+    night_deaths={2: Chris, 3: Josef},
+    hidden_characters=[Imp, Witch, Drunk, Lunatic],
+    hidden_self=[Lunatic],
+)
+
+for world in Solver().generate_worlds(puzzle):
+    print(world)
+ ```
+</td></tr>
+<tr><th>Output</th></tr>
+<tr><td><img src="README_imgs/solution41.png" width=450px></td></tr>
+</table>
+</details>
+ 
 </p>
 
 ## Usage
@@ -306,10 +451,10 @@ class NoDashii(GenericDemon):
         # so there may be multiple possible combinations of neighbour pairs
         # depending on ST choices. Find them all and create a world for each.
         N = len(state.players)
-        fwd_candidates, bkwd_candidates = [], []
+        clockwise_candidates, anticlockwise_candidates = [], []
         for candidates, direction in (
-            (fwd_candidates, 1),
-            (bkwd_candidates, -1),
+            (clockwise_candidates, 1),
+            (anticlockwise_candidates, -1),
         ):
             for step in range(1, N):
                 player = (me + direction * step) % N
@@ -318,13 +463,13 @@ class NoDashii(GenericDemon):
                     candidates.append(player)
                 if is_tf is info.TRUE:
                     break
-        # Create a world or each combination of left and right poisoned player
-        for fwd in fwd_candidates:
-            for bkwd in bkwd_candidates:
+        # Create a world or each combination of cw and acw poisoned player
+        for clockwise_neighbour in clockwise_candidates:
+            for anticlockwise_neighbour in anticlockwise_candidates:
                 new_state = state.fork()
                 new_nodashii = new_state.players[me].character
-                new_nodashii.tf_neighbour1 = fwd
-                new_nodashii.tf_neighbour2 = bkwd
+                new_nodashii.tf_neighbour1 = clockwise_neighbour
+                new_nodashii.tf_neighbour2 = anticlockwise_neighbour
                 new_nodashii.maybe_activate_effects(new_state, me)
                 yield new_state
 

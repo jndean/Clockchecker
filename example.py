@@ -8,41 +8,46 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
 
-    You, Matthew, Steph, Jasmine, Hannah, Fraser, Tim, Josh, Adam = range(9)
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kqfgch/weekly_puzzle_41_in_which_you_might_be_the_lunatic/
+    You, Amelia, Edd, Riley, Josef, Gina, Katharine, Chris = range(8)
     puzzle = Puzzle(
         players=[
-            Player('You', claim=Investigator, night_info={
-                1: Investigator.Ping(Steph, Fraser, ScarletWoman),
+            Player('You', claim=Imp),
+            Player('Amelia', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Edd, Josef, False),
+                2: FortuneTeller.Ping(Josef, You, False),
+                3: FortuneTeller.Ping(Amelia, You, False),
             }),
-            Player('Matthew', claim=FortuneTeller, night_info={
-                1: FortuneTeller.Ping(Tim, Josh, demon=False),
-                2: FortuneTeller.Ping(Hannah, Tim, demon=False),
-                3: FortuneTeller.Ping(You, Matthew, demon=True),
+            Player('Edd', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Katharine, Chris, same=True),
             }),
-            Player('Steph', claim=Recluse),
-            Player('Jasmine', claim=Washerwoman, night_info={
-                1: Washerwoman.Ping(Tim, Adam, Empath),
+            Player('Riley', claim=Slayer, day_info={
+                1: Slayer.Shot(Katharine, died=False),
             }),
-            Player('Hannah', claim=Saint),
-            Player('Fraser', claim=Librarian, night_info={
-                1: Librarian.Ping(Jasmine, Hannah, Drunk),
+            Player('Josef', claim=Chef, night_info={
+                1: Chef.Ping(1),
             }),
-            Player('Tim', claim=Empath, night_info={
-                1: Empath.Ping(2),
-                2: Empath.Ping(1),
+            Player('Gina', claim=Noble, night_info={
+                1: Noble.Ping(Edd, Riley, Chris),
             }),
-            Player('Hannah', claim=Butler),
-            Player('Adam', claim=Slayer, day_info={
-                3: Slayer.Shot(Matthew, died=False),
+            Player('Katharine', claim=PoppyGrower),
+            Player('Chris', claim=Artist, day_info={
+                1: Artist.Ping(~IsCategory(Riley, TOWNSFOLK)),
             }),
         ],
-        day_events={1: Execution(Josh), 2: Execution(Jasmine)},
-        night_deaths={2: Fraser, 3: Tim},
-        hidden_characters=[Imp, Poisoner, Spy, ScarletWoman, Baron, Drunk],
-        hidden_self=[Drunk],
+        day_events={
+        	1: [
+        		Dies(after_nominating=True, player=Gina),
+        		Execution(Riley),
+        	],
+        	2: Execution(Edd)
+        },
+        night_deaths={2: Chris, 3: Josef},
+        hidden_characters=[Imp, Witch, Drunk, Lunatic],
+        hidden_self=[Lunatic],
     )
 
     print(puzzle, '\n\nSolving...\n')
 
-    for world in Solver().generate_worlds(puzzle):
-        print('Found', world)
+    for world in Solver(num_processes=4).generate_worlds(puzzle):
+        print(world)
