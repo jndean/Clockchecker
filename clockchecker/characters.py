@@ -1079,6 +1079,7 @@ class Imp(GenericDemon):
             return
         self.death_explanation = f'Starpassed N{state.night}'
         # Decide who catches the star pass. SW must catch if able.
+
         scarletwomen, other_minions = [], []
         for player in state.players:
             character = player.character
@@ -1089,6 +1090,7 @@ class Imp(GenericDemon):
                 scarletwomen.append(player.id)
             elif character.category is MINION and not player.is_dead:
                 other_minions.append(player.id)
+
         catchers = scarletwomen if scarletwomen else other_minions
 
         for minion in catchers:
@@ -2054,14 +2056,15 @@ class ScarletWoman(Character):
             # On MAYBE, spawn an extra world where no catch happened
             if catches is info.MAYBE:
                 substate = state.fork()
-                substate.math_misregistration(~misfire)
+                if info.has_ability_of(substate, about_to_die, ScarletWoman):
+                    substate.math_misregistration(~misfire)
                 yield substate
 
             possible_demons = set([type(dying_player.character)])
             # Recluse could have registered as any Demon on the script
             if info.has_ability_of(state, about_to_die, Recluse):
                 possible_demons.update(state.puzzle.demons)
-                
+
             # Yield worlds where the SW catches the death
             for demon in possible_demons:
                 substate = state.fork()
@@ -2289,7 +2292,7 @@ class Saint(Character):
         if droisoned:
             state.math_misregistration()
         if droisoned or not died:
-            return super().executed(self, state, me, died)
+            yield from super().executed(self, state, me, died)
 
 
 @dataclass

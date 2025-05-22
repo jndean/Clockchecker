@@ -54,7 +54,7 @@ class Player:
     """
     name: str
     claim: type[Character]
-    night_info: dict[int, Info | list] = field(default_factory=dict)
+    night_info: dict[int, Info | list[Info]] = field(default_factory=dict)
     day_info: dict[int, Info] = field(default_factory=dict)
     character: Character | None = None
 
@@ -234,10 +234,7 @@ class State:
             return False
         keys = [key] if key is not None else _DEBUG_WORLD_KEYS
         return any(
-            (
-                len(self.debug_key) <= len(_key)
-                and all(a == b for a, b in zip(self.debug_key, _key))
-            )
+            all(a == b for a, b in zip(self.debug_key, _key))
             for _key in keys
         )
             
@@ -300,6 +297,9 @@ class State:
         if events is None:
             yield self
         else:
+            if self._is_world():
+                names = {p: plyr.name for p, plyr in enumerate(self.players)}
+                print(f'Running {info.pretty_print(events[event], names)}')
             yield from events[event](self)
 
     def end_setup(self) -> StateGen:
@@ -502,10 +502,10 @@ class State:
             char = type(player.character)
             rhs = player._world_str(self)
             colour = 0
-            if char.is_liar:
+            if char.is_liar or player.is_evil:
                 colour = '31' if player.is_evil else '34'
             ret.append(
-                f'\033[{colour};1m{player.name: >{pad}} : {rhs}\033[0m'
+                f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
             )
         ret.append(')')
         return '\n'.join(ret)
@@ -775,9 +775,9 @@ def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
 
 class Solver:
     """Manages the worker threads"""
-    def __init__(self, num_processes=10):
+    def __init__(self, num_processes=None):
         if num_processes is None:
-            num_processes = max(os.cpu_count() - 1, 1)
+            num_processes = os.cpu_count()
         self.puzzle_queue = Queue(maxsize=num_processes + 1)
         self.liars_queue = Queue(maxsize=num_processes)
         self.solutions_queue = Queue(maxsize=num_processes)
