@@ -8,17 +8,22 @@ from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
-from multiprocessing import Queue, Process
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TypeAlias
 
-if TYPE_CHECKING:
-    from .characters import Character
-    from .events import Event
-    from .info import PlayerID, Info
+try:
+    from multiprocessing import Queue, Process
+    MULTIPROCESSING_AVAILABLE = True
+except ModuleNotFoundError:
+    MULTIPROCESSING_AVAILABLE = False
+
 
 from . import characters
+from .characters import Character
 from . import events
+from .events import Event
 from . import info
+from .info import PlayerID, Info
+
 
 
 # Set True to enable debug mode
@@ -29,8 +34,9 @@ _DEBUG_WORLD_KEYS = [
 ]
 
 
-if TYPE_CHECKING:
-    StateGen = Iterator[State]
+StateGen: TypeAlias = Iterator['State']
+LiarPlacement: TypeAlias = tuple[list[type['Character']], tuple[int, ...], int]
+LiarGen: TypeAlias = Iterator[LiarPlacement]
 
 
 class Phase(enum.Enum):
@@ -528,7 +534,6 @@ class Puzzle:
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
     category_counts: tuple[int, int, int, int] | None = None
-    world_init_check: Callable[[State], bool] | None = None
     allow_good_double_claims: bool = True
     deduplicate_initial_characters: bool = True
     finish_final_day: bool = False
@@ -663,173 +668,156 @@ def _check_valid_character_counts(
         if not lo <= actual_counts[category] <= hi:
             return False
     return True
-    
 
-def _run_game_gen(
-    states: StateGen,
-    n_players: int,
-    max_night: int,
-    max_day: int,
-    finish_final_day: bool,
-    event_counts: Mapping[int, int],
-) -> StateGen:
-    """
-    Chains together a big ol' stack of generators corresponding to each possible
-    action of each player, forming a pipeline through which possible world 
-    states flow. Only valid worlds are able to reach the end of the pipe.
-    """	
+
+def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
+    """Generate all possible initial placements of the hidden roles."""
+    n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
+    liar_combinations = it.product(
+        it.combinations(puzzle.demons, n_demons),
+        it.chain(*[
+            it.combinations(puzzle.minions, i)
+            for i in range(n_minions, len(puzzle.minions) + 1)
+        ]),
+        it.chain(*[
+            it.combinations(puzzle.hidden_good, i)
+            for i in range(len(puzzle.hidden_good) + 1)
+        ])
+    )
+    player_ids = list(range(len(puzzle.players)))
+    dbg_idx = 0
+    for demons, minions, hidden_good in liar_combinations:
+        liars = demons + minions + hidden_good
+        for liar_positions in it.permutations(player_ids, len(liars)):
+            yield (liars, liar_positions, dbg_idx)
+            dbg_idx += 1
+
+
+def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
+    """Accepts starting configurations and finds all possible solutions."""
+
     def apply_all(substates: StateGen, method: str, args: tuple[Any]):
         return (s for S in substates for s in getattr(S, method)(*args))
 
-    for player in range(n_players):
-        states = apply_all(states, 'run_next_player', (None, ))
-    states = apply_all(states, 'end_setup', ())
-    for round_ in range(1, max_night + 1):
-        for player in range(n_players + 1):
-            states = apply_all(states, 'run_next_player', (round_, ))
-        states = apply_all(states, 'end_night', ())
-        if round_ <= max_day:
-            for player in range(n_players):
-                states = apply_all(states, 'run_next_player', (round_, ))
-            for event in range(event_counts[round_]):
-                states = apply_all(states, 'run_event', (round_, event))
-            if round_ < max_day or finish_final_day:
-                states = apply_all(states, 'end_day', ())
+    event_counts = defaultdict(int, {
+        day: len(events) for day, events in puzzle.day_events.items()
+    })
 
-    yield from states
-
-
-def _liar_placement_worker(
-    puzzle_queue: Queue,
-    liar_queue: Queue,
-    num_processes: int,
-):
-    """Generate all possible initial placements of the hidden roles."""
-    while (puzzle := puzzle_queue.get()) is not None:
-        n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
-        liar_combinations = it.product(
-            it.combinations(puzzle.demons, n_demons),
-            it.chain(*[
-                it.combinations(puzzle.minions, i)
-                for i in range(n_minions, len(puzzle.minions) + 1)
-            ]),
-            it.chain(*[
-                it.combinations(puzzle.hidden_good, i)
-                for i in range(len(puzzle.hidden_good) + 1)
-            ])
-        )
-        player_ids = list(range(len(puzzle.players)))
-        dbg_idx = 0
-        for demons, minions, hidden_good in liar_combinations:
-            liars = demons + minions + hidden_good
-            for liar_positions in it.permutations(player_ids, len(liars)):
-                liar_queue.put((liars, liar_positions, dbg_idx))
-                dbg_idx += 1
-
-        # WorkDone sentinel per process
-        for _ in range(num_processes):
-            liar_queue.put(None)
-
-
-def _world_checking_worker(puzzle_q: Queue, liars_q: Queue, solutions_q: Queue):
-    """Accepts starting configurations and finds all possible solutions."""
-
-    while (puzzle := puzzle_q.get()) is not None:
-        event_counts = defaultdict(int, {
-            day: len(events) for day, events in puzzle.day_events.items()
-        })
-
-        while (liars := liars_q.get()) is not None:
-            # Sanity check character counts before creating a new world
-            liar_characters, liar_positions, debug_idx = liars
-            if not _check_valid_character_counts(
-                puzzle, liar_characters, liar_positions,
-            ):
-                continue
-            # Create the world and place the hidden characters
-            world = puzzle._state.fork(debug_idx)
-            for liar, position in zip(liar_characters, liar_positions):
-                world.players[position].character = liar()
-                world.players[position].is_evil = liar.category in (
-                    characters.MINION, characters.DEMON
-                )
-            if not world.begin_game(puzzle.allow_good_double_claims):
-                continue
-            if (
-                puzzle.world_init_check is not None
-                and not puzzle.world_init_check(world)
-            ):
-                continue
-            # Run the solver on the world
-            for solution in _run_game_gen(
-                [world],
-                len(puzzle.players),
-                puzzle._max_night,
-                puzzle._max_day,
-                puzzle.finish_final_day,
-                event_counts,
-            ):
-                solutions_q.put(solution)
-        solutions_q.put(None)
-
-
-class Solver:
-    """Manages the worker threads"""
-    def __init__(self, num_processes=None):
-        if num_processes is None:
-            num_processes = os.cpu_count()
-        self.puzzle_queue = Queue(maxsize=num_processes + 1)
-        self.liars_queue = Queue(maxsize=num_processes)
-        self.solutions_queue = Queue(maxsize=num_processes)
-        self.num_processes = num_processes
-
-        self.all_workers = [
-            Process(
-                target=_world_checking_worker,
-                daemon=True,
-                args=(self.puzzle_queue, self.liars_queue, self.solutions_queue)
+    for liar_characters, liar_positions, debug_idx in liars_generator:
+        # Sanity check character counts before creating a new world
+        if not _check_valid_character_counts(
+            puzzle, liar_characters, liar_positions,
+        ):
+            continue
+        # Create the world and place the hidden characters
+        world = puzzle._state.fork(debug_idx)
+        for liar, position in zip(liar_characters, liar_positions):
+            world.players[position].character = liar()
+            world.players[position].is_evil = liar.category in (
+                characters.MINION, characters.DEMON
             )
-            for _ in range(num_processes)
-        ]
-        self.all_workers.append(
-            Process(
-                target=_liar_placement_worker,
-                daemon=True,
-                args=(self.puzzle_queue, self.liars_queue, num_processes)
-            )
-        )
-        self._running = False
+        if not world.begin_game(puzzle.allow_good_double_claims):
+            continue
     
-    def __enter__(self):
-        for process in self.all_workers:
-            process.start()
-        self._running = True
-        return self
+        # Chains together a big ol' stack of generators corresponding to each
+        # possible action of each player, forming a pipeline through which
+        # possible world states flow. Only valid worlds are able to reach the
+        # end of the pipe.
+        worlds = [world]
+        for player in range(len(puzzle.players)):
+            worlds = apply_all(worlds, 'run_next_player', (None, ))
+        worlds = apply_all(worlds, 'end_setup', ())
+        for round_ in range(1, puzzle._max_night + 1):
+            for player in range(len(puzzle.players) + 1):
+                worlds = apply_all(worlds, 'run_next_player', (round_, ))
+            worlds = apply_all(worlds, 'end_night', ())
+            if round_ <= puzzle._max_day:
+                for player in range(len(puzzle.players)):
+                    worlds = apply_all(worlds, 'run_next_player', (round_, ))
+                for event in range(event_counts[round_]):
+                    worlds = apply_all(worlds, 'run_event', (round_, event))
+                if round_ < puzzle._max_day or puzzle.finish_final_day:
+                    worlds = apply_all(worlds, 'end_day', ())
+        yield from worlds
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        for _ in range(self.num_processes + 1):
-            self.puzzle_queue.put(None)
-        for process in self.all_workers:
-            process.join()
-        self._running = False
 
-    def generate_worlds(self, puzzle: Puzzle) -> StateGen:
+def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
+    if not puzzle.deduplicate_initial_characters:
+        yield from solutions
+    else:
+        seen_solutions = set()
+        for solution in solutions:
+            if solution.initial_characters not in seen_solutions:
+                seen_solutions.add(solution.initial_characters)
+                yield solution
 
-        with nullcontext() if self._running else self:
-            for _ in range(self.num_processes + 1):
-                self.puzzle_queue.put(puzzle)
-            
-            seen_solutions = set()
-            finish_count = 0
-            while True:
-                solution = self.solutions_queue.get()
-                if solution is None:  # Done sentinel
-                    finish_count += 1
-                    if finish_count == self.num_processes:
-                        break
-                elif (
-                    not puzzle.deduplicate_initial_characters
-                    or solution.initial_characters not in seen_solutions
-                ):
-                    seen_solutions.add(solution.initial_characters)
-                    yield solution
+    
+def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
+    def liars_gen():
+        while (liars := liars_q.get()) is not None:
+            yield liars
+    for solution in _world_check_gen(puzzle, liars_gen()):
+        solutions_q.put(solution)
+    solutions_q.put(None)  # Finished Sentinel
+
+def _liar_placement_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
+    for placement in _liar_placement_gen(puzzle):
+        liars_q.put(placement)
+    for _ in range(num_procs):
+        liars_q.put(None)  # Finished Sentinel
+
+def _solution_collecting_worker(solutions_q: Queue, num_procs: int) -> StateGen:
+    finish_count = 0
+    while True:
+        solution = solutions_q.get()
+        if solution is None:  # Finished Sentinel
+            finish_count += 1
+            if finish_count == num_procs:
+                return
+        else:
+            yield solution
+
+
+def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
+    """Top level solver method, accepts a puzzle and generates solutions."""
+
+    if num_processes is None:
+        num_processes = os.cpu_count()
+
+    if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
+        # Non-parallel version just runs everything in one process.
+        liars = _liar_placement_gen(puzzle)
+        solutions = _world_check_gen(puzzle, liars)
+        solutions = _filter_solutions(puzzle, solutions)
+        yield from solutions
+        return
+
+    # Parallel version
+    liars_queue = Queue(maxsize=num_processes)
+    solutions_queue = Queue(maxsize=num_processes)
+
+    all_workers = [
+        Process(
+            target=_world_checking_worker,
+            daemon=True,
+            args=(puzzle, liars_queue, solutions_queue)
+        )
+        for _ in range(num_processes)
+    ]
+    all_workers.append(
+        Process(
+            target=_liar_placement_worker,
+            daemon=True,
+            args=(puzzle, liars_queue, num_processes)
+        )
+    )
+
+    for worker in all_workers:
+        worker.start()
+
+    solutions = _solution_collecting_worker(solutions_queue, num_processes)
+    solutions = _filter_solutions(puzzle, solutions)
+    yield from _filter_solutions(puzzle, solutions)
+        
+    for worker in all_workers:
+        worker.join()

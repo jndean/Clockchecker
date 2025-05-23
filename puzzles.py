@@ -1969,8 +1969,7 @@ if __name__ == '__main__':
     print(puzzle)
     print('\nSolving...')
 
-    with Solver() as solver:
-        worlds = list(solver.generate_worlds(puzzle))
+    worlds = list(solve(puzzle))
 
     success = (set(w.initial_characters for w in worlds) == set(solutions))
     if solve_condition is not None:

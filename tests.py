@@ -21,8 +21,7 @@ class NQTPuzzles(unittest.TestCase):
                 print(f'\033[31;1m.', end='', flush=True)
 
                 puzzle, solutions, condition = all_puzzles[puzzle_name]()
-                with clockchecker.Solver() as solver:
-                    worlds = list(solver.generate_worlds(puzzle))
+                worlds = list(clockchecker.solve(puzzle))
 
                 prediction_str = sorted(tuple(
                     ', '.join(x.__name__ for x in world.initial_characters)

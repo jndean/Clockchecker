@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     print(puzzle, '\n\nSolving...\n')
     count = 0
-    for world in Solver().generate_worlds(puzzle):
+    for world in solve(puzzle):
         print(world)
         count += 1
     print(f'Found {count} worlds')
