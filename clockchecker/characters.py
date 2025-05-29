@@ -163,12 +163,10 @@ class Character:
         even_if_dead: bool = False,
     ) -> bool:
         """Most info roles can inherit this pattern for their info check."""
-        if state.night is not None:
+        if state.current_phase is core.Phase.NIGHT:
             ping = state.get_night_info(type(self), me, state.night)
-        elif state.day is not None:
+        elif state.current_phase is core.Phase.DAY:
             ping = state.get_day_info(me, state.day)
-        else:
-            raise ValueError('What time is it?')
 
         if ping is None or info.behaves_evil(state, me) or self.is_liar:
             return True
@@ -1457,7 +1455,7 @@ class NoDashii(GenericDemon):
     tf_neighbour1: PlayerID | None = None
     tf_neighbour2: PlayerID | None = None
 
-    def run_setup(self, state: State, src: PlayerID) -> StateGen:
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # I allow the No Dashii to poison misregistering characters (e.g. Spy),
         # so there may be multiple possible combinations of neighbour pairs
         # depending on ST choices. Find them all and create a world for each.
@@ -1468,8 +1466,8 @@ class NoDashii(GenericDemon):
             (bkwd_candidates, -1),
         ):
             for step in range(1, N):
-                player = (src + direction * step) % N
-                is_tf = info.IsCategory(player, TOWNSFOLK)(state, src)
+                player = (me + direction * step) % N
+                is_tf = info.IsCategory(player, TOWNSFOLK)(state, me)
                 if is_tf is not info.FALSE:
                     candidates.append(player)
                 if is_tf is info.TRUE:
@@ -1478,10 +1476,10 @@ class NoDashii(GenericDemon):
         for fwd in fwd_candidates:
             for bkwd in bkwd_candidates:
                 new_state = state.fork()
-                new_nodashii = new_state.players[src].character
+                new_nodashii = new_state.players[me].character
                 new_nodashii.tf_neighbour1 = fwd
                 new_nodashii.tf_neighbour2 = bkwd
-                new_nodashii.maybe_activate_effects(new_state, src)
+                new_nodashii.maybe_activate_effects(new_state, me)
                 yield new_state
 
     def _activate_effects_impl(self, state: State, src: PlayerID):
@@ -1569,13 +1567,7 @@ class Philosopher(Character):
             state.math_misregistration()
             yield state; return
 
-        # Updating the phase order index is very specifically done before
-        # setting the active ability or updating the night order
-        state.update_phase_order_index_before_character_change(
-            Philosopher, choice.character
-        )
         self.active_ability = choice.character(first_night=state.night)
-        state.update_character_orders()  # Night order changes
         self.wake_pattern = choice.character.wake_pattern
         self.is_liar = choice.character.is_liar  # Philo-Mutant...?
 
@@ -1761,6 +1753,64 @@ class PoppyGrower(Character):
     category: ClassVar[Categories] = TOWNSFOLK
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+@dataclass
+class Progidy(Character):
+    """
+    HOMEBREW: NQT
+    You draw the Prodigy token. Each night, choose a player:
+    you learn a player of the same(solar)/opposite(lunar) alignment.
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    is_solar: bool | None = None
+
+    @dataclass
+    class Ping(info.Info):
+        chose: PlayerID
+        shown: PlayerID
+        def __call__(self, state: State, src: PlayerID) -> STBool:
+            chose_evil = info.IsEvil(self.chose)(state, src)
+            shown_evil = info.IsEvil(self.shown)(state, src)
+            if state.players[src].character.is_solar:
+                return chose_evil == shown_evil
+            else:
+                return chose_evil ^ shown_evil
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        if state.current_phase is not core.Phase.SETUP:
+            raise NotImplementedError('Prodigy create mid-game')
+
+        # Check if another prodigy hase already set our polarity
+        if self.is_solar is not None:
+            yield state
+            return
+
+        other_prodigies = [
+            i for i, player in enumerate(state.players)
+            if i != me and isinstance(player.character, Progidy)
+        ]
+        if len(other_prodigies) > 1:
+            return
+
+        # I am Solar
+        solar_state = state.fork()
+        solar_state.players[me].character.is_solar = True
+        if other_prodigies:
+            solar_state.players[other_prodigies[0]].character.is_solar = False
+        yield solar_state
+
+        # I am Lunar
+        state.players[me].character.is_solar = False
+        if other_prodigies:
+            state.players[other_prodigies[0]].character.is_solar = True
+        yield state
+
+    def _world_str(self, state: State) -> str:
+        return f"{'Solar' if self.is_solar else 'Lunar'}Prodigy"
+
 
 @dataclass
 class Pukka(Character):
@@ -2118,6 +2168,8 @@ class Seamstress(Character):
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
+    spent: bool = False
+
     @dataclass
     class Ping(info.Info):
         player1: PlayerID
@@ -2221,7 +2273,7 @@ class SnakeCharmer(Character):
             for ss2 in ss1.character_change(choice.player, SnakeCharmer):
                 new_snakecharmer = ss2.players[choice.player].character
                 new_snakecharmer.self_droison = True
-                new_snakecharmer.maybe_activate_effects(state, me)
+                new_snakecharmer.maybe_activate_effects(state, choice.player)
                 yield ss2
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
@@ -2481,7 +2533,7 @@ class VillageIdiot(Character):
             registers_evil = info.IsEvil(self.player)(state, src)
             return registers_evil == info.STBool(self.is_evil)
 
-    def run_setup(self, state: State, src: PlayerID) -> StateGen:
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # If there is more than one Village Idiot, choose one to be the drunk VI
         VIs = [i for i, player in enumerate(state.players)
                 if isinstance(player.character, VillageIdiot)]
@@ -2652,6 +2704,7 @@ GLOBAL_SETUP_ORDER = [
     Puzzlemaster,
     FortuneTeller,
     VillageIdiot,
+    Progidy,
     Drunk,
     Soldier,
     Xaan,
@@ -2699,6 +2752,7 @@ GLOBAL_NIGHT_ORDER = [
     Balloonist,
     Shugenja,
     VillageIdiot,
+    Progidy,
     NightWatchman,
     Chambermaid,
     Mathematician,

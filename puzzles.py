@@ -1948,6 +1948,113 @@ def puzzle_nqt41():
     return puzzle, solutions, None
 
 
+def puzzle_nqt43_alt():
+    # Unreleased Solar/Lunar Prodigy puzzle, because it has unintended solutions
+    You, Fraser, Sula, Adam, Oscar, Jasmine, Anna, Steph = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Oscar, Steph, Shugenja),
+            }),
+            Player('Fraser', claim=Progidy, night_info={
+                1: Progidy.Ping(Adam, Anna),
+                2: Progidy.Ping(Anna, You),
+            }),
+            Player('Sula', claim=Progidy, night_info={
+                1: Progidy.Ping(Steph, You),
+                2: Progidy.Ping(Fraser, Steph),
+            }),
+            Player('Adam', claim=Knight, night_info={
+                1: Knight.Ping(Sula, Steph),
+            }),
+            Player('Oscar', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False),
+            }),
+            Player('Jasmine', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(3),
+            }),
+            Player('Anna', claim=Noble, night_info={
+                1: Noble.Ping(Fraser, Adam, Jasmine),
+            }),
+            Player('Step', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        You: Leviathan,
+                        Fraser: Leviathan,
+                        Oscar: Leviathan,
+                        Sula: Drunk,
+                    }
+                )},
+                night_info={2: Juggler.Ping(0)},
+            ),
+        ],
+        hidden_characters=[Leviathan, ScarletWoman, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions=(
+        (Washerwoman, Drunk, Progidy, Leviathan, Shugenja, Clockmaker,
+            ScarletWoman, Juggler),
+        (Washerwoman, Drunk, Progidy, ScarletWoman, Shugenja, Clockmaker,
+            Leviathan, Juggler),
+        (Washerwoman, Progidy, ScarletWoman, Knight, Shugenja, Drunk,
+            Leviathan, Juggler),
+    )
+    return puzzle, solutions, None
+
+
+def puzzle_josef_yes_but_dont():
+    # A puzzle that relies on the ScarletWoman catching a Recluse death
+    You, Ali, Edd, Riley, _, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Zak, Soldier),
+            }),
+            Player('Ali', claim=Slayer, day_info={
+                1: Slayer.Shot(Riley, died=False),
+            }),
+            Player('Edd', claim=Saint),
+            Player('Riley', claim=Investigator, night_info={
+                1: Investigator.Ping(Katharine, Jodie, ScarletWoman),
+            }),
+            Player('Adam', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Ali, True),
+                2: FortuneTeller.Ping(Jodie, Katharine, True),
+                3: FortuneTeller.Ping(Tom, Zak, True),
+            }),
+            Player('Gina', claim=Recluse),
+            Player('Katharine', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+                3: Empath.Ping(1),
+            }),
+            Player('Tom', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Gina, Imp),
+                3: Undertaker.Ping(Jodie, Slayer),
+            }),
+            Player('Zak', claim=Soldier),
+            Player('Jodie', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Jesal', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Katharine, Zak, Empath),
+            })
+        ],
+        day_events={
+            1: Execution(Gina),
+            2: Execution(Jodie),
+        },
+        night_deaths={2: Edd, 3: You},
+        hidden_characters=[Imp, Spy, ScarletWoman],
+        hidden_self=[],
+        deduplicate_initial_characters=True,
+    )
+    solutions=(
+        (Ravenkeeper, Slayer, Imp, Investigator, FortuneTeller, Recluse, Empath,
+            Spy, Soldier, ScarletWoman, Washerwoman),
+    )
+    return puzzle, solutions, None
+
 
 if __name__ == '__main__':
     # Running this file will solve a puzzle of your choice, because why not?
@@ -1957,7 +2064,7 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
 
-    PREFIX = 'puzzle_nqt'
+    PREFIX = 'puzzle_'
     puzzle_names = [p[len(PREFIX):] for p in dir() if p.startswith(PREFIX)]
     parser = argparse.ArgumentParser()
     parser.add_argument('puzzle_name', choices=puzzle_names, nargs='?', default='1')
@@ -1980,7 +2087,7 @@ if __name__ == '__main__':
     else:
         print('\033[31;1mERROR - Mismatch with desired Solutions:\033[0m')
         for solution in solutions:
-            print(solution)
+            print(f"Solution: [{','.join(c.__name__ for c in solution)}]")
     
     for world in worlds:
         print(world)

@@ -177,9 +177,7 @@ class State:
         """Called after player positions and characters have been chosen"""
         self.current_phase = Phase.SETUP
         self.phase_order_index = 0
-        self.setup_order, self.night_order, self.day_order = [], [], []
-        self.current_phase_order = self.setup_order
-        self.update_character_orders()
+        self.update_character_callbacks()
         self.initial_characters = tuple(type(p.character) for p in self.players)
         self.night, self.day = None, None
         self.previously_alive = [True] * len(self.players)
@@ -243,40 +241,65 @@ class State:
             all(a == b for a, b in zip(self.debug_key, _key))
             for _key in keys
         )
-            
-    def run_next_player(self, round_: int | None) -> StateGen:
-        assert self.phase_order_index >= 0, "Broken phase order"
-        if self.phase_order_index >= len(self.current_phase_order):
+
+    def run_next_character(self) -> StateGen:
+        """Run all players who have the ability of the next character."""
+        order = (
+            self.puzzle.night_order if self.current_phase is Phase.NIGHT
+            else self.puzzle.day_order if self.current_phase is Phase.DAY
+            else self.puzzle.setup_order
+        )
+
+        if self.phase_order_index >= len(order):
             yield self
             return
-        pid = self.current_phase_order[self.phase_order_index]
+
+        character_t = order[self.phase_order_index]
+        self.currently_acting_character = character_t
+        self.players_still_to_act = [
+            pid for pid in range(len(self.players))
+            if info.acts_like(self, pid, character_t)
+        ]
+        for state in self.run_all_players_with_currently_acting_character():
+            state.phase_order_index += 1
+            yield state
+
+    def run_all_players_with_currently_acting_character(self) -> StateGen:
+        """
+        Multiple characters might have the ability of the character acting in
+        the current night/day/setup order step, run them all.
+        """
+        if not self.players_still_to_act:
+            yield self
+            return
+
+        pid = self.players_still_to_act.pop()
         player = self.players[pid]
-        character = player.character
         
         if self._is_world():
-            print(
-                f'Running {self.current_phase.name} {round_} for '
-                f'{player.name} ({type(character).__name__})'
-            )
+            print(f'Running {self.current_phase.name} ? for '
+                  f'{player.name} ({type(player.character).__name__})')
 
         match self.current_phase:
-            case Phase.SETUP:
-                substates = character.run_setup(self, pid)
             case Phase.NIGHT:
                 if characters.Chambermaid.player_wakes_tonight(self, pid):
                     player.woke()
-                substates = character.run_night(self, round_, pid)                    
-                substates = State.run_external_night_info(
-                    substates, type(character), round_
+                states = player.character.run_night(self, self.night, pid)
+                states = State.run_external_night_info(
+                    states, self.currently_acting_character, self.night
                 )
             case Phase.DAY:
-                substates = character.run_day(self, round_, pid)
+                states = player.character.run_day(self, self.day, pid)
+            case Phase.SETUP:
+                states = player.character.run_setup(self, pid)
 
-        for substate in substates:
-            if hasattr(substate, 'debug_cull'):
+        for state in states:
+            if hasattr(states, 'debug_cull'):
                 continue
-            substate.phase_order_index += 1
-            yield substate
+            # Recursive tail-calls can set up a variable-depth generator stack
+            # corresponding to how many players have the active ability, and
+            # handle players changing character mid-turn.
+            yield from state.run_all_players_with_currently_acting_character()
     
     @staticmethod
     def run_external_night_info(
@@ -310,15 +333,12 @@ class State:
 
     def end_setup(self) -> StateGen:
         self.current_phase = Phase.NIGHT
-        self.current_phase_order = self.night_order
         self.phase_order_index = 0
         self.night = 1
         self.day = None
         yield self
 
     def end_night(self) -> StateGen:
-        if self.phase_order_index < len(self.night_order):
-            raise RuntimeError(f'Not enough run_next_player frames for night')
         for player in self.players:
             player.woke_tonight = False
 
@@ -352,7 +372,6 @@ class State:
         self.math_misregistration_bounds = [0, 0]
 
         self.current_phase = Phase.DAY
-        self.current_phase_order = self.day_order
         self.phase_order_index = 0
         self.day = self.night
         self.night = None
@@ -367,7 +386,6 @@ class State:
             for player in range(len(self.players))
         ]
         self.current_phase = Phase.NIGHT
-        self.current_phase_order = self.night_order
         self.phase_order_index = 0
         self.night = self.day + 1
         self.day = None
@@ -385,57 +403,19 @@ class State:
         player.character.maybe_deactivate_effects(
             self, player_id, characters.Reason.CHARACTER_CHANGE
         )
-        self.update_phase_order_index_before_character_change(
-            type(player.character), character
-        )
+        if player_id in self.players_still_to_act:
+            self.players_still_to_act.remove(player_id)
+
         next_night = self.night if self.night is not None else self.day + 1
         player.character = character(first_night=next_night)
-        self.update_character_orders()
+        self.update_character_callbacks()
 
         for substate in player.character.run_setup(self, player_id):
             if not substate.check_game_over():
                 yield substate
 
-    def update_phase_order_index_before_character_change(
-        self,
-        old_character: type[Character],
-        new_character: type[Character],
-    ):
-        """Modify the night(/day/setup) order position pre-character change."""
-        if self.phase_order_index >= len(self.current_phase_order):
-            return  # Phase is already over
-        
-        global_order = GLOBAL_PHASE_ORDERS[self.current_phase]
-        active_player_id = self.current_phase_order[self.phase_order_index]
-        active_idx = characters.get_player_phase_order_idx(
-            global_order, self, active_player_id,
-        )
-        old_idx = characters.get_character_phase_order_idx(
-            global_order, old_character
-        )
-        new_idx = characters.get_character_phase_order_idx(
-            global_order, new_character
-        )
-        self.phase_order_index += (new_idx <= active_idx)
-        self.phase_order_index -= (old_idx <= active_idx)
-
-    def update_character_orders(self):
-        """Recompute the Night/Day/Setup order."""
-        self.setup_order.clear()
-        self.night_order.clear()
-        self.day_order.clear()
-        for global_order, order in (
-            (characters.GLOBAL_SETUP_ORDER, self.setup_order),
-            (characters.GLOBAL_NIGHT_ORDER, self.night_order),
-            (characters.GLOBAL_DAY_ORDER, self.day_order),
-        ):
-            idxs = sorted([
-                (characters.get_player_phase_order_idx(global_order, self, pid),
-                    pid)
-                for pid in range(len(self.players))
-            ])
-            # Large sentinel value indicates not in night order
-            order.extend([player for idx, player in idxs if idx < 999])
+    def update_character_callbacks(self):
+        """Re-gather callbacks after character changes"""
 
         # Death_in_town callback registration
         self.pre_death_in_town_callback_players = []
@@ -455,7 +435,9 @@ class State:
     
     def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
         assert self.current_phase is Phase.NIGHT
-        return player in self.current_phase_order[self.phase_order_index + 1:]
+        char = type(self.players[player].character)
+        remaining_chars = self.puzzle.night_order[self.phase_order_index + 1:]
+        return player in self.players_still_to_act or char in remaining_chars
     
     def pre_death_in_town(self, dying_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
@@ -572,6 +554,24 @@ class Puzzle:
         self._night_info, self._day_info = zip(*(
             player._extract_info() for player in self.players
         ))
+
+        script = set(
+            [p.claim for p in self.players]
+            + hidden_characters
+            + self.hidden_self
+        )
+        self.setup_order = [
+            character for character in characters.GLOBAL_SETUP_ORDER
+            if character in script
+        ]
+        self.night_order = [
+            character for character in characters.GLOBAL_NIGHT_ORDER
+            if character in script
+        ]
+        self.day_order = [
+            character for character in characters.GLOBAL_DAY_ORDER
+            if character in script
+        ]
 
     def _validate_inputs(self):
         """
@@ -696,7 +696,7 @@ def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
 def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
     """Accepts starting configurations and finds all possible solutions."""
 
-    def apply_all(substates: StateGen, method: str, args: tuple[Any]):
+    def apply_all(substates: StateGen, method: str, args: tuple[Any] = ()):
         return (s for S in substates for s in getattr(S, method)(*args))
 
     event_counts = defaultdict(int, {
@@ -724,20 +724,20 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         # possible world states flow. Only valid worlds are able to reach the
         # end of the pipe.
         worlds = [world]
-        for player in range(len(puzzle.players)):
-            worlds = apply_all(worlds, 'run_next_player', (None, ))
-        worlds = apply_all(worlds, 'end_setup', ())
+        for player in range(len(puzzle.setup_order)):
+            worlds = apply_all(worlds, 'run_next_character')
+        worlds = apply_all(worlds, 'end_setup')
         for round_ in range(1, puzzle._max_night + 1):
-            for player in range(len(puzzle.players) + 1):
-                worlds = apply_all(worlds, 'run_next_player', (round_, ))
-            worlds = apply_all(worlds, 'end_night', ())
+            for player in range(len(puzzle.night_order)):
+                worlds = apply_all(worlds, 'run_next_character')
+            worlds = apply_all(worlds, 'end_night')
             if round_ <= puzzle._max_day:
-                for player in range(len(puzzle.players)):
-                    worlds = apply_all(worlds, 'run_next_player', (round_, ))
+                for player in range(len(puzzle.day_order)):
+                    worlds = apply_all(worlds, 'run_next_character')
                 for event in range(event_counts[round_]):
                     worlds = apply_all(worlds, 'run_event', (round_, event))
                 if round_ < puzzle._max_day or puzzle.finish_final_day:
-                    worlds = apply_all(worlds, 'end_day', ())
+                    worlds = apply_all(worlds, 'end_day')
         yield from worlds
 
 

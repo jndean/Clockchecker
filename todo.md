@@ -4,7 +4,7 @@
 
  - EASY: Move day_events, night_deaths from State to Puzzle
 
- - Could really do with a refactor that separates State into two things: a class for the initial immutable Puzzle definition (all the public info) and a class for the current mutable state of a World which is run out (like State currently is, with forking) and checked against the Puzzle.
+ - EASY: run_day and run_night methods on character needn't accept night/day argument, retreive that from state instead if required.
 
  - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
 
@@ -57,9 +57,6 @@
 	Having said that, the current system can correctly solve all the available vortox puzzles, so perhaps I'm ok leaving it for now...
 
 	- For external info (Like Nightwatchman pings or Evil Twin sightings), if there are multuple instances of an external-info generating character then the first one will trigger the check for all such character info, possibly before the second instance of the character gets to make their choice so the world will be incorrectly rejects. This will be relevant if the Philosopher is ever implemented and chooses in-play abilities.
-
-	- If there are two Scarlet Women, I think both of them will catch an executed demon.
-
 
 
 # Things we don't and won't handle:
