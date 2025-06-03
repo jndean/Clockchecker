@@ -31,6 +31,7 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
+    (179, 4, 3),
 ]
 
 
@@ -277,8 +278,13 @@ class State:
         player = self.players[pid]
         
         if self._is_world():
-            print(f'Running {self.current_phase.name} ? for '
-                  f'{player.name} ({type(player.character).__name__})')
+            round_ = self.night if self.night else self.day if self.day else ''
+            claim = (
+                '' if isinstance(player.character, player.claim)
+                else f' claiming {player.claim.__name__}'
+            )
+            print(f'Running {self.current_phase.name} {round_} for '
+                  f'{player.name} ({type(player.character).__name__}{claim})')
 
         match self.current_phase:
             case Phase.NIGHT:
@@ -555,22 +561,22 @@ class Puzzle:
             player._extract_info() for player in self.players
         ))
 
-        script = set(
+        self.script = set(
             [p.claim for p in self.players]
             + hidden_characters
             + self.hidden_self
         )
         self.setup_order = [
             character for character in characters.GLOBAL_SETUP_ORDER
-            if character in script
+            if character in self.script
         ]
         self.night_order = [
             character for character in characters.GLOBAL_NIGHT_ORDER
-            if character in script
+            if character in self.script
         ]
         self.day_order = [
             character for character in characters.GLOBAL_DAY_ORDER
-            if character in script
+            if character in self.script
         ]
 
     def _validate_inputs(self):
@@ -742,14 +748,18 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
 
 
 def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
+    """
+    Filter solutions, e.g., deduplicating by identical starting characters.
+    """
     if not puzzle.deduplicate_initial_characters:
         yield from solutions
-    else:
-        seen_solutions = set()
-        for solution in solutions:
-            if solution.initial_characters not in seen_solutions:
-                seen_solutions.add(solution.initial_characters)
-                yield solution
+        return
+
+    seen_solutions = set()
+    for solution in solutions:
+        if solution.initial_characters not in seen_solutions:
+            seen_solutions.add(solution.initial_characters)
+            yield solution
 
     
 def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
@@ -782,7 +792,7 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
     """Top level solver method, accepts a puzzle and generates solutions."""
 
     if num_processes is None:
-        num_processes = os.cpu_count()
+        num_processes = 1 if _DEBUG else os.cpu_count()
 
     if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
         # Non-parallel version just runs everything in one process.
@@ -816,7 +826,6 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
         worker.start()
 
     solutions = _solution_collecting_worker(solutions_queue, num_processes)
-    solutions = _filter_solutions(puzzle, solutions)
     yield from _filter_solutions(puzzle, solutions)
         
     for worker in all_workers:

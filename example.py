@@ -55,6 +55,7 @@ if __name__ == '__main__':
         deduplicate_initial_characters=True,
     )
 
+
     print(puzzle, '\n\nSolving...\n')
     count = 0
     for world in solve(puzzle):

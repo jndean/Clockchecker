@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 import enum
 import itertools
@@ -10,7 +9,7 @@ from typing import ClassVar, TYPE_CHECKING
 from clockchecker.info import PlayerID
 
 if TYPE_CHECKING:
-    from .core import State, StateGen, Player
+    from .core import Player, State, StateGen
     from .info import PlayerID, ExternalInfo, STBool
 
 from . import core
@@ -720,20 +719,100 @@ class Dreamer(Character):
             )
 
 @dataclass
-class Drunk(Character):
+class Drunklike(Character):
+    """
+    A base class for characters that think they have the behaviour of another
+    character but don't (Drunk, Marionette, Lunatic). Upon any action, forks the
+    current world state and simulates the character's assumed behaviour in a
+    fake world, thus computing correct wake patterns/picks without mutating the
+    real world state or requiring other character implementations to implement
+    Drunk-specific behaviour.
+    """
+    is_liar: ClassVar[bool] = True
+
+    simulated_character: Character | None = None
+
+    @property
+    def wake_pattern(self):
+        return self.simulated_character.wake_pattern
+
+    def _create_simulation(
+        self,
+        state: State,
+        me: PlayerID,
+    ) -> tuple[State, Character]:
+        """Create a parallel world where the Drunklike really has the ability"""
+        sim_state = state.fork()
+        sim_player = sim_state.players[me]
+        sim_player.character = sim_player.character.simulated_character
+        return sim_state, sim_player.character
+
+    def _extract_from_simulation(
+        self,
+        state: State,
+        simulation: State,
+        me: PlayerID
+    ):
+        """Copy useful info from simulation back to real state."""
+        real_player = state.players[me]
+        sim_player = simulation.players[me]
+        if hasattr(sim_player.character, 'spent'):
+            real_player.character.spent = sim_player.character.spent
+        real_player.character.simulated_character = sim_player.character
+
+    def _worth_simulating(self, state: State):
+        """
+        The simulations require expensive deepcopys, and are only relevant for
+        a slim few character interactions. So it's worth filtering out some
+        basic cases where the output is obviously irrelevant.
+        """
+        return (
+            Chambermaid in state.puzzle.script
+            and self.simulated_character.wake_pattern in (
+                WakePattern.MANUAL,
+                WakePattern.EACH_NIGHT_UNTIL_SPENT,
+            )
+        )
+
+    def _run_simulation(self, state: State, me: PlayerID) -> StateGen:
+        """Run fake ability in simulated world, extract real-world effects."""
+        if not self._worth_simulating(state):
+            state.players[me].character.spent = False
+            yield state
+            return
+
+        sim_state, sim_character = self._create_simulation(state, me)
+        match state.current_phase:
+            case core.Phase.SETUP:
+                simulation = sim_character.run_setup(sim_state, me)
+            case core.Phase.NIGHT:
+                simulation = sim_character.run_night(sim_state, state.night, me)
+
+        no_substates = True
+        for sim_substate in simulation:
+            substate = state if sim_substate is sim_state else state.fork()
+            self._extract_from_simulation(substate, sim_substate, me)
+            yield substate
+            no_substates = False
+        if no_substates:
+            self._extract_from_simulation(state, sim_state, me)
+            yield state
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        yield from self._run_simulation(state, me)
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        yield from self._run_simulation(state, me)
+
+@dataclass
+class Drunk(Drunklike):
     """
     You do not know you are the Drunk. 
     You think you are a Townsfolk character, but you are not.
     """
     category: ClassVar[Categories] = OUTSIDER
-    is_liar: ClassVar[bool] = True
-    # wake_pattern is decided during run_setup
 
     self_droison: bool = True
-
-    # TODO: Drunk goes through the motions of the claimed character to determine
-    # e.g. if it is spent and should no longer be waking.
-    spent: bool = False
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
@@ -745,11 +824,9 @@ class Drunk(Character):
             else Reason.CHARACTER_CHANGE
         )
         self.maybe_activate_effects(state, me, setup_reason)
-        self.wake_pattern = drunk.claim.wake_pattern
-        yield state
 
-    # def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
-    #     yield state
+        self.simulated_character = drunk.claim()
+        yield from super().run_setup(state, me)
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         state.players[me].droison_count += 1
@@ -1292,34 +1369,42 @@ class LordOfTyphon(GenericDemon):
             yield state
 
 @dataclass
-class Lunatic(Character):
+class Lunatic(Drunklike):
     """
     You think you are the Demon, but you are not.
     The demon knows who you are & who you chose at night.
-    TODO: Not quite properly implemented yet - see todo.md
     """
     category: ClassVar[Categories] = OUTSIDER
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        """Create world for each choice of claimed demon."""
+        for demon in state.puzzle.demons:
+            substate = state.fork()
+            new_lunatic = substate.players[me].character
+            new_lunatic.simulated_character = demon()
+            yield from super().run_setup(substate, me)
+
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
         """
-        Override Reason: Poisoned Lunatic doesn't tell the Demon their kill
+        TODO: Poisoned Lunatic doesn't tell the Demon their kill
         choice, so should tick Mathematician number up.
         TODO: Lunatic-Mathematician jinx, if the Lunatic's kill choice is not
-        followed by the demon, the Math number increments. Currntly don't model
-        Lunatic kill choices.
+        followed by the demon, the Math number increments. Currently there are
+        no puzzles where the Lunatic claims Lunatic and reveals their kill
+        choices, so this is not modelled.
         """
+        yield from super().run_night(state, night, me)
 
 @dataclass
-class Marionette(Character):
+class Marionette(Drunklike):
     """
     You think you are a good character, but you are not. 
     The Demon knows who you are. [You neighbor the Demon]
     """
     category: ClassVar[Categories] = MINION
     is_liar: ClassVar[bool] = True
-    # wake_pattern is decided during run_setup
 
     @staticmethod
     def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
@@ -1338,8 +1423,9 @@ class Marionette(Character):
                 return
             if demon_neighbour is info.MAYBE:
                 state.math_misregistration()  # e.g. Recluse-Mario triggers Math
-        self.wake_pattern = state.players[me].claim.wake_pattern
-        yield state
+
+        self.simulated_character = state.players[me].claim()
+        yield from super().run_setup(state, me)
 
 @dataclass
 class Mathematician(Character):
@@ -1636,6 +1722,18 @@ class Philosopher(Character):
         if self.active_ability is None:
             return super().cant_die(state, me)
         return self.active_ability.cant_die(state, me)
+
+    @property
+    def spent(self):
+        if self.active_ability is None:
+            return None
+        return getattr(self.active_ability, 'spent', None)
+
+    @spent.setter
+    def spent(self, value):
+        if self.active_ability is None:
+            return
+        self.active_ability.spent = value
 
 @dataclass
 class Po(GenericDemon):
@@ -2166,7 +2264,7 @@ class Seamstress(Character):
     """
     category: ClassVar[Categories] = TOWNSFOLK
     is_liar: ClassVar[bool] = False
-    wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
 
     spent: bool = False
 
@@ -2784,23 +2882,3 @@ INACTIVE_CHARACTERS = [
     Spy,
     Virgin,
 ]
-
-
-def get_character_phase_order_idx(
-    global_order: Sequence[type[Character]],
-    character: type[Character],
-) -> int:
-    try:
-        return global_order.index(character)
-    except ValueError:
-        return 999999
-
-def get_player_phase_order_idx(
-    global_order: Sequence[type[Character]],
-    state: State,
-    player: PlayerID,
-) -> int:
-    for i, character in enumerate(global_order):
-        if info.acts_like(state, player, character):
-            return i
-    return 999999

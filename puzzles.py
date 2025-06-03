@@ -1947,8 +1947,46 @@ def puzzle_nqt41():
     )
     return puzzle, solutions, None
 
+# TODO: nqt42
 
-def puzzle_nqt43_alt():
+def puzzle_nqt43():
+    # TODO: URL unpublished for puzzle "Too Many Cooks".
+    You, Anna, Josh, Tom, Sarah, Matthew, Fraser, Steph = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Steph, Drunk),
+            }),
+            Player('Anna', claim=Investigator, night_info={
+                1: Investigator.Ping(Josh, Sarah, ScarletWoman),
+            }),
+            Player('Josh', claim=Chef, night_info={
+                1: Chef.Ping(2),
+            }),
+            Player('Tom', claim=Chef, night_info={
+                1: Chef.Ping(1),
+            }),
+            Player('Sarah', claim=Recluse),
+            Player('Matthew', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Tom, Fraser, demon=False),
+                2: FortuneTeller.Ping(Josh, Matthew, demon=False),
+            }),
+            Player('Fraser', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Steph', claim=Saint),
+        ],
+        day_events={1: Execution(Fraser), 2: Execution(Matthew)},
+        night_deaths={2: You, 3: Steph},
+        hidden_characters=[Imp, Poisoner, Spy, ScarletWoman, Baron, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions=(
+        (Drunk, Imp, Baron, Chef, Recluse, FortuneTeller, Empath, Saint),
+    )
+    return puzzle, solutions, None
+
+def puzzle_nqt_prodigy_alt1():
     # Unreleased Solar/Lunar Prodigy puzzle, because it has unintended solutions
     You, Fraser, Sula, Adam, Oscar, Jasmine, Anna, Steph = range(8)
     puzzle = Puzzle(
@@ -2001,6 +2039,157 @@ def puzzle_nqt43_alt():
     )
     return puzzle, solutions, None
 
+
+def puzzle_nqt_prodigy_alt2():
+    # Unreleased Solar/Lunar Prodigy puzzle
+    You, Olivia, Sarah, Tim, Fraser, Steph, Matt, Dan = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Matt: Leviathan,
+                        Olivia: ScarletWoman,
+                    }
+                )},
+                night_info={2: Juggler.Ping(0)},
+            ),
+            Player('Olivia', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Sarah', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Tim, Dan, demon=False),
+                2: FortuneTeller.Ping(Tim, Fraser, demon=False),
+                3: FortuneTeller.Ping(You, Steph, demon=True),
+            }),
+            Player('Tim', claim=Noble, night_info={
+                1: Noble.Ping(You, Olivia, Fraser),
+            }),
+            Player('Fraser', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False),
+            }),
+            Player('Steph', claim=Investigator, night_info={
+                1: Investigator.Ping(Fraser, Matt, ScarletWoman),
+            }),
+            Player('Matt', claim=Progidy, night_info={
+                1: Progidy.Ping(Dan, Tim),
+                2: Progidy.Ping(Sarah, Dan),
+                3: Progidy.Ping(Sarah, Steph),
+            }),
+            Player('Dan', claim=Progidy, night_info={
+                1: Progidy.Ping(Steph, Olivia),
+                2: Progidy.Ping(Fraser, Matt),
+                3: Progidy.Ping(Steph, Fraser),
+            }),
+        ],
+        hidden_characters=[Leviathan, ScarletWoman, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions=(
+        (Juggler, Leviathan, FortuneTeller, Drunk, ScarletWoman, Investigator, 
+            Progidy, Progidy),
+    )
+    return puzzle, solutions, None
+
+def puzzle_ali_adversarial1():
+    # A puzzle made by a hater.
+    You, Edd, Riley, Gina, Adam, Katharine, Chris, Josef = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False)
+            }),
+            Player('Edd', claim=Noble, night_info={
+                1: Noble.Ping(You, Riley, Katharine),
+            }),
+            Player('Riley', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Adam, Chris, same=False),
+            }),
+            Player('Gina', claim=Investigator, night_info={
+                1: Investigator.Ping(Adam, Josef, Goblin),
+            }),
+            Player('Adam', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(You, Riley, Seamstress),
+            }),
+            Player('Katharine', claim=Knight, night_info={
+                1: Knight.Ping(Chris, Josef),
+            }),
+            Player('Chris', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Riley, Josef, same=True),
+            }),
+            Player('Josef', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(Riley, Chris, 2),
+                2: Chambermaid.Ping(Riley, Chris, 2),
+                3: Chambermaid.Ping(Riley, Chris, 0),
+            }),
+        ],
+        day_events={
+            1: Execution(Edd),
+            2: Execution(Gina)
+        },
+        night_deaths={2: Adam, 3: Katharine},
+        hidden_characters=[Imp, Goblin, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Shugenja, Noble, Imp, Investigator, Drunk, Knight, Seamstress, Goblin),
+    )
+    return puzzle, solutions, None
+
+def puzzle_ali_adversarial2():
+    # A puzzle made by a hater.
+    You, Gina, Chris, Adam, Riley, Edd, Josef, Katharine = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Gina: Imp,
+                        Adam: Seamstress,
+                        Edd: Washerwoman,
+                        Josef: Goblin,
+                        Katharine:Goblin,
+                    })
+                },
+                night_info={2: Juggler.Ping(1)}
+            ),
+            Player('Gina', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Chris, Josef, same=False),
+            }),
+            Player('Chris', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False)
+            }),
+            Player('Adam', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Edd, Josef, same=False),
+            }),
+            Player('Riley', claim=Knight, night_info={
+                1: Knight.Ping(Chris, Josef),
+            }),
+            Player('Edd', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Gina, Adam, Seamstress),
+            }),
+            Player('Josef', claim=Noble, night_info={
+                1: Noble.Ping(Chris, Riley, Katharine),
+            }),
+            Player('Katharine', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(Adam, Edd, 1),
+                2: Chambermaid.Ping(Adam, Edd, 2),
+                3: Chambermaid.Ping(Gina, Josef, 0),
+            }),
+        ],
+        day_events={
+            1: Execution(Chris),
+            2: Execution(Adam)
+        },
+        night_deaths={2: Riley, 3: You},
+        hidden_characters=[Imp, Goblin, Drunk],
+        hidden_self=[Drunk],
+        allow_good_double_claims=False,
+    )
+    solutions=((
+        Juggler, Goblin, Shugenja, Seamstress, Knight, Imp, Drunk, Chambermaid
+    ),)
+    return puzzle, solutions, None
 
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
