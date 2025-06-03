@@ -365,11 +365,9 @@ def acts_like(
     if has_ability_of(state, player_id, character):
         return True
     player = state.players[player_id]
-    if type(player.character) in (
-        characters.Drunk,
-        characters.Marionette,
-    ):
-        return player.claim is character
+    simulated_character = getattr(player.character, 'simulated_character', None)
+    if simulated_character is not None:
+        return isinstance(simulated_character, character)
     # TODO: Lunatic currently doesn't decide what demon they think they are.
     return False
 

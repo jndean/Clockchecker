@@ -30,25 +30,18 @@
 
 	- If the NoDashii's poisoned neighbours are changed to non-townsfolk, currently nothing prompts the NoDashii to update who it is poisoning
 
-	- RN, Pings don't generally check that their callers are actually the
-	corresponding character. This will become more relevant when TF can become evil?
-
-	- Pukka shouldn't stop poisoning on end_day
-
 	- Not respecting the jinx on cannibal/juggler. What a ridiculous jinx!
 
 	- EvilTwin is doesn't pick a new twin if they change alignment
+
+	- Not respecting Lunatic-Mathematician jinx.
 
 	- The Mathematician implementation can't handle the possibiliy of an evil Townsolk learning incorrect info.
 
 	- In general, Mathematician is implemented badly. Currently only "first-degree" math numbers are counted, e.g. during run_night, an ability doesn't work on the spot. However, a drunk Poisoner, Xaan, No Dashii etc who is failing to poison their target should increment the count, but only at the moment that their target's ability _does_ work. This happens at an arbitrary point later, and is not implemented. Also, the No Dashii failing to kill ticks up the Math number, and this would need to be deduplicated with the them failing to poison their neighbour (since Math counts players who misfired tonight, not number of misfires). Similarly, a droisoned Monk or Soldier failing to protect from the demon won't Math right...
 	The Spy misregistering as good is detected fine by Mathematician, but a drunk Spy _not_ misregistering as good when they would normally is _not_ picked up by Math.
 
-	- Should implement run_night for Lunatic so it can call decide_if_woke_tonight for the demon they think they are (make decide_if_woke_tonight accept a 
-	character, rather than a player). This should also be respected in `info.behaves_like`.
-	Perhaps Lunatic.run_setup should generate a world for each choice of demon? May require separation of Puzzle and State. This would also help implement the Lunatic-Mathematician jinx which is currently ignored :)
-
-	- IsCategory(Spy, TOWNSFOLK) returns MAYBE but IsCategory(Spy, MINION) 
+	- EASY FIX: IsCategory(Spy, TOWNSFOLK) returns MAYBE but IsCategory(Spy, MINION) 
 	returns TRUE, should be able to misregister!
 
 	- Nobody f***ing knows the exact ruling on how Vortox affects 

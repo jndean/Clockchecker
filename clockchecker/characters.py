@@ -1959,10 +1959,6 @@ class Pukka(Character):
                     substate.players[self.target].undroison(substate, me)
                     yield substate
 
-    def end_day(self, state: State, day: int, me: PlayerID) -> bool:
-        self.maybe_deactivate_effects(state, me)
-        return True
-
     def _activate_effects_impl(self, state: State, me: PlayerID):
         state.players[self.target].droison(state, me)
 
@@ -2802,6 +2798,7 @@ GLOBAL_SETUP_ORDER = [
     Puzzlemaster,
     FortuneTeller,
     VillageIdiot,
+    Lunatic,
     Progidy,
     Drunk,
     Soldier,
