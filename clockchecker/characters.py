@@ -148,12 +148,12 @@ class Character:
             yield state
 
     def end_day(self, state: State, day: int, me: PlayerID) -> bool:
-            """
-            Take dusk actions (e.g. poisoner stops poisoning).
-            Can return False to invalidate the world, e.g., Vortox uses this to 
-            reject worlds with no executions.
-            """
-            return True
+        """
+        Take dusk actions (e.g. poisoner stops poisoning).
+        Can return False to invalidate the world, e.g., Vortox uses this to 
+        reject worlds with no executions.
+        """
+        return True
 
     def default_info_check(
         self: Character, 
@@ -198,8 +198,8 @@ class Character:
     ) -> None:
         """
         Effects that this character is having on other players. Needs to be 
-        triggerable under one method so that e.g. a poisoner dying at night can
-        reactivate that poisoner's current victim.
+        triggerable under one method so that e.g. a Poisoner dying at night can
+        reactivate that Poisoner's current victim.
         If a character doesn't want this wrapper logic, it can override this 
         method rather than the _impl method.
         """
@@ -467,7 +467,6 @@ class Balloonist(Character):
             yield state
         elif differ is not info.FALSE:
             yield state
-
 
 @dataclass
 class Baron(Character):
@@ -763,8 +762,8 @@ class Drunklike(Character):
     def _worth_simulating(self, state: State):
         """
         The simulations require expensive deepcopys, and are only relevant for
-        a slim few character interactions. So it's worth filtering out some
-        basic cases where the output is obviously irrelevant.
+        a few character interactions. So it's worth filtering out some basic
+        cases where the output is obviously irrelevant.
         """
         return (
             Chambermaid in state.puzzle.script
@@ -890,15 +889,17 @@ class EvilTwin(Character):
             else 1
         )
         twin_alignment = ~info.IsEvil(me)(state, me)
+
+        all_good_twin_claims = state.puzzle.external_info_registry.get(
+            (EvilTwin, night_idx), []
+        )
         for player_id in range(len(state.players)):
             # Only players of opposing alignment can be twins
             if not (info.IsEvil(player_id)(state, me) is twin_alignment):
                 continue
             claims_good_twin = any(
-                (isinstance(ex_info, EvilTwin.Is) and ex_info.eviltwin == me)
-                for ex_info in state.players[player_id].external_night_info.get(
-                    (night_idx, EvilTwin), []
-                )
+                (_pid == player_id and claim.eviltwin == me)
+                for claim, _pid in all_good_twin_claims
             )
             if not (claims_good_twin or info.behaves_evil(state, player_id)):
                 continue
@@ -1495,7 +1496,7 @@ class NightWatchman(Character):
         nightwatchman = state.players[me]
         if nightwatchman.is_evil or state.vortox:
             raise NotImplementedError(
-                "When to spend if evil, or vortox giving incorrect ping source."
+                "When to be spent if evil, or vortox giving incorrect ping src."
             )
         ping = state.get_night_info(NightWatchman, me, night)
         if ping is None:
@@ -2524,19 +2525,20 @@ class Undertaker(Character):
             assert state.night > 1, "Undertaker acts from second night."
             assert (self.character is None) == (self.player is None)
 
-            previous_day_events = state.day_events.get(state.night - 1, [])
+            yesterday = state.night - 1
+            yesterdays_events = state.puzzle.day_events.get(yesterday, [])
             if self.player is None:
                 return STBool(
                     not any(
                         isinstance(e, events.Execution) and e.died 
-                        for e in previous_day_events
+                        for e in yesterdays_events
                     )
                 )
             elif any(
                 isinstance(event, events.Execution)
                 and event.player == self.player
                 and event.died
-                for event in previous_day_events
+                for event in yesterdays_events
             ):
                 return info.IsCharacter(self.player, self.character)(state, src)
             return info.FALSE
@@ -2560,6 +2562,72 @@ class Washerwoman(Character):
                 info.IsCharacter(self.player1, self.character)(state, src) |
                 info.IsCharacter(self.player2, self.character)(state, src)
             )
+
+@dataclass
+class Widow(Character):
+    """
+    On your 1st night, look at the Grimoire & choose a player:
+    they are poisoned. 1 good player knows a Widow is in play.
+    """
+    category: ClassVar[Categories] = MINION
+    is_liar: ClassVar[bool] = True
+    wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
+
+    target: PlayerID | None = None
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        if state.current_phase is not core.Phase.SETUP:
+            yield from self._run_creation(state, me, Reason.CHARACTER_CHANGE)
+
+    def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:
+        if state.night == 1:
+            yield from self._run_creation(state, me, None)
+
+    def _run_first_night(
+        self,
+        state: State,
+        me: PlayerID,
+        reason: Reason
+    ) -> StateGen:
+        """
+        Run the Widow's first night. On the first night of the game this
+        happens just after the Poisoner (according to night order), but if
+        created mid-game it (as far as I can see) always happens at the moment
+        of creation, ignoring night-order.
+        """
+        raise NotImplementedError('Widow not finished')
+        # TODO: This impl doesn't reject worlds where two good players claim
+        # to have been told about 1 Widow.
+        for pid, player in enumerate(state.players):
+            if (
+                not player.is_evil
+                and state.get_night_info(Widow, pid, state.night) is not None
+            ):
+                widow_ping = True
+                break
+        else:
+            widow_ping = False
+
+        for target in range(len(state.players)):
+            substate = state.fork()
+            widow = substate.players[me]
+            widow.character.target = target
+            widow.character.maybe_activate_effects(substate, me, reason)
+            if widow.droison_count == 0 and not widow_ping:
+                pass
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.target == me:
+            state.players[me].droison_count += 1
+        elif self.target is not None:
+            state.players[self.target].droison(state, me)
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.target == me:
+            state.players[me].droison_count -= 1
+        elif self.target is not None:
+            state.players[self.target].undroison(state, me)
+
 
 @dataclass
 class Witch(Character):
@@ -2674,7 +2742,7 @@ class Vortox(GenericDemon):
         yield state
 
     def end_day(self, state: State, day: int, me: PlayerID) -> bool:
-        events_ = state.day_events.get(day, [])
+        events_ = state.puzzle.day_events.get(day, [])
         return any(isinstance(ev, events.Execution) for ev in events_)
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
@@ -2739,7 +2807,7 @@ class Xaan(Character):
         if xaan.droison_count and trues:
             # This is a best-effort at maintining Mathematician count, but
             # technically should only really trigger if one of the targets
-            # doesn't misfire tonight. See TODO.
+            # doesn't misfire tonight. See todo.md.
             state.math_misregistration()
 
         for maybe_subset in itertools.chain.from_iterable(
@@ -2812,6 +2880,7 @@ GLOBAL_NIGHT_ORDER = [
     Xaan,
     Leviathan,
     Poisoner,
+    Widow,
     Courtier,
     Gambler,
     Acrobat,

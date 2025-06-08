@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Iterable, Mapping
 from collections import Counter, defaultdict
-from contextlib import nullcontext
 from copy import copy, deepcopy
 from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
-from typing import Any, Callable, TypeAlias
+from typing import Any, TypeAlias
 
 try:
     from multiprocessing import Queue, Process
@@ -31,7 +30,7 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    (179, 4, 3),
+    # (48, 0, 2, 1, 1),
 ]
 
 
@@ -113,7 +112,6 @@ class Player:
 
                 if isinstance(item, characters.Philosopher.Choice):
                     all_claims.add(item.character)
-
                 if (character := info.info_creator(item)) in all_claims:
                     assert (night, character) not in self.night_info, (
                         "One info per night from own ability (for now?)."
@@ -125,52 +123,21 @@ class Player:
         self.external_night_info = dict(self.external_night_info)
     
     def _extract_info(self):
+        # TODO: These should be created in Puzzle, not State, obviously.
         night_info, day_info = self.night_info, self.day_info
+        ext_night_info = self.external_night_info
         del self.night_info
         del self.day_info
-        return night_info, day_info
+        del self.external_night_info
+        return night_info, day_info, ext_night_info
 
 
 @dataclass
 class State:
     puzzle: Puzzle
     players: list[Player]
-    day_events: dict[int, list[Event]]
-    night_deaths: dict[int, list[PlayerID]]
 
     def __post_init__(self):
-        """
-        Post-process the human-entered state representation for the machine.
-        Called before worlds are posited by overriding these characters.
-        """
-        for i, player in enumerate(self.players):
-            player.id = i
-        assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
-        # Make entering night deaths neater by accepting bare ints 
-        for night, deaths in self.night_deaths.items():
-            if not isinstance(deaths, Iterable):
-                deaths = [deaths]
-            for i, death in enumerate(deaths):
-                if not isinstance(death, events.NightEvent):
-                    assert isinstance(death, int), "Bad night_deaths value."
-                    deaths[i] = events.NightDeath(death)
-            self.night_deaths[night] = deaths
-        for day, events_ in self.day_events.items():
-            if isinstance(events_, events.Event):
-                self.day_events[day] = [events_]
-
-        for player in self.players:
-            # Events can be entered in Player.day_info or in State.day_events,
-            # b/c that feels nice. Move them all to one place before solving.
-            for day, maybe_event in list(player.day_info.items()):
-                if isinstance(maybe_event, events.Event):
-                    del player.day_info[day]
-                    maybe_event.player = player.id
-                    if day in self.day_events:
-                        self.day_events[day].insert(0, maybe_event)
-                    else:
-                        self.day_events[day] = [maybe_event]
-
         if _DEBUG:
             self.debug_key = ()  # The root debug key
 
@@ -318,7 +285,9 @@ class State:
         another player (e.g. Nightwatchman, Evil Twin).
         """
         for state in states:
-            externals = state.external_info_registry.get((character, night), [])
+            externals = state.puzzle.external_info_registry.get(
+                (character, night), []
+            )
             for external_info, player_id in externals:
                 if not state.players[player_id].character.run_night_external(
                     state, external_info, player_id
@@ -328,7 +297,7 @@ class State:
                 yield state
 
     def run_event(self, round_: int, event: int) -> StateGen:
-        events = self.day_events.get(round_, None)
+        events = self.puzzle.day_events.get(round_, None)
         if events is None:
             yield self
         else:
@@ -354,8 +323,8 @@ class State:
             for player in range(len(self.players))
         ]
         currently_alive_gt = copy(self.previously_alive)
-        if self.night in self.night_deaths:
-            for death in self.night_deaths[self.night]:
+        if self.night in self.puzzle.night_deaths:
+            for death in self.puzzle.night_deaths[self.night]:
                 # `death` can either be a NightDeath or a NightResurrection
                 # Deaths/Resurrections require players to be alive/dead resp.
                 previously_alive_gt = isinstance(death, events.NightDeath)
@@ -422,22 +391,10 @@ class State:
 
     def update_character_callbacks(self):
         """Re-gather callbacks after character changes"""
-
-        # Death_in_town callback registration
         self.pre_death_in_town_callback_players = []
         for player_id, player in enumerate(self.players):
             if hasattr(player.character, "pre_death_in_town"):
                 self.pre_death_in_town_callback_players.append(player_id)
-        
-        # External info retrieval 
-        self.external_info_registry = defaultdict(list)
-        for player in self.players:
-            for (night, character), items in player.external_night_info.items():
-                for item in items:
-                    self.external_info_registry[(character, night)].append(
-                        (item, player.id)
-                    )
-        self.external_info_registry = dict(self.external_info_registry)
     
     def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
         assert self.current_phase is Phase.NIGHT
@@ -467,13 +424,21 @@ class State:
         yield self
 
     def check_game_over(self) -> bool:
-        # TODO: evil win condition. Doesn't actually come up much when solving.
+        # TODO: Check evil win condition? Doesn't come up much when solving...
         all_demons_dead = not any(
             p.character.category is characters.DEMON and not p.is_dead
             for p in self.players
         )
-        # TODO: Add Evil Twin / Mastermind check here.
-        game_over = all_demons_dead  
+        no_evil_twin = not any(
+            (
+                isinstance(p.character, characters.EvilTwin)
+                and not p.is_dead
+                and p.droison_count == 0
+            )
+            for p in self.players
+        )
+        # TODO: Mastermind day.
+        game_over = all_demons_dead and no_evil_twin
         return game_over
     
     def math_misregistration(self, result: info.STBool | None = None):
@@ -527,6 +492,7 @@ class Puzzle:
     finish_final_day: bool = False
 
     def __post_init__(self, hidden_characters):
+        """Finish building Puzzle representation from user inputs."""
         if self.category_counts is None:
             self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
                 len(self.players)
@@ -556,11 +522,48 @@ class Puzzle:
         self._max_day = max(self._max_day, self._max_night - 1)
         self.finish_final_day |= (self._max_day < self._max_night)
 
-        self._state = State(self, self.players, self.day_events, self.night_deaths)
-        self._night_info, self._day_info = zip(*(
+        for i, player in enumerate(self.players):
+            player.id = i
+
+        # Make entering night deaths neater by accepting bare ints
+        for night, deaths in self.night_deaths.items():
+            if not isinstance(deaths, Iterable):
+                deaths = [deaths]
+            for i, death in enumerate(deaths):
+                if not isinstance(death, events.NightEvent):
+                    assert isinstance(death, int), "Bad night_deaths value."
+                    deaths[i] = events.NightDeath(death)
+            self.night_deaths[night] = deaths
+        for day, events_ in self.day_events.items():
+            if isinstance(events_, events.Event):
+                self.day_events[day] = [events_]
+
+        # Events can be entered in Player.day_info or in State.day_events,
+        # b/c that feels nice. Move them all to one place before solving.
+        for player in self.players:
+            for day, maybe_event in list(player.day_info.items()):
+                if isinstance(maybe_event, events.Event):
+                    del player.day_info[day]
+                    maybe_event.player = player.id
+                    if day in self.day_events:
+                        self.day_events[day].insert(0, maybe_event)
+                    else:
+                        self.day_events[day] = [maybe_event]
+        self._night_info, self._day_info, _external_night_info = zip(*(
             player._extract_info() for player in self.players
         ))
 
+        # External info retrieval
+        self.external_info_registry = defaultdict(list)
+        for pid, ext_info in enumerate(_external_night_info):
+            for (night, character), items in ext_info.items():
+                for item in items:
+                    self.external_info_registry[(character, night)].append(
+                        (item, pid)
+                    )
+        self.external_info_registry = dict(self.external_info_registry)
+
+        # Compute script and character orderings.
         self.script = set(
             [p.claim for p in self.players]
             + hidden_characters
@@ -578,6 +581,7 @@ class Puzzle:
             character for character in characters.GLOBAL_DAY_ORDER
             if character in self.script
         ]
+        self.state_template = State(self, self.players)
 
     def _validate_inputs(self):
         """
@@ -618,6 +622,8 @@ class Puzzle:
         for character in self.minions:
             if character.category is not characters.MINION:
                 raise ValueError(f'{character.__name__} is not a Minion')
+
+        assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
     
     def __str__(self) -> str:
         ret = ['Puzzle(\n  \033[0;4mPlayers\033[0m']
@@ -716,7 +722,7 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         ):
             continue
         # Create the world and place the hidden characters
-        world = puzzle._state.fork(debug_idx)
+        world = puzzle.state_template.fork(debug_idx)
         for liar, position in zip(liar_characters, liar_positions):
             world.players[position].character = liar()
             world.players[position].is_evil = liar.category in (

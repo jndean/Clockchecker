@@ -1861,6 +1861,7 @@ def puzzle_nqt39():
     )
     return puzzle, solutions, None
 
+
 def puzzle_nqt40():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1klqy8j/weekly_puzzle_40_nine_lives/
     You, Matthew, Steph, Jasmine, Hannah, Fraser, Tim, Josh, Adam = range(9)
@@ -1947,7 +1948,9 @@ def puzzle_nqt41():
     )
     return puzzle, solutions, None
 
+
 # TODO: nqt42
+
 
 def puzzle_nqt43():
     # TODO: URL unpublished for puzzle "Too Many Cooks".
@@ -1985,6 +1988,7 @@ def puzzle_nqt43():
         (Drunk, Imp, Baron, Chef, Recluse, FortuneTeller, Empath, Saint),
     )
     return puzzle, solutions, None
+
 
 def puzzle_nqt_prodigy_alt1():
     # Unreleased Solar/Lunar Prodigy puzzle, because it has unintended solutions
@@ -2091,6 +2095,61 @@ def puzzle_nqt_prodigy_alt2():
     )
     return puzzle, solutions, None
 
+
+def puzzle_josef_yes_but_dont():
+    # A puzzle that relies on the ScarletWoman catching a Recluse death
+    You, Ali, Edd, Riley, _, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Zak, Soldier),
+            }),
+            Player('Ali', claim=Slayer, day_info={
+                1: Slayer.Shot(Riley, died=False),
+            }),
+            Player('Edd', claim=Saint),
+            Player('Riley', claim=Investigator, night_info={
+                1: Investigator.Ping(Katharine, Jodie, ScarletWoman),
+            }),
+            Player('Adam', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Ali, True),
+                2: FortuneTeller.Ping(Jodie, Katharine, True),
+                3: FortuneTeller.Ping(Tom, Zak, True),
+            }),
+            Player('Gina', claim=Recluse),
+            Player('Katharine', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+                3: Empath.Ping(1),
+            }),
+            Player('Tom', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Gina, Imp),
+                3: Undertaker.Ping(Jodie, Slayer),
+            }),
+            Player('Zak', claim=Soldier),
+            Player('Jodie', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Jesal', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Katharine, Zak, Empath),
+            })
+        ],
+        day_events={
+            1: Execution(Gina),
+            2: Execution(Jodie),
+        },
+        night_deaths={2: Edd, 3: You},
+        hidden_characters=[Imp, Spy, ScarletWoman],
+        hidden_self=[],
+        deduplicate_initial_characters=True,
+    )
+    solutions=(
+        (Ravenkeeper, Slayer, Imp, Investigator, FortuneTeller, Recluse, Empath,
+            Spy, Soldier, ScarletWoman, Washerwoman),
+    )
+    return puzzle, solutions, None
+
+
 def puzzle_ali_adversarial1():
     # A puzzle made by a hater.
     You, Edd, Riley, Gina, Adam, Katharine, Chris, Josef = range(8)
@@ -2135,6 +2194,7 @@ def puzzle_ali_adversarial1():
         (Shugenja, Noble, Imp, Investigator, Drunk, Knight, Seamstress, Goblin),
     )
     return puzzle, solutions, None
+
 
 def puzzle_ali_adversarial2():
     # A puzzle made by a hater.
@@ -2189,59 +2249,6 @@ def puzzle_ali_adversarial2():
     solutions=((
         Juggler, Goblin, Shugenja, Seamstress, Knight, Imp, Drunk, Chambermaid
     ),)
-    return puzzle, solutions, None
-
-def puzzle_josef_yes_but_dont():
-    # A puzzle that relies on the ScarletWoman catching a Recluse death
-    You, Ali, Edd, Riley, _, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
-    puzzle = Puzzle(
-        players=[
-            Player('You', claim=Ravenkeeper, night_info={
-                3: Ravenkeeper.Ping(Zak, Soldier),
-            }),
-            Player('Ali', claim=Slayer, day_info={
-                1: Slayer.Shot(Riley, died=False),
-            }),
-            Player('Edd', claim=Saint),
-            Player('Riley', claim=Investigator, night_info={
-                1: Investigator.Ping(Katharine, Jodie, ScarletWoman),
-            }),
-            Player('Adam', claim=FortuneTeller, night_info={
-                1: FortuneTeller.Ping(You, Ali, True),
-                2: FortuneTeller.Ping(Jodie, Katharine, True),
-                3: FortuneTeller.Ping(Tom, Zak, True),
-            }),
-            Player('Gina', claim=Recluse),
-            Player('Katharine', claim=Empath, night_info={
-                1: Empath.Ping(0),
-                2: Empath.Ping(1),
-                3: Empath.Ping(1),
-            }),
-            Player('Tom', claim=Undertaker, night_info={
-                2: Undertaker.Ping(Gina, Imp),
-                3: Undertaker.Ping(Jodie, Slayer),
-            }),
-            Player('Zak', claim=Soldier),
-            Player('Jodie', claim=Chef, night_info={
-                1: Chef.Ping(0),
-            }),
-            Player('Jesal', claim=Washerwoman, night_info={
-                1: Washerwoman.Ping(Katharine, Zak, Empath),
-            })
-        ],
-        day_events={
-            1: Execution(Gina),
-            2: Execution(Jodie),
-        },
-        night_deaths={2: Edd, 3: You},
-        hidden_characters=[Imp, Spy, ScarletWoman],
-        hidden_self=[],
-        deduplicate_initial_characters=True,
-    )
-    solutions=(
-        (Ravenkeeper, Slayer, Imp, Investigator, FortuneTeller, Recluse, Empath,
-            Spy, Soldier, ScarletWoman, Washerwoman),
-    )
     return puzzle, solutions, None
 
 

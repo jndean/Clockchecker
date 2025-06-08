@@ -2,8 +2,6 @@
  - Why are there Categories, why do Characters not instead inherit from 4 subclasses of Character? Then Category checks are performed by isinstance?
  	- Would be a good time to switch to proper ABCs?
 
- - EASY: Move day_events, night_deaths from State to Puzzle
-
  - EASY: run_day and run_night methods on character needn't accept night/day argument, retreive that from state instead if required.
 
  - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
@@ -24,7 +22,13 @@
    - Vigormortis to update poisoned neighbours of killed minions
    - Xaan to poison new townsfolk
    - Philo to drunk new players with the same role
+ - Characters that would like to listen for alignment_changed events:
+   - Fortune Teller to change red herring
+   - Widow to update player who knows
+   - Evil twin to update good twin
+   - Etc
 
+ - I think one day I might need a GLOBAL_FIRST_NIGHT_ORDER and a GLOBAL_OTHER_NIGHT_ORDER.
 
 # Active Bugs To Fix:
 
