@@ -194,8 +194,8 @@ class State:
     ):
         return self.puzzle._night_info[player].get((night, character), None)
     
-    def get_day_info(self, player: PlayerID, day: int):
-        return self.puzzle._day_info[player].get(day, None)
+    def get_day_info(self, player: PlayerID):
+        return self.puzzle._day_info[player].get(self.day, None)
 
     def _is_world(self, key: tuple[int] | None = None) -> bool:
         """
@@ -257,12 +257,12 @@ class State:
             case Phase.NIGHT:
                 if characters.Chambermaid.player_wakes_tonight(self, pid):
                     player.woke()
-                states = player.character.run_night(self, self.night, pid)
+                states = player.character.run_night(self, pid)
                 states = State.run_external_night_info(
                     states, self.currently_acting_character, self.night
                 )
             case Phase.DAY:
-                states = player.character.run_day(self, self.day, pid)
+                states = player.character.run_day(self, pid)
             case Phase.SETUP:
                 states = player.character.run_setup(self, pid)
 
@@ -354,7 +354,7 @@ class State:
 
     def end_day(self) -> StateGen:
         for player in self.players:
-            if not player.character.end_day(self, self.day, player.id):
+            if not player.character.end_day(self, player.id):
                 return
         self.previously_alive = [
             info.IsAlive(player)(self, None) is info.TRUE

@@ -2,8 +2,6 @@
  - Why are there Categories, why do Characters not instead inherit from 4 subclasses of Character? Then Category checks are performed by isinstance?
  	- Would be a good time to switch to proper ABCs?
 
- - EASY: run_day and run_night methods on character needn't accept night/day argument, retreive that from state instead if required.
-
  - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
 
  - Seperately track night number and a character's personal night number
@@ -52,6 +50,7 @@
 	mis-registering characters, but I'm not happy with what is currently implemented. STBool.Maybe doesn't contain info about whether misinfo would be True or False, so it is not possible to infer which way the Vortox should push ST choices (if you believe the ST doesn't have misregistration choices in a vortox world).
 	A solution would be to make STBool have True, False True-That-Can-Misregister-As-False, and False-That-Can-Misregister-As-True. Maybe called TRUE, FALSE, SURE, NAH?
 	Having said that, the current system can correctly solve all the available vortox puzzles, so perhaps I'm ok leaving it for now...
+	- The 3-value bool is also slightly lacking for e.g. a FangGu to increment the Math number correctly. If a Fang Gu kills a Recluse or a Spy, they both register as Outsider with identical value MAYBE. But the Math number is incremented when the Spy is jumped to, whereas it is incremented when the Recluse is _not_ jumped to, and a single MAYBE requires us to add some slightly inelegant extra checks to detect which case we're in.
 
 	- For external info (Like Nightwatchman pings or Evil Twin sightings), if there are multuple instances of an external-info generating character then the first one will trigger the check for all such character info, possibly before the second instance of the character gets to make their choice so the world will be incorrectly rejects. This will be relevant if the Philosopher is ever implemented and chooses in-play abilities.
 
