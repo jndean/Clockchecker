@@ -1011,16 +1011,14 @@ class FangGu(GenericDemon):
 
             is_outsider = info.IsCategory(target, OUTSIDER)(state, me)
 
-            # 3. The normal kill world. This includes the case where they can't
-            # jump due to other player's abilities.
-            wouldnt_jump = (
-                getattr(state, 'fanggu_already_jumped', False)
-                or is_outsider is not info.TRUE
-            )
+            already_jumped = getattr(state, 'fanggu_already_jumped', False)
+            wouldnt_jump = already_jumped or (is_outsider is not info.TRUE)
             fails_jump = (
                 fanggu.character.safe_from_attacker(state, me, me)
                 or target_player.character.safe_from_attacker(state, target, me)
             )
+            # 3. The normal kill world. This includes the case where they can't
+            # jump due to other player's abilities.
             if wouldnt_jump or fails_jump:
                 kill_state = state.fork()
                 if (
@@ -1034,7 +1032,7 @@ class FangGu(GenericDemon):
                 kill_target = kill_state.players[target].character
                 yield from kill_target.attacked_at_night(kill_state, target, me)
                 # Let MAYBE through to also create a jump world
-                if is_outsider is info.FALSE:
+                if already_jumped or fails_jump or is_outsider is info.FALSE:
                     continue
 
             # 4. The world where the Fang Gu jumps.
@@ -1046,6 +1044,8 @@ class FangGu(GenericDemon):
             ):
                 jump_state.math_misregistration()
             for jump_substate in jump_state.character_change(target, FangGu):
+                new_fanggu = jump_substate.players[target]
+                new_fanggu.is_evil = True
                 new_me = jump_substate.players[me].character
                 new_me.death_explanation = f'Jumped N{jump_substate.night}'
                 yield from new_me.apply_death(jump_substate, me, src=me)
