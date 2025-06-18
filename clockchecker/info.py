@@ -315,6 +315,26 @@ def all_registration_combinations(
     ):
         yield trues + list(maybe_combination)
 
+def tf_candidates_in_direction(
+    state: State,
+    src: PlayerID,
+    direction: int,
+) -> list[PlayerID]:
+    """
+    Find all players that could register as the closest Townsfolk in a given
+    direction from a src player. Used by e.g. NoDashii and Vigormortis.
+    Direction 1 = clockwise, -1 = anticlockwise.
+    """
+    N = len(state.players)
+    candidates = []
+    for step in range(1, N):
+        player = (src + direction * step) % N
+        is_tf = IsCategory(player, characters.TOWNSFOLK)(state, src)
+        if is_tf is not FALSE:
+            candidates.add(player)
+        if is_tf is TRUE:
+            break
+    return candidates
 
 def behaves_evil(state: State, player_id: PlayerID) -> bool:
     """
@@ -458,7 +478,8 @@ class DrunkBetweenTownsfolk(Info):
 # Required for a Savant statement in Puzzle #15
 @dataclass
 class LongestRowOfTownsfolk(Info):
-    length: int
+    length: int | None
+    min_length: int | None = None
     def __call__(self, state: State, src: PlayerID) -> STBool:
         townsfolk = [
             IsCategory(player, characters.TOWNSFOLK)(state, src)
@@ -473,4 +494,6 @@ class LongestRowOfTownsfolk(Info):
                 longest = max(longest, player - prev_not_tf - 1)
                 prev_not_tf = player
         longest = min(longest, len(state.players))
-        return STBool(longest == self.length)
+        if self.length is not None:
+            return STBool(longest == self.length)
+        return STBool(longest >= self.min_length)

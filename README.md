@@ -5,7 +5,7 @@ Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](
 <p align="center">
 
 
-<details>
+<details open>
 <summary><b>Puzzle 26 - A Basic Example</b></summary>
  
 <table>

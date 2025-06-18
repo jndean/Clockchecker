@@ -42,11 +42,12 @@
 
 	- FangGu jump will also be caught by a ScarletWoman
 
+
 	- In general, Mathematician is implemented badly. Currently only "first-degree" math numbers are counted, e.g. during run_night, an ability doesn't work on the spot. However, a drunk Poisoner, Xaan, No Dashii etc who is failing to poison their target should increment the count, but only at the moment that their target's ability _does_ work. This happens at an arbitrary point later, and is not implemented. Also, the No Dashii failing to kill ticks up the Math number, and this would need to be deduplicated with the them failing to poison their neighbour (since Math counts players who misfired tonight, not number of misfires). Similarly, a droisoned Monk or Soldier failing to protect from the demon won't Math right...
 	The Spy misregistering as good is detected fine by Mathematician, but a drunk Spy _not_ misregistering as good when they would normally is _not_ picked up by Math.
 
-	- EASY FIX: IsCategory(Spy, TOWNSFOLK) returns MAYBE but IsCategory(Spy, MINION) 
-	returns TRUE, should be able to misregister!
+	- IsCategory(Spy, TOWNSFOLK) returns MAYBE but IsCategory(Spy, MINION) 
+	returns TRUE, should be able to misregister! This is easy to fix, but if fixed it exposes the holes in the vortox misinfo calcs, described herafter.
 
 	- Nobody f***ing knows the exact ruling on how Vortox affects 
 	mis-registering characters, but I'm not happy with what is currently implemented. STBool.Maybe doesn't contain info about whether misinfo would be True or False, so it is not possible to infer which way the Vortox should push ST choices (if you believe the ST doesn't have misregistration choices in a vortox world).
@@ -60,3 +61,5 @@
 # Things we don't and won't handle:
 
  - Order not specified by night order. E.g. if there are two poisoners in town then either could go first, but we only try one ordering.
+
+ - Currently, a Vig killed Recluse can register as Minion and poison one of their neighbours for the rest of the game, however there is no mechanism for them to stop registering as Minion at an arbitrary subsequent time to stop the poisoning. I don't think I will ever address this. To be completely correct it would technically have to spawn a non-poisoning world after every other action in the game.

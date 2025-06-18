@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
-from typing import Any, TypeAlias
+from typing import Any, Callable, TypeAlias
 
 try:
     from multiprocessing import Queue, Process
@@ -84,6 +84,10 @@ class Player:
 
     def woke(self) -> None:
         self.woke_tonight = True
+    
+    @property
+    def vigormortised(self):
+        return getattr(self.character, 'vigormortised', False)
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
@@ -184,6 +188,8 @@ class State:
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
             if _DEBUG_WORLD_KEYS and not ret._is_world():
                 ret.debug_cull = True
+        if puzzle.user_interrupt is not None and puzzle.user_interrupt():
+            raise InterruptedError('User requested solve stops')
         return ret
     
     def get_night_info(
@@ -432,7 +438,7 @@ class State:
         no_evil_twin = not any(
             (
                 isinstance(p.character, characters.EvilTwin)
-                and not p.is_dead
+                and (not p.is_dead or p.vigormortised)
                 and p.droison_count == 0
             )
             for p in self.players
@@ -490,6 +496,8 @@ class Puzzle:
     allow_good_double_claims: bool = True
     deduplicate_initial_characters: bool = True
     finish_final_day: bool = False
+
+    user_interrupt: Callable[[], bool] | None = None
 
     def __post_init__(self, hidden_characters):
         """Finish building Puzzle representation from user inputs."""

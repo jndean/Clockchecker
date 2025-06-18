@@ -1953,7 +1953,7 @@ def puzzle_nqt41():
 
 
 def puzzle_nqt43():
-    # TODO: URL unpublished for puzzle "Too Many Cooks".
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kz0kf2/weekly_puzzle_43_too_many_cooks/
     You, Anna, Josh, Tom, Sarah, Matthew, Fraser, Steph = range(8)
     puzzle = Puzzle(
         players=[
@@ -2280,7 +2280,7 @@ def puzzle_emerald_snv1():
                 2: Oracle.Ping(0),
                 3: Oracle.Ping(1),
             }),
-            Player('Aero', claim=Artist, night_info={
+            Player('Aero', claim=Artist, day_info={
                 1: Artist.Ping(IsInPlay(NoDashii))
             }),
             Player('Sam', claim=Juggler,

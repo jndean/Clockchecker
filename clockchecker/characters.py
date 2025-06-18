@@ -203,10 +203,11 @@ class Character:
         If a character doesn't want this wrapper logic, it can override this 
         method rather than the _impl method.
         """
+        player = state.players[me]
         if (
             not self.effects_active
-            and state.players[me].droison_count == 0
-            and not state.players[me].is_dead
+            and player.droison_count == 0
+            and (not player.is_dead or player.vigormortised)
         ):
             self.effects_active = True
             self._activate_effects_impl(state, me)
@@ -221,6 +222,8 @@ class Character:
         Will be called on any character at the moment they are poisoned, killed,
         or changed into another character.
         """
+        if reason is Reason.DEATH and state.players[me].vigormortised:
+            return
         if self.effects_active:
             self.effects_active = False
             self._deactivate_effects_impl(state, me)
@@ -240,7 +243,8 @@ class Character:
     ) -> StateGen:
         """Trigger consequences of a confirmed death."""
         for substate in state.pre_death_in_town(me):
-            substate.players[me].is_dead = True
+            player = substate.players[me]
+            player.is_dead = True
             self.maybe_deactivate_effects(substate, me, Reason.DEATH)
             yield from substate.post_death_in_town(me)
 
@@ -931,8 +935,10 @@ class EvilTwin(Character):
         death: PlayerID,
         me: PlayerID
     ) -> StateGen:
+        eviltwin = state.players[me]
         if (
-            (death != self.twin and death != me)  # `me` could be good
+            (eviltwin.is_dead and not eviltwin.vigormortised)
+            or (death != self.twin and death != me)  # `me` could be good
             or info.IsEvil(death)(state, me) is not info.FALSE
         ):
             yield state
@@ -1926,7 +1932,7 @@ class Poisoner(Character):
     def run_night(self, state: State, src: PlayerID) -> StateGen:
         """Override Reason: Create a world for every poisoning choice."""
         poisoner = state.players[src]
-        if poisoner.is_dead:
+        if poisoner.is_dead and not poisoner.vigormortised:
             yield state; return
         for target in range(len(state.players)):
             new_state = state.fork()
@@ -2362,7 +2368,8 @@ class ScarletWoman(Character):
             for p in state.players
         )
         ability_active = info.STBool(
-            living_player_count >= 5 and not scarletwoman.is_dead
+            living_player_count >= 5 
+            and (not scarletwoman.is_dead or scarletwoman.vigormortised) # :O
         )
         demon_dying = info.IsCategory(dying.id, DEMON)(state, scarletwoman.id)
 
@@ -2662,6 +2669,45 @@ class Undertaker(Character):
             return info.FALSE
 
 @dataclass
+class VillageIdiot(Character):
+    """
+    Each night, choose a player: you learn their alignment. 
+    [+0 to +2 Village Idiots. 1 of the extras is drunk]
+    """
+    category: ClassVar[Categories] = TOWNSFOLK
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    self_droison: bool = False
+
+    @dataclass
+    class Ping(info.Info):
+        player: PlayerID
+        is_evil: bool
+        def __call__(self, state: State, src: PlayerID) -> STBool:
+            registers_evil = info.IsEvil(self.player)(state, src)
+            return registers_evil == info.STBool(self.is_evil)
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        # If there is more than one Village Idiot, choose one to be the drunk VI
+        VIs = [i for i, player in enumerate(state.players)
+                if isinstance(player.character, VillageIdiot)]
+        already_done = any(state.players[p].character.self_droison for p in VIs)
+        if len(VIs) == 1 or already_done:
+            yield state
+            return
+
+        for vi in VIs:
+            new_state = state.fork()
+            new_state.players[vi].droison_count += 1
+            new_state.players[vi].character.self_droison = True
+            yield new_state
+
+    def _world_str(self, state: State) -> str:
+        """For printing nice output representations of worlds"""
+        return f'VillageIdiot ({"Drunk" if self.self_droison else "Sober"})'
+
+@dataclass
 class Washerwoman(Character):
     """
     You start knowing that 1 of 2 players is a particular Townsfolk.
@@ -2766,7 +2812,10 @@ class Witch(Character):
             del state.players[self.target].witch_cursed
             self.target = None
 
-        if witch.is_dead or sum(not p.is_dead for p in state.players) <= 3:
+        if (
+            (witch.is_dead and not witch.vigormortised)
+            or sum(not p.is_dead for p in state.players) <= 3
+        ):
             yield state; return
        
         if witch.droison_count:
@@ -2792,45 +2841,90 @@ class Witch(Character):
             del state.players[self.target].witch_cursed
 
 
-
 @dataclass
-class VillageIdiot(Character):
+class Vigormortis(GenericDemon):
     """
-    Each night, choose a player: you learn their alignment. 
-    [+0 to +2 Village Idiots. 1 of the extras is drunk]
+    Each night*, choose a player: they die. Minions you kill keep their ability
+    & poison 1 Townsfolk neighbor. [-1 Outsider]
     """
-    category: ClassVar[Categories] = TOWNSFOLK
-    is_liar: ClassVar[bool] = False
-    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+    poisoned_tf: list[PlayerID] = field(default_factory=list)
+    killed_minions: list[PlayerID] = field(default_factory=list)
 
-    self_droison: bool = False
-
-    @dataclass
-    class Ping(info.Info):
-        player: PlayerID
-        is_evil: bool
-        def __call__(self, state: State, src: PlayerID) -> STBool:
-            registers_evil = info.IsEvil(self.player)(state, src)
-            return registers_evil == info.STBool(self.is_evil)
-
-    def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        # If there is more than one Village Idiot, choose one to be the drunk VI
-        VIs = [i for i, player in enumerate(state.players)
-                if isinstance(player.character, VillageIdiot)]
-        already_done = any(state.players[p].character.self_droison for p in VIs)
-        if len(VIs) == 1 or already_done:
+    @staticmethod
+    def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+        (min_tf, max_tf), (min_out, max_out), mn, dm = bounds
+        bounds = (min_tf + 1, max_tf + 1), (min_out - 1, max_out - 1), mn, dm
+        return bounds
+    
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        vig = state.players[me]
+        if state.night == 1 or vig.is_dead:
             yield state
             return
 
-        for vi in VIs:
-            new_state = state.fork()
-            new_state.players[vi].droison_count += 1
-            new_state.players[vi].character.self_droison = True
-            yield new_state
+        N = len(state.players)
+        sunk_a_kill = False
+        for target in range(N):
+            target_player = state.players[target]
 
-    def _world_str(self, state: State) -> str:
-        """For printing nice output representations of worlds"""
-        return f'VillageIdiot ({"Drunk" if self.self_droison else "Sober"})'
+            # 1. The kill sink world
+            if target_player.is_dead:
+                if sunk_a_kill:
+                    continue  # Dedupe identical kill_sink worlds
+                yield state.fork()
+                sunk_a_kill = True
+                continue
+
+            # 2. The droison world
+            if vig.droison_count:
+                droison_state = state.fork()
+                droison_state.math_misregistration()
+                yield droison_state
+                continue
+
+            is_minion = info.IsCategory(target, MINION)(state, me)
+
+            # 3. The normal kill world
+            if is_minion is not info.TRUE:
+                kill_state = state.fork()
+                kill_target = kill_state.players[target].character
+                yield from kill_target.attacked_at_night(kill_state, target, me)
+                if is_minion is info.FALSE:
+                    continue
+
+            # 4. The killed minion world
+            minion_state = state.fork()
+            minion = minion_state.players[minion].character
+            minion.vigormortised = True
+            poison_candidates = (
+                info.tf_candidates_in_direction(minion_state, target, -1)
+                + info.tf_candidates_in_direction(minion_state, target, 1)
+            )
+            for ss1 in minion.attacked_at_night(minion_state, target, me):
+                for poison_candidate in poison_candidates:
+                    ss2 = ss1.fork()
+                    new_vig = ss2.players[me].character
+                    new_vig.maybe_activate_effects(ss2, me)
+                    new_vig.killed_minions.append(target)
+                    new_vig.poisoned_tf.append(poison_candidate)
+                    if self.effects_active:
+                        ss2.players[poison_candidate].droison(ss2, me)
+                    yield ss2
+                
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        for target in self.poison_targets:
+            state.players[target].droison(state, me)
+        for minion in self.killed_minions:
+            state.players[minion].character.vigormortised = True
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        for target in self.poison_targets:
+            state.players[target].droison(state, me)
+        for minion in self.killed_minions:
+            minion_char = state.players[minion].character
+            if hasattr(minion_char, 'vigormortised'):
+                del minion_char.vigormortised
+                # TODO: minion character change event should notify vigormortis.
 
 @dataclass
 class Virgin(Character):
@@ -2911,7 +3005,7 @@ class Xaan(Character):
         targets (i.e., handle a Spy misregistering as a TF or not).
         """
         xaan = state.players[me]
-        if xaan.is_dead or state.night != self.X:
+        if (xaan.is_dead and not xaan.vigormortised) or state.night != self.X:
             self.targets = None
             yield state
             return
@@ -3013,6 +3107,7 @@ GLOBAL_NIGHT_ORDER = [
     NoDashii,
     Vortox,
     LordOfTyphon,
+    Vigormortis,
     Gossip,
     Sage,
     Ravenkeeper,
