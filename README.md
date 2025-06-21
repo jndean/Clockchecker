@@ -1,5 +1,7 @@
 # Clockchecker 🕰️
 Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). Clockchecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation behind the design of clockchecker is for implementing new characters to be as easy as possible, because hobbies are supposed to be fun.
+
+*Try it now, interactively [in your browser](https://josefdean.co.uk/clockchecker/).*
  
 ## Puzzle Solving Examples
 <p align="center">

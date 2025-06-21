@@ -2368,7 +2368,7 @@ class ScarletWoman(Character):
             for p in state.players
         )
         ability_active = info.STBool(
-            living_player_count >= 5 
+            living_player_count >= 5
             and (not scarletwoman.is_dead or scarletwoman.vigormortised) # :O
         )
         demon_dying = info.IsCategory(dying.id, DEMON)(state, scarletwoman.id)
@@ -2855,7 +2855,7 @@ class Vigormortis(GenericDemon):
         (min_tf, max_tf), (min_out, max_out), mn, dm = bounds
         bounds = (min_tf + 1, max_tf + 1), (min_out - 1, max_out - 1), mn, dm
         return bounds
-    
+
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         vig = state.players[me]
         if state.night == 1 or vig.is_dead:
@@ -2910,7 +2910,7 @@ class Vigormortis(GenericDemon):
                     if self.effects_active:
                         ss2.players[poison_candidate].droison(ss2, me)
                     yield ss2
-                
+
     def _activate_effects_impl(self, state: State, me: PlayerID):
         for target in self.poison_targets:
             state.players[target].droison(state, me)

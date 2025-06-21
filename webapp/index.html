@@ -1,0 +1,566 @@
+<!-- 
+ As may quickly become apparent, this was vibe-coded as a single file GUI
+ front-end in Gemini+Canvas, then the Clockchecker / Pyscript backend was 
+ inserted aferwards.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="./mini-coi.js"></script> <!-- Hack to allow cross-origin :) -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clockchecker Interactive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/mode/overlay.min.js"></script>
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2025.5.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2025.5.1/core.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <script type="py" worker src="main" config="pyscript-config.toml"></script>
+
+    <div class="main-app-container">
+        <div id="longSamplesTrayWrapper" class="samples-tray-wrapper">
+            <div id="toggleLongSamplesTrayButton" class="toggle-samples-tray-button">Puzzles</div>
+            <div id="longSamplesTray" class="samples-tray"></div>
+        </div>
+
+        <div id="shortSamplesTrayWrapper" class="samples-tray-wrapper">
+            <div id="toggleShortSamplesTrayButton" class="toggle-samples-tray-button">Characters</div>
+            <div id="shortSamplesTray" class="samples-tray"></div>
+        </div>
+
+        <div class="main-content-wrapper">
+            <div class="app-header">
+                <div class="app-title-container">
+                    <h1 class="app-title">Clockchecker Interactive</h1>
+                    <button id="infoButton" title="About this App">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-info"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="main-content">
+                <div class="panels-container">
+                    <div class="panel input-panel">
+                        <div class="history-buttons-container">
+                            <button id="undoInputButton" class="history-button" title="Undo (Ctrl+Z)">←</button>
+                            <button id="redoInputButton" class="history-button" title="Redo (Ctrl+Y)">→</button>
+                        </div>
+                        <textarea id="inputText" placeholder="Enter text here..."></textarea> </div>
+                    <div class="panel output-panel">
+                        <div id="outputText" class="output-content-area" placeholder="Solutions will appear here..."></div>
+                        <div id="outputInfoBar">Solutions: 0 | Time taken: --</div>
+                    </div>
+                </div>
+
+                <div class="controls-container">
+                    <button id="pythonLoadingMessage" class="python-loading-message">
+                        <span>Initialising Python, please wait</span>
+                        &nbsp;&nbsp;
+                        <svg class="animate-spin h-5 w-5 text-white" style="display: inline-block;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                    <div id="takingTooLongPopup">Taking too long?</div>
+                    <button id="applyButton" class="apply-button" style="display: none;">
+                        <span>Solve (Ctrl + Enter)</span>
+                    </button>
+                    <button id="stopButton" class="stop-button" style="display: none;">
+                        <svg id="stopButtonSpinner" class="animate-spin h-5 w-5 text-white" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="stopButtonText">Stop</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3>What is this?</h3>
+                <button id="closeInfoModal" class="modal-button close-dialog">&times;</button>
+            </div>
+            <p>
+            <strong><span style="color: #7fa5f3">Clockchecker</span></strong> is a solver of <span style="color: plum">Blood on the Clocktower's</span> puzzles, 
+            specifically the kind posted by reddit user u/Not_Quite_Vertical.
+            An archive of their puzzles is <a href="https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html" target="_blank"><u>here</u></a>.
+            The project page for clockchecker is <a href="https://github.com/jndean/clockchecker" target="_blank"><u>here</u></a>.
+            <br><br>
+            <strong><span style="color: #7fa5f3">Clockchecker Interactive</span></strong> (i.e., this webpage) is a statically-hosted web GUI for <span style="color: #7fa5f3">clockchecker</span>.
+            It was vibe-coded using Gemini+Canvas, because I am not a front-end guy. The <span style="color: #7fa5f3">clockchecker</span> solver runs using PyScript, which is the full(ish)
+            CPython interpreter compiled into WASM bytecode that runs in your browser. It uses a single thread, so it is not particularly fast.
+            But it does work, which I think is pretty neat. ✨
+            </p>
+        </div>
+    </div>
+
+    <div id="longTransformInfoDialogOverlay" class="modal-overlay">
+        <div id="longTransformInfoDialogContent" class="modal-content">
+             <div class="flex justify-between items-center mb-4">
+                <h3>Why is it slow?</h3>
+                <button id="closeLongTransformInfoDialog" class="modal-button close-dialog">&times;</button>
+            </div>
+            <p>
+                <span style="color: #7fa5f3">Clockchecker</span> is a hobby project. To try to keep it fun, it is written in Python, and the design decisions lean
+                towards conceptual simplicity rather than efficiency. This helps keep the sprawling complexity of 
+                <span style="color: plum">Blood on the Clocktower's</span> character
+                interactions managable, but it does mean it's not as fast as it could be. Additionally, 
+                <span style="color: #7fa5f3">Clockchecker Interactive</span>
+                (this web front-end) runs the solver in a single thread, in a Python interpreter, in a WASM runtime, in your browser...
+            </p>
+            <p>
+                If you would like to run the solver faster (e.g. <span style="color: #059669; font-weight: bold;">~20x faster</span> if you have a 16-core CPU), you can
+                download the <span style="color: #7fa5f3">clockchecker</span> source from <a href="https://github.com/jndean/clockchecker" target="_blank"><u>github</u></a>
+                and run it natively, no installation required.
+            </p>
+        </div>
+    </div>
+
+
+    <div id="messageBoxOverlay" class="message-box-overlay">
+        <div class="message-box">
+            <p id="messageBoxText"></p>
+            <button id="messageBoxOkButton">OK</button>
+        </div>
+    </div>
+    
+    <script src="samples.js"></script>
+
+    <script>
+        const inputTextElement = document.getElementById('inputText'); 
+        const outputText = document.getElementById('outputText');
+        const outputInfoBar = document.getElementById('outputInfoBar'); 
+        const applyButton = document.getElementById('applyButton');
+        const stopButton = document.getElementById('stopButton');
+        const stopButtonText = document.getElementById('stopButtonText');
+        const stopButtonSpinner = document.getElementById('stopButtonSpinner');
+        const messageBoxOverlay = document.getElementById('messageBoxOverlay');
+        const messageBoxText = document.getElementById('messageBoxText');
+        const messageBoxOkButton = document.getElementById('messageBoxOkButton');
+        const undoInputButton = document.getElementById('undoInputButton');
+        const redoInputButton = document.getElementById('redoInputButton'); 
+
+        const longSamplesTrayWrapper = document.getElementById('longSamplesTrayWrapper');
+        const longSamplesTray = document.getElementById('longSamplesTray');
+        const toggleLongSamplesTrayButton = document.getElementById('toggleLongSamplesTrayButton');
+
+        const shortSamplesTrayWrapper = document.getElementById('shortSamplesTrayWrapper');
+        const shortSamplesTray = document.getElementById('shortSamplesTray');
+        const toggleShortSamplesTrayButton = document.getElementById('toggleShortSamplesTrayButton');
+
+        const infoButton = document.getElementById('infoButton');
+        const infoModal = document.getElementById('infoModal');
+        const closeInfoModalButton = document.getElementById('closeInfoModal');
+
+        const takingTooLongPopup = document.getElementById('takingTooLongPopup');
+        const longTransformInfoDialogOverlay = document.getElementById('longTransformInfoDialogOverlay');
+        const closeLongTransformInfoDialogButton = document.getElementById('closeLongTransformInfoDialog');
+        let takingTooLongTimerId = null;
+
+        const currentTransform = 'reverseText'; 
+        const SIMULATED_DELAY_MS_PER_CHUNK = 5; 
+        
+        let inputHistory = [];
+        let currentHistoryIndex = -1;
+        const MAX_HISTORY_SIZE = 20;
+        let debounceTimer = null;
+        const DEBOUNCE_DELAY = 300; 
+        let codeMirrorEditor;
+
+        document.addEventListener("DOMContentLoaded", function() {
+            try {
+                const blueTokens = Townsfolk.concat(Outsiders);
+                const purpleTokens = InfoTokens.concat(['Puzzle', 'Player']);
+
+                CodeMirror.defineMode("python-custom-overlay", function(config, parserConfig) {
+                    let pythonMode = CodeMirror.getMode(config, "python"); 
+                    return CodeMirror.overlayMode(pythonMode, {
+                        token: function(stream, state) {
+                            for (let token of Evils) {
+                                if (stream.match(token, true, false)) { // Case-sensitive
+                                    return "custom-red-tokens";
+                                }
+                            }
+                            for (let token of purpleTokens) {
+                                if (stream.match(token, true, false)) { // Case-sensitive
+                                    return "custom-purple-tokens";
+                                }
+                            }
+                            for (let token of blueTokens) {
+                                if (stream.match(token, true, false)) { // Case-sensitive
+                                    return "custom-blue-tokens";
+                                }
+                            }
+                            for (let token of DataTokens) {
+                                if (stream.match(token, true, false)) { // Case-sensitive
+                                    return "custom-orange-tokens";
+                                }
+                            }
+                            // Advance stream if no custom token is matched to avoid infinite loops
+                            while (stream.next() != null) {
+                                let matched = false;
+                                for (let token of blueTokens) if (stream.match(token, false, true)) matched = true;
+                                for (let token of Evils) if (stream.match(token, false, true)) matched = true;
+                                for (let token of purpleTokens) if (stream.match(token, false, true)) matched = true;
+                                for (let token of DataTokens) if (stream.match(token, false, true)) matched = true;
+                                if (matched) break; // Break to re-evaluate from the start of a potential match
+                            }
+                            return null; // Let base Python mode handle other tokens
+                        }
+                    });
+                });
+                
+                
+                codeMirrorEditor = CodeMirror.fromTextArea(inputTextElement, {
+                    mode: "python-custom-overlay", // Use the new overlay mode
+                    theme: "material-darker",
+                    lineNumbers: true, 
+                    autoCloseBrackets: true,
+                    matchBrackets: true,
+                    indentUnit: 4, 
+                    smartIndent: true,
+                    readOnly: false 
+                });
+                globalThis.codeMirrorEditor = codeMirrorEditor;
+                
+                codeMirrorEditor.on("change", (editor, changeObj) => {
+                    if (changeObj.origin !== "setValue") { 
+                        clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(() => {
+                            saveInputState(editor.getValue(), true);
+                        }, DEBOUNCE_DELAY);
+                    }
+                });
+                
+                saveInputState(codeMirrorEditor.getValue() || "");
+                codeMirrorEditor.focus();
+            } catch (e) {
+                console.error("Error initializing CodeMirror:", e);
+                showUserMessage("Error initializing code editor. Please try refreshing the page.");
+            }
+        });
+
+        
+        function saveInputState(newState, isUserInput = false) {
+            if (!isUserInput) clearTimeout(debounceTimer); 
+
+            if (currentHistoryIndex >= 0 && inputHistory[currentHistoryIndex] !== undefined && newState === inputHistory[currentHistoryIndex]) {
+                updateUndoRedoButtonStates();
+                return;
+            }
+
+            if (currentHistoryIndex < inputHistory.length - 1) {
+                inputHistory = inputHistory.slice(0, currentHistoryIndex + 1);
+            }
+
+            inputHistory.push(newState);
+
+            if (inputHistory.length > MAX_HISTORY_SIZE) { 
+                inputHistory.shift(); 
+            }
+            currentHistoryIndex = inputHistory.length - 1;
+            updateUndoRedoButtonStates();
+        }
+
+        function updateUndoRedoButtonStates() {
+            undoInputButton.disabled = currentHistoryIndex <= 0;
+            redoInputButton.disabled = currentHistoryIndex >= inputHistory.length - 1;
+        }
+
+        function make_puzzle_card(data) {
+            const puzzleCard = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'sample-title';
+            title.textContent = '🧩 ' + data.name;
+            puzzleCard.appendChild(title);
+            claims = [];
+            function colour_claim(claim) {
+                let colour = '89DDFF';
+                if (Outsiders.includes(claim)) colour = '7af';
+                else if (Evils.includes(claim)) colour = 'f96';
+                return `<span style="color: #${colour}">${claim}</span>`;
+            }
+            character_content = '<strong>Claims:</strong> ';
+            character_content += data.claims.map(colour_claim).join(', ');
+            character_content += '<br><strong>Hidden:</strong> ';
+            character_content += data.hidden.map(colour_claim).join(', ');
+            // data.claims.forEach(colour_claim);
+            const characters = document.createElement('div');
+            characters.innerHTML = character_content
+            puzzleCard.appendChild(characters);
+
+            puzzleCard.className = 'sample-item-card';
+            puzzleCard.dataset.sampleValue = data.value;
+
+            return puzzleCard;
+        }
+
+
+        function populateLongSamplesTray() {
+            longSamplesTray.innerHTML = ''; 
+            const mainLabel = document.createElement('h3');
+            mainLabel.textContent = 'Puzzles'; 
+            mainLabel.className = 'samples-tray-label';
+            longSamplesTray.appendChild(mainLabel);
+
+            for (const categoryName in longSamples) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'sample-category';
+                const categoryHeader = document.createElement('h4');
+                categoryHeader.textContent = categoryName;
+                categoryDiv.appendChild(categoryHeader);
+
+                longSamples[categoryName].forEach(sample => {
+                    const sampleCard = make_puzzle_card(sample);
+                    sampleCard.addEventListener('click', () => {
+                        if (codeMirrorEditor) {
+                            saveInputState(codeMirrorEditor.getValue()); 
+                            codeMirrorEditor.setValue(sample.value); 
+                            saveInputState(codeMirrorEditor.getValue()); 
+                        }
+                        longSamplesTrayWrapper.classList.remove('visible');
+                        shortSamplesTrayWrapper.classList.remove('visible'); 
+                        if (codeMirrorEditor) codeMirrorEditor.focus();
+                    });
+                    categoryDiv.appendChild(sampleCard);
+                });
+                longSamplesTray.appendChild(categoryDiv);
+            }
+        }
+
+        function populateShortSamplesTray() {
+            shortSamplesTray.innerHTML = '';
+            const mainLabel = document.createElement('h3');
+            mainLabel.textContent = 'Characters';
+            mainLabel.className = 'samples-tray-label';
+            shortSamplesTray.appendChild(mainLabel);
+
+            for (const categoryName in shortSamples) {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'sample-category';
+                const categoryHeader = document.createElement('h4');
+                categoryHeader.textContent = categoryName;
+                categoryDiv.appendChild(categoryHeader);
+
+                shortSamples[categoryName].forEach(sample => {
+                    const sampleCard = document.createElement('div');
+                    sampleCard.className = 'short-sample-item';
+
+                    const titleElement = document.createElement('div');
+                    titleElement.className = 'short-sample-title';
+                    titleElement.textContent = sample.name;
+
+                    const snippetElement = document.createElement('div');
+                    snippetElement.className = 'short-sample-snippet';
+                    snippetElement.textContent = sample.value;
+
+                    sampleCard.appendChild(titleElement);
+                    sampleCard.appendChild(snippetElement);
+
+                    sampleCard.addEventListener('click', () => {
+                        if (codeMirrorEditor) {
+                            const doc = codeMirrorEditor.getDoc();
+                            const cursor = doc.getCursor();
+                            
+                            const currentLineContent = doc.getLine(cursor.line);
+                            const baseIndentMatch = currentLineContent.match(/^(\s*)/);
+                            const baseIndent = baseIndentMatch ? baseIndentMatch[0] : "";
+                            
+                            const sampleValueToInsert = sample.value;
+                            const sampleLines = sampleValueToInsert.split('\n');
+                            
+                            let textToInsert = "";
+
+                            if (sampleLines.length > 0) {
+                                textToInsert += sampleLines[0];
+                                for (let i = 1; i < sampleLines.length; i++) {
+                                    textToInsert += "\n" + baseIndent + sampleLines[i];
+                                }
+                            } else {
+                                textToInsert = sampleValueToInsert;
+                            }
+                            
+                            doc.replaceRange(textToInsert, cursor);
+                            codeMirrorEditor.focus();
+                        }
+                    });
+                    categoryDiv.appendChild(sampleCard);
+                });
+                shortSamplesTray.appendChild(categoryDiv);
+            }
+        }
+        
+        undoInputButton.addEventListener('click', () => {
+            if (currentHistoryIndex > 0) {
+                currentHistoryIndex--;
+                if (codeMirrorEditor) codeMirrorEditor.setValue(inputHistory[currentHistoryIndex]);
+            }
+            updateUndoRedoButtonStates();
+            if (codeMirrorEditor) codeMirrorEditor.focus();
+        });
+        
+        redoInputButton.addEventListener('click', () => {
+            if (currentHistoryIndex < inputHistory.length - 1) {
+                currentHistoryIndex++;
+                if (codeMirrorEditor) codeMirrorEditor.setValue(inputHistory[currentHistoryIndex]);
+            }
+            updateUndoRedoButtonStates();
+            if (codeMirrorEditor) codeMirrorEditor.focus();
+        });
+
+
+        toggleLongSamplesTrayButton.addEventListener('click', () => {
+            longSamplesTrayWrapper.classList.toggle('visible');
+        });
+        toggleShortSamplesTrayButton.addEventListener('click', () => {
+            shortSamplesTrayWrapper.classList.toggle('visible');
+        });
+
+        
+        function updateOutputStats() {
+            let time = '0';
+            if (solve_start_time !== null) {
+                time = ((solve_end_time - solve_start_time) / 1000).toFixed(1);
+            }
+            outputInfoBar.textContent = `Solutions: ${worlds_found} | Time taken: ${time}s`;
+        }
+
+
+        function showUserMessage(message) {
+            messageBoxText.textContent = message;
+            messageBoxOverlay.classList.add('show');
+        }
+        messageBoxOkButton.addEventListener('click', () => messageBoxOverlay.classList.remove('show'));
+
+
+        infoButton.addEventListener('click', () => {
+            infoModal.classList.add('show');
+        });
+
+        closeInfoModalButton.addEventListener('click', () => {
+            infoModal.classList.remove('show');
+        });
+
+
+        takingTooLongPopup.addEventListener('click', () => {
+            takingTooLongPopup.style.display = 'none'; 
+            clearTimeout(takingTooLongTimerId); 
+            longTransformInfoDialogOverlay.classList.add('show');
+        });
+
+        closeLongTransformInfoDialogButton.addEventListener('click', () => {
+            longTransformInfoDialogOverlay.classList.remove('show');
+        });
+
+        globalThis.stopRequested = false;
+        
+        worlds_found = 0;
+        solve_start_time = null;
+        solve_end_time = null;
+        time_ticker_interval = null;
+        function GUI_startProcessing() {
+            globalThis.stopRequested = false;
+            outputText.innerHTML = '';
+            worlds_found = 0;
+            solve_start_time = new Date().getTime();
+            solve_end_time = new Date().getTime();
+            time_ticker_interval = setInterval(
+                () => {
+                    solve_end_time = new Date().getTime();
+                    updateOutputStats()},
+                100,
+            )
+            applyButton.style.display = 'none';
+            stopButton.style.display = 'flex';
+            stopButtonSpinner.style.display = 'inline-block';
+            stopButton.disabled = false;
+            stopButtonText.innerText = 'Stop';
+            console.log('GUI_startProcessing')
+
+            clearTimeout(takingTooLongTimerId); 
+            takingTooLongPopup.style.display = 'none'; 
+            takingTooLongTimerId = setTimeout(() => {
+                if (stopButton.style.display === 'flex') {
+                    takingTooLongPopup.style.display = 'block';
+                }
+            }, 10000); 
+        }
+
+        function GUI_worldFound(world) {
+            outputText.innerHTML += String(world) + '\n';
+            outputText.scrollTop = outputText.scrollHeight;
+            worlds_found += 1;
+            solve_end_time = new Date().getTime();
+            updateOutputStats(); 
+        }
+
+        function GUI_returnError(message) {
+            outputText.innerHTML += `<span style="color: #ef4444; font-weight: bold;">${message}</span>`;
+            outputText.scrollTop = outputText.scrollHeight;
+        }
+
+        function GUI_finishedProcessing() {
+            clearTimeout(takingTooLongTimerId); 
+            takingTooLongPopup.style.display = 'none'; 
+            applyButton.style.display = 'flex';
+            stopButton.style.display = 'none';
+            stopButtonSpinner.style.display = 'none';
+            clearInterval(time_ticker_interval);
+            solve_end_time = new Date().getTime();
+            updateOutputStats(); 
+        }
+
+    
+        stopButton.addEventListener('click', () => {
+            if (globalThis.stopRequested) return;
+            globalThis.stopRequested = true;
+            stopButtonSpinner.style.display = 'inline-block';
+            stopButtonText.innerText = 'Stopping'
+            console.log("Stop requested by user.");
+        });
+
+        
+        document.addEventListener('keydown', (event) => {
+            const isInputFocused = codeMirrorEditor && codeMirrorEditor.hasFocus();
+
+            if (isInputFocused) {
+                 if (event.ctrlKey && event.key === 'Enter' && applyButton.style.display !== 'none') {
+                    event.preventDefault();
+                    applyTransformation();
+                } else if (event.ctrlKey && (event.key === 'z' || event.key === 'Z')) { 
+                    event.preventDefault();
+                    undoInputButton.click();
+                } else if (event.ctrlKey && (event.key === 'y' || event.key === 'Y')) { 
+                    event.preventDefault();
+                    redoInputButton.click();
+                }
+            }
+        });
+        
+        // --- Initialization ---
+        populateLongSamplesTray(); 
+        populateShortSamplesTray();
+        updateOutputStats(); 
+        // Focus is handled by CodeMirror after initialization in DOMContentLoaded
+
+    </script>
+</body>
+</html>

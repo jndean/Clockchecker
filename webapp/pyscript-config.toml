@@ -1,0 +1,8 @@
+[files]
+"./main" = "main.py"
+"./clockchecker/__init__" = "clockchecker/__init__.py"
+"./clockchecker/core" = "clockchecker/core.py"
+"./clockchecker/characters" = "clockchecker/characters.py"
+"./clockchecker/info" = "clockchecker/info.py"
+"./clockchecker/events" = "clockchecker/events.py"
+"./clockchecker/worker" = "clockchecker/worker.py"

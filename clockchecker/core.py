@@ -84,7 +84,7 @@ class Player:
 
     def woke(self) -> None:
         self.woke_tonight = True
-    
+
     @property
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)
