@@ -485,9 +485,9 @@ class DrunkBetweenTownsfolk(Info):
 # Required for a Savant statement in Puzzle #15
 @dataclass
 class LongestRowOfTownsfolk(Info):
-    length: int | None
-    minimum: int = 999
-    maximum: int = -999
+    length: int | None = None
+    minimum: int = -999
+    maximum: int = 999
     def __call__(self, state: State, src: PlayerID) -> STBool:
         townsfolk = [
             IsCategory(player, characters.TOWNSFOLK)(state, src)

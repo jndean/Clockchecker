@@ -1,18 +1,25 @@
 import traceback
 
-from pyscript import window, document
+from pyscript import window, document, display
 from pyscript.ffi import create_proxy
 
 from clockchecker import *
 
 
+apply_btn = document.getElementById("applyButton")
+
+
 def _stream_solve_to_output(puzzle: Puzzle):
     puzzle.user_interrupt = check_for_user_interrupt
     try:
+        world_count = 0
         for world in solve(puzzle):
+            world_count += 1
             window.GUI_worldFound(format_world(world))
             if window.stopRequested:
                 raise InterruptedError()
+        if world_count == 0:
+            window.GUI_returnError('No Solutions Found\n')
     except InterruptedError:
         window.GUI_returnError('\n======= Solve Stopped By User =======\n')
     except Exception as e:
@@ -28,6 +35,15 @@ def apply_button_handler(event):
         msg = traceback.format_exc()
         window.GUI_returnError('Error in input:\n' + msg)
     window.GUI_finishedProcessing()
+
+def keydown_handler(event):
+    if (
+        event.ctrlKey
+        and event.key == 'Enter'
+        and apply_btn.style.display != 'none'
+    ):
+        apply_button_handler(event)
+
 
 check_count = 0
 def check_for_user_interrupt() -> bool:
@@ -47,8 +63,9 @@ def format_world(world: State) -> str:
 
 
 apply_proxy = create_proxy(apply_button_handler)
-apply_btn = document.getElementById("applyButton")
+keydown_proxy = create_proxy(keydown_handler)
 apply_btn.addEventListener("click", apply_proxy)
+document.addEventListener("keydown", keydown_proxy)
 
 # Only display solving button once python worker is initialised
 document.getElementById("pythonLoadingMessage").remove()

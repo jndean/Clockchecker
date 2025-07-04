@@ -33,12 +33,12 @@ body {
     pointer-events: auto; 
 }
 
-#longSamplesTrayWrapper {
+#puzzleSamplesTrayWrapper {
     z-index: 101; 
     top: 20px;
     height: calc(100vh - 20px);
 }
-#shortSamplesTrayWrapper {
+#characterSamplesTrayWrapper {
     z-index: 100;
     top: 150px; 
     height: calc(100vh - 150px);
@@ -54,6 +54,10 @@ body {
     flex-direction: column;
     padding: 1rem;
     overflow-y: auto;
+    user-select: none;
+}
+.samples-tray.visible {
+/*    display: flex;*/
 }
 
 .toggle-samples-tray-button {
@@ -110,7 +114,7 @@ body {
     margin-bottom: 0.5rem;
     cursor: pointer;
     transition: background-color 0.2s;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
 }
 .sample-item-card:hover {
     background-color: #525f71;
@@ -304,7 +308,8 @@ body {
 .output-panel {
     display: flex; 
     flex-direction: column; 
-    min-height: 0; 
+    min-height: 0;
+    flex: 0.8;
 }
 .output-content-area {
     background-color: #262626;
@@ -335,7 +340,7 @@ body {
     background-color: #4b5563; 
     color: #d1d5db; 
     padding: 0.25rem 0.75rem; 
-    font-size: 1rem; 
+    font-size: 0.8rem; 
     font-family: monospace;
     border-bottom-left-radius: 0.5rem;
     border-bottom-right-radius: 0.5rem;

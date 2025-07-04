@@ -11,7 +11,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clockchecker Interactive</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./tailwindcss.js"></script>
 
     <!-- CodeMirror -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
@@ -21,6 +21,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/mode/overlay.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/comment/comment.min.js"></script>
     <!-- PyScript -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2025.5.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2025.5.1/core.js"></script>
@@ -33,14 +34,14 @@
     <script type="py" worker src="main" config="pyscript-config.toml"></script>
 
     <div class="main-app-container">
-        <div id="longSamplesTrayWrapper" class="samples-tray-wrapper">
+        <div id="puzzleSamplesTrayWrapper" class="samples-tray-wrapper">
             <div id="toggleLongSamplesTrayButton" class="toggle-samples-tray-button">Puzzles</div>
-            <div id="longSamplesTray" class="samples-tray"></div>
+            <div id="puzzleSamplesTray" class="samples-tray"></div>
         </div>
 
-        <div id="shortSamplesTrayWrapper" class="samples-tray-wrapper">
+        <div id="characterSamplesTrayWrapper" class="samples-tray-wrapper">
             <div id="toggleShortSamplesTrayButton" class="toggle-samples-tray-button">Characters</div>
-            <div id="shortSamplesTray" class="samples-tray"></div>
+            <div id="characterSamplesTray" class="samples-tray"></div>
         </div>
 
         <div class="main-content-wrapper">
@@ -106,7 +107,7 @@
             <br><br>
             <strong><span style="color: #7fa5f3">Clockchecker Interactive</span></strong> (i.e., this webpage) is a statically-hosted web GUI for <span style="color: #7fa5f3">clockchecker</span>.
             It was vibe-coded using Gemini+Canvas, because I am not a front-end guy. The <span style="color: #7fa5f3">clockchecker</span> solver runs using PyScript, which is the full(ish)
-            CPython interpreter compiled into WASM bytecode that runs in your browser. It uses a single thread, so it is not particularly fast.
+            CPython interpreter compiled into WASM bytecode that runs in your browser. It uses a single thread, so it is not particularly fast (I've found it to be around <b>20x slower</b> than running natively on a 16-core CPU).
             But it does work, which I think is pretty neat. ✨
             </p>
         </div>
@@ -142,7 +143,8 @@
         </div>
     </div>
     
-    <script src="samples.js"></script>
+    <script src="puzzles.js"></script>
+    <script src="characters.js"></script>
 
     <script>
         const inputTextElement = document.getElementById('inputText'); 
@@ -158,12 +160,12 @@
         const undoInputButton = document.getElementById('undoInputButton');
         const redoInputButton = document.getElementById('redoInputButton'); 
 
-        const longSamplesTrayWrapper = document.getElementById('longSamplesTrayWrapper');
-        const longSamplesTray = document.getElementById('longSamplesTray');
+        const puzzleSamplesTrayWrapper = document.getElementById('puzzleSamplesTrayWrapper');
+        const puzzleSamplesTray = document.getElementById('puzzleSamplesTray');
         const toggleLongSamplesTrayButton = document.getElementById('toggleLongSamplesTrayButton');
 
-        const shortSamplesTrayWrapper = document.getElementById('shortSamplesTrayWrapper');
-        const shortSamplesTray = document.getElementById('shortSamplesTray');
+        const characterSamplesTrayWrapper = document.getElementById('characterSamplesTrayWrapper');
+        const characterSamplesTray = document.getElementById('characterSamplesTray');
         const toggleShortSamplesTrayButton = document.getElementById('toggleShortSamplesTrayButton');
 
         const infoButton = document.getElementById('infoButton');
@@ -185,6 +187,31 @@
         const DEBOUNCE_DELAY = 300; 
         let codeMirrorEditor;
 
+
+        const InfoTokens = [
+            "IsCharacter",
+            "IsEvil",
+            "IsDroisoned",
+            "IsAlive",
+            "IsCategory",
+            "IsInPlay",
+            "CharAttrEq",
+            "ExactlyN",
+            "SameCategory",
+            "Dies",
+            "Execution",
+            "DrunkBetweenTownsfolk",
+            "LongestRowOfTownsfolk",
+            "Doomsayer",
+        ];
+
+        const DataTokens = [
+            "MINION",
+            "DEMON",
+            "TOWNSFOLK",
+            "OUTSIDER",
+        ];
+
         document.addEventListener("DOMContentLoaded", function() {
             try {
                 const blueTokens = Townsfolk.concat(Outsiders);
@@ -194,29 +221,34 @@
                     let pythonMode = CodeMirror.getMode(config, "python"); 
                     return CodeMirror.overlayMode(pythonMode, {
                         token: function(stream, state) {
+                            if (stream.match("#", true, false)) {
+                                while (stream.next() != null) {};
+                                return null;
+                            }
                             for (let token of Evils) {
-                                if (stream.match(token, true, false)) { // Case-sensitive
+                                if (stream.match(token, true, false)) {
                                     return "custom-red-tokens";
                                 }
                             }
                             for (let token of purpleTokens) {
-                                if (stream.match(token, true, false)) { // Case-sensitive
+                                if (stream.match(token, true, false)) {
                                     return "custom-purple-tokens";
                                 }
                             }
                             for (let token of blueTokens) {
-                                if (stream.match(token, true, false)) { // Case-sensitive
+                                if (stream.match(token, true, false)) {
                                     return "custom-blue-tokens";
                                 }
                             }
                             for (let token of DataTokens) {
-                                if (stream.match(token, true, false)) { // Case-sensitive
+                                if (stream.match(token, true, false)) {
                                     return "custom-orange-tokens";
                                 }
                             }
                             // Advance stream if no custom token is matched to avoid infinite loops
                             while (stream.next() != null) {
                                 let matched = false;
+                                if (stream.match("#", true, false)) {while (stream.next() != null) {}; return null;};
                                 for (let token of blueTokens) if (stream.match(token, false, true)) matched = true;
                                 for (let token of Evils) if (stream.match(token, false, true)) matched = true;
                                 for (let token of purpleTokens) if (stream.match(token, false, true)) matched = true;
@@ -237,7 +269,8 @@
                     matchBrackets: true,
                     indentUnit: 4, 
                     smartIndent: true,
-                    readOnly: false 
+                    readOnly: false,
+                    lineComment: true,
                 });
                 globalThis.codeMirrorEditor = codeMirrorEditor;
                 
@@ -281,8 +314,8 @@
         }
 
         function updateUndoRedoButtonStates() {
-            undoInputButton.disabled = currentHistoryIndex <= 0;
-            redoInputButton.disabled = currentHistoryIndex >= inputHistory.length - 1;
+            // undoInputButton.disabled = currentHistoryIndex <= 0;
+            // redoInputButton.disabled = currentHistoryIndex >= inputHistory.length - 1;
         }
 
         function make_puzzle_card(data) {
@@ -295,7 +328,7 @@
             function colour_claim(claim) {
                 let colour = '89DDFF';
                 if (Outsiders.includes(claim)) colour = '7af';
-                else if (Evils.includes(claim)) colour = 'f96';
+                else if (Evils.includes(claim)) colour = 'f88';
                 return `<span style="color: #${colour}">${claim}</span>`;
             }
             character_content = '<strong>Claims:</strong> ';
@@ -315,20 +348,20 @@
 
 
         function populateLongSamplesTray() {
-            longSamplesTray.innerHTML = ''; 
+            puzzleSamplesTray.innerHTML = ''; 
             const mainLabel = document.createElement('h3');
             mainLabel.textContent = 'Puzzles'; 
             mainLabel.className = 'samples-tray-label';
-            longSamplesTray.appendChild(mainLabel);
+            puzzleSamplesTray.appendChild(mainLabel);
 
-            for (const categoryName in longSamples) {
+            for (const categoryName in puzzleSamples) {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'sample-category';
                 const categoryHeader = document.createElement('h4');
                 categoryHeader.textContent = categoryName;
                 categoryDiv.appendChild(categoryHeader);
 
-                longSamples[categoryName].forEach(sample => {
+                puzzleSamples[categoryName].forEach(sample => {
                     const sampleCard = make_puzzle_card(sample);
                     sampleCard.addEventListener('click', () => {
                         if (codeMirrorEditor) {
@@ -336,37 +369,42 @@
                             codeMirrorEditor.setValue(sample.value); 
                             saveInputState(codeMirrorEditor.getValue()); 
                         }
-                        longSamplesTrayWrapper.classList.remove('visible');
-                        shortSamplesTrayWrapper.classList.remove('visible'); 
+                        puzzleSamplesTrayWrapper.classList.remove('visible');
+                        characterSamplesTrayWrapper.classList.remove('visible');
+                        showHidePuzzleTrayContent();
+                        showHideCharacterTrayContent();
                         if (codeMirrorEditor) codeMirrorEditor.focus();
                     });
                     categoryDiv.appendChild(sampleCard);
                 });
-                longSamplesTray.appendChild(categoryDiv);
+                puzzleSamplesTray.appendChild(categoryDiv);
             }
         }
 
         function populateShortSamplesTray() {
-            shortSamplesTray.innerHTML = '';
+            characterSamplesTray.innerHTML = '';
             const mainLabel = document.createElement('h3');
             mainLabel.textContent = 'Characters';
             mainLabel.className = 'samples-tray-label';
-            shortSamplesTray.appendChild(mainLabel);
+            characterSamplesTray.appendChild(mainLabel);
 
-            for (const categoryName in shortSamples) {
+            for (const categoryName in characterSamples) {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'sample-category';
                 const categoryHeader = document.createElement('h4');
                 categoryHeader.textContent = categoryName;
                 categoryDiv.appendChild(categoryHeader);
 
-                shortSamples[categoryName].forEach(sample => {
+                characterSamples[categoryName].forEach(sample => {
                     const sampleCard = document.createElement('div');
                     sampleCard.className = 'short-sample-item';
 
                     const titleElement = document.createElement('div');
                     titleElement.className = 'short-sample-title';
                     titleElement.textContent = sample.name;
+                    if (categoryName == 'Demons' || categoryName == 'Minions') {
+                        titleElement.style.color = '#f88';
+                    }
 
                     const snippetElement = document.createElement('div');
                     snippetElement.className = 'short-sample-snippet';
@@ -404,34 +442,54 @@
                     });
                     categoryDiv.appendChild(sampleCard);
                 });
-                shortSamplesTray.appendChild(categoryDiv);
+                characterSamplesTray.appendChild(categoryDiv);
             }
         }
         
         undoInputButton.addEventListener('click', () => {
-            if (currentHistoryIndex > 0) {
-                currentHistoryIndex--;
-                if (codeMirrorEditor) codeMirrorEditor.setValue(inputHistory[currentHistoryIndex]);
-            }
-            updateUndoRedoButtonStates();
+            codeMirrorEditor.undo();
             if (codeMirrorEditor) codeMirrorEditor.focus();
         });
         
         redoInputButton.addEventListener('click', () => {
-            if (currentHistoryIndex < inputHistory.length - 1) {
-                currentHistoryIndex++;
-                if (codeMirrorEditor) codeMirrorEditor.setValue(inputHistory[currentHistoryIndex]);
-            }
-            updateUndoRedoButtonStates();
+            codeMirrorEditor.redo();
             if (codeMirrorEditor) codeMirrorEditor.focus();
         });
 
 
+        puzzleSamplesTimeout = null;
+        function showHidePuzzleTrayContent() {
+            if (puzzleSamplesTimeout != null) clearTimeout(puzzleSamplesTimeout);
+            if (puzzleSamplesTrayWrapper.classList.contains('visible')) {
+                puzzleSamplesTray.style.display = 'flex';
+                return;
+            }
+            puzzleSamplesTimeout = setInterval(
+                () => {puzzleSamplesTray.style.display = 'none';},
+                700,
+            ); 
+        }
+
+        characterSamplesTimeout = null;
+        function showHideCharacterTrayContent() {
+            if (characterSamplesTimeout != null) clearTimeout(characterSamplesTimeout);
+            if (characterSamplesTrayWrapper.classList.contains('visible')) {
+                characterSamplesTray.style.display = 'flex';
+                return;
+            }
+            characterSamplesTimeout = setInterval(
+                () => {characterSamplesTray.style.display = 'none';},
+                700,
+            ); 
+        }
+
         toggleLongSamplesTrayButton.addEventListener('click', () => {
-            longSamplesTrayWrapper.classList.toggle('visible');
+            puzzleSamplesTrayWrapper.classList.toggle('visible');
+            showHidePuzzleTrayContent();
         });
         toggleShortSamplesTrayButton.addEventListener('click', () => {
-            shortSamplesTrayWrapper.classList.toggle('visible');
+            characterSamplesTrayWrapper.classList.toggle('visible');
+            showHideCharacterTrayContent();
         });
 
         
@@ -461,7 +519,6 @@
 
 
         takingTooLongPopup.addEventListener('click', () => {
-            takingTooLongPopup.style.display = 'none'; 
             clearTimeout(takingTooLongTimerId); 
             longTransformInfoDialogOverlay.classList.add('show');
         });
@@ -551,6 +608,9 @@
                 } else if (event.ctrlKey && (event.key === 'y' || event.key === 'Y')) { 
                     event.preventDefault();
                     redoInputButton.click();
+                    codeMirrorEditor.redo();
+                } else if (event.ctrlKey && event.key === '/') { 
+                    codeMirrorEditor.toggleComment();
                 }
             }
         });
