@@ -19,6 +19,7 @@ class NQTPuzzles(unittest.TestCase):
         for puzzle_name in all_puzzles:
             with self.subTest(msg=puzzle_name):
                 print(f'\033[31;1m.', end='', flush=True)
+                # print(puzzle_name)
 
                 puzzle, solutions, condition = all_puzzles[puzzle_name]()
                 worlds = list(clockchecker.solve(puzzle))

@@ -1,5 +1,4 @@
 import multiprocessing
-from time import time
 
 from clockchecker import *
 
@@ -9,45 +8,49 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
 
-    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1j8ub5q/weekly_puzzle_31_no_your_other_left/
-    You, Aoife, Tim, Adam, Fraser, Sarah, Olivia = range(7)
+
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
+
+    Hermit.set_outsiders(Saint, Recluse, Drunk)
+
+    You, Tim, Adam, Dan, Oscar, Sula, Sarah, Fraser = range(8)
     puzzle = Puzzle(
         players=[
-            Player('You', claim=Chef, night_info={
-                1: Chef.Ping(1),
+            Player('You', claim=Slayer, day_info={
+                2: Slayer.Shot(Adam, died=False),
             }),
-            Player('Aoife', claim=Empath, night_info={
-                1: Empath.Ping(0),
-                2: Empath.Ping(1),
-                3: Empath.Ping(1),
-            }),
-            Player('Tim', claim=Ravenkeeper, night_info={
-                2: Ravenkeeper.Ping(Olivia, Imp),
+            Player('Tim', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Dan, Drunk),
+                3: Undertaker.Ping(Fraser, Chef),
             }),
             Player('Adam', claim=Investigator, night_info={
-                1: Investigator.Ping(Aoife, Fraser, Spy),
+                1: Investigator.Ping(Tim, Dan, ScarletWoman)
             }),
-            Player('Fraser', claim=Recluse),
-            Player('Sarah', claim=Undertaker, night_info={
-                2: Undertaker.Ping(You, Spy),
+            Player('Dan', claim=Empath, night_info={
+                1: Empath.Ping(1),
             }),
-            Player('Olivia', claim=FortuneTeller, night_info={
-                1: FortuneTeller.Ping(Aoife, Tim, demon=False),
-                2: FortuneTeller.Ping(Aoife, Olivia, demon=False),
+            Player('Oscar', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Adam, Investigator),
+            }),
+            Player('Sula', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Tim, Fraser, Undertaker)
+            }),
+            Player('Sarah', claim=Investigator, night_info={
+                1: Investigator.Ping(Tim, Fraser, Spy)
+            }),
+            Player('Fraser', claim=Chef, night_info={
+                1: Chef.Ping(1)
             }),
         ],
-        day_events={1: Execution(You), 2: Execution(Sarah)},
-        night_deaths={2: Tim, 3: Olivia},
-        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
-        hidden_self=[Drunk],
+        day_events={1: Execution(Dan), 2: Execution(Fraser)},
+        night_deaths={2: Oscar, 3: You},
+        hidden_characters=[Imp, ScarletWoman, Spy, Drunk, Hermit],
+        hidden_self=[Drunk, Hermit],
     )
 
-
     print(puzzle, '\n\nSolving...\n')
-    start = time()
-
     count = 0
     for world in solve(puzzle):
         print(world)
         count += 1
-    print(f'Found {count} worlds in {time() - start:0.2f}s')
+    print(f'Found {count} worlds')

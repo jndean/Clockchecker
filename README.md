@@ -256,14 +256,14 @@ python example.py
 ```
 Solved puzzles are recorded in the `puzzles.py` file, you can choose to print and solve one by name, e.g.:
 ```bash
-python puzzles.py 24
-python puzzles.py 30left
+python puzzles.py NQT24
+python puzzles.py josef_yes_but_dont
 ```
-I record all (or most) previously solved puzzles so that they can be run as unit tests during development. You can run these tests and solve all puzzles using
+I record most previously solved puzzles so that they can be run as unit tests during development. You can run these tests and solve all puzzles using
 ```bash
 python -m unittest
 ```
-Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on rather than efficient to run. At time of writing the above unittest command solves 46 puzzles in 15.1 seconds.
+Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on rather than efficient to run. At time of writing the above unittest command solves 54 puzzles in 18.2 seconds.
 
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
@@ -371,7 +371,6 @@ class Drunk(Character):
         # Drunk can only 'lie' about being Townsfolk
         if drunk.claim.category is not TOWNSFOLK:
             return
-        drunk.droison_count += 1
         self.wake_pattern = drunk.claim.wake_pattern
         yield state
 ```

@@ -30,7 +30,7 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    # (48, 0, 2, 1, 1),
+    # (3023, 4, 0)
 ]
 
 
@@ -154,7 +154,8 @@ class State:
         self.night, self.day = None, None
         self.previously_alive = [True] * len(self.players)
 
-        self.math_misregistration_bounds = [0, 0]  # Setup pings incl. in N1.
+        self._math_misregistration_bounds = [0, 0]  # Setup pings incl. in N1.
+        self._math_misregisterers = set()
         self.vortox = False  # The vortox will set this during setup
 
         if not allow_good_double_claims:
@@ -232,7 +233,7 @@ class State:
         self.currently_acting_character = character_t
         self.players_still_to_act = [
             pid for pid in range(len(self.players))
-            if info.acts_like(self, pid, character_t)
+            if info.acts_like(self.players[pid].character, character_t)
         ]
         for state in self.run_all_players_with_currently_acting_character():
             state.phase_order_index += 1
@@ -261,7 +262,7 @@ class State:
 
         match self.current_phase:
             case Phase.NIGHT:
-                if characters.Chambermaid.player_wakes_tonight(self, pid):
+                if player.character.wakes_tonight(self, pid):
                     player.woke()
                 states = player.character.run_night(self, pid)
                 states = State.run_external_night_info(
@@ -350,7 +351,8 @@ class State:
             ):
                 return
 
-        self.math_misregistration_bounds = [0, 0]
+        self._math_misregistration_bounds = [0, 0]
+        self._math_misregisterers = set()
 
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
@@ -447,18 +449,23 @@ class State:
         game_over = all_demons_dead and no_evil_twin
         return game_over
     
-    def math_misregistration(self, result: info.STBool | None = None):
+    def math_misregistration(
+        self,
+        player: PlayerID,
+        result: info.STBool | None = None
+    ) -> None:
         """
         Modify bounds on possible Mathematician pings this night.
         If misregistration is certain, no argument is needed. If it depends on
         an STBool being FALSE (e.g. a Ping from a character ability), that can
         be provided in `result`.
         """
-        if result is info.TRUE:
+        if result is info.TRUE or player in self._math_misregisterers:
             return
-        self.math_misregistration_bounds[1] += 1
+        self._math_misregistration_bounds[1] += 1
+        self._math_misregisterers.add(player)
         if result is None or result is info.FALSE:
-            self.math_misregistration_bounds[0] += 1
+            self._math_misregistration_bounds[0] += 1
 
     def __str__(self) -> str:
         ret = [f'World{self.debug_key if _DEBUG else ""}(']
@@ -493,9 +500,11 @@ class Puzzle:
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
     category_counts: tuple[int, int, int, int] | None = None
-    allow_good_double_claims: bool = True
     deduplicate_initial_characters: bool = True
+
     finish_final_day: bool = False
+    allow_good_double_claims: bool = False
+    allow_killing_dead_players: bool = True
 
     user_interrupt: Callable[[], bool] | None = None
 
@@ -591,6 +600,20 @@ class Puzzle:
         ]
         self.state_template = State(self, self.players)
 
+        # Annoyingly, the pickle module doesn't store modified class attributes,
+        # so when a puzzle is sent between processes, such classes (like the
+        # Hermit) lose their state. Therefore, we get the Puzzle to record state
+        # manually and reapply it when the puzzle is unserialised.
+        self._extra_serialised_state = {
+            'hermit_outsiders': characters.Hermit.outsiders
+        }
+
+    def unserialise_extra_state(self):
+        if hermit_outsiders := self._extra_serialised_state['hermit_outsiders']:
+            characters.Hermit.set_outsiders(*hermit_outsiders)
+        del self._extra_serialised_state
+
+
     def _validate_inputs(self):
         """
         When I enter a new puzzle and it is not solved correctly, half the time
@@ -612,7 +635,7 @@ class Puzzle:
             + characters.INACTIVE_CHARACTERS
         )
         for character in used_characters:
-            if character not in registered_characters:
+            if not any(issubclass(character, reg) for reg in registered_characters):
                 raise ValueError(
                     f'Character {character.__name__} has not been placed in the'
                     ' night order. Did you forget?'
@@ -777,6 +800,7 @@ def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
 
     
 def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
+    puzzle.unserialise_extra_state()
     def liars_gen():
         while (liars := liars_q.get()) is not None:
             yield liars

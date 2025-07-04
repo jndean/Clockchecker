@@ -159,9 +159,9 @@ class IsEvil(Info):
     def __call__(self, state: State, src: PlayerID = None):
         player = state.players[self.player]
         if not player.droison_count:  # Misregistrations are part of ability
-            if isinstance(player.character, characters.Recluse):
+            if has_ability_of(player.character, characters.Recluse):
                 return TRUE if player.is_evil else MAYBE
-            if isinstance(player.character, characters.Spy):
+            if has_ability_of(player.character, characters.Spy):
                 return MAYBE if player.is_evil else FALSE
         return STBool(player.is_evil)
 
@@ -177,8 +177,10 @@ class IsAlive(Info):
     player: PlayerID
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        character = player.character
-        if type(character) is characters.Zombuul and character.registering_dead:
+        if (
+            has_ability_of(player.character, characters.Zombuul)
+            and player.character.registering_dead
+        ):
             return FALSE
         return STBool(not player.is_dead)
 
@@ -249,7 +251,7 @@ class IsInPlay(Info):
             result |= test(state, src)
             if result is TRUE:
                 return TRUE  # Early exit on TRUE not MAYBE
-        return result		
+        return result
 
 @dataclass
 class SameCategory(Info): 
@@ -355,39 +357,44 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
 
 
 def has_ability_of(
-    state: State,
-    player_id: PlayerID,
-    character: type[Character]
+    character_instance: Character,
+    ability: type[Character]
 ) -> bool:
-    """For checking if it is legal for a player to use a character's ability."""
-    actual_character = state.players[player_id].character
+    """
+    For checking if it is legal for a player to use a character's ability.
+    Is only concenred with characters who gain other character's abilities, does
+    not handle anything like poisoning etc.
+    """
     if (
-        isinstance(actual_character, characters.Philosopher)
-        and actual_character.active_ability is not None
+        isinstance(character_instance, characters.Philosopher)
+        and character_instance.active_ability is not None
     ):
         # This method says Philo doeosn't have Philo ability after making a
         # sober choice. This is convenient when computing night order.
-        return isinstance(actual_character.active_ability, character)
+        return acts_like(character_instance.active_ability, ability)
+    if isinstance(character_instance, characters.Hermit):
+        return any(
+            acts_like(subability, ability)
+            for subability in character_instance.active_abilities
+        )
 
     # TODO: Alchemist and Boffin'd Demon
-    return isinstance(actual_character, character)
+    return isinstance(character_instance, ability)
 
 
 def acts_like(
-    state: State,
-    player_id: PlayerID,
+    character_instance: Character,
     character: type[Character]
 ) -> bool:
     """
     Like `has_ability_of` but also includes characters that think they have
     another character's ability.
     """
-    if has_ability_of(state, player_id, character):
+    if has_ability_of(character_instance, character):
         return True
-    player = state.players[player_id]
-    simulated_character = getattr(player.character, 'simulated_character', None)
-    if simulated_character is not None:
-        return isinstance(simulated_character, character)
+    sim_char = getattr(character_instance, 'simulated_character', None)
+    if sim_char is not None:
+        return acts_like(sim_char, character)
     # TODO: Lunatic currently doesn't decide what demon they think they are.
     return False
 
@@ -479,7 +486,8 @@ class DrunkBetweenTownsfolk(Info):
 @dataclass
 class LongestRowOfTownsfolk(Info):
     length: int | None
-    min_length: int | None = None
+    minimum: int = 999
+    maximum: int = -999
     def __call__(self, state: State, src: PlayerID) -> STBool:
         townsfolk = [
             IsCategory(player, characters.TOWNSFOLK)(state, src)
@@ -496,4 +504,5 @@ class LongestRowOfTownsfolk(Info):
         longest = min(longest, len(state.players))
         if self.length is not None:
             return STBool(longest == self.length)
-        return STBool(longest >= self.min_length)
+        else:
+            return STBool(self.minimum <= longest <= self.maximum)

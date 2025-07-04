@@ -56,23 +56,6 @@ class Execution(Event):
         yield from player.executed(state, self.player, self.died)
 
 
-class Doomsayer:
-    """
-    If 4 or more players live, each living player may publically choose (once
-    per game) that a player of their own alignment dies.
-    """
-    @dataclass
-    class Call(Event):
-        died: PlayerID
-        player: PlayerID | None = None
-        def __call__(self, state: State) -> StateGen:
-            a = info.IsEvil(self.player)(state, self.player)
-            b = info.IsEvil(self.died)(state, self.player)
-            if a ^ b is not info.TRUE:
-                yield from state.players[self.died].character.killed(
-                    state, self.died
-                )
-
 @dataclass
 class ExecutionByST(Execution):
     """
@@ -97,7 +80,11 @@ class UneventfulNomination(Event):
     nominator: PlayerID
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        if info.has_ability_of(state, self.player, characters.Virgin):
+        nominator = state.players[self.nominator].character
+        nominee = state.players[self.player].character
+        if info.has_ability_of(nominator, characters.Princess):
+            nominator.nominates(state, self.nominator, self.player)
+        if info.has_ability_of(nominee, characters.Virgin):
             yield from self._virgin_check(state)
         else:
             yield state
@@ -117,7 +104,7 @@ class UneventfulNomination(Event):
             virgin.character.spent = True
             yield state
         elif virgin.droison_count:
-            state.math_misregistration()
+            state.math_misregistration(self.player)
             virgin.character.spent = True
             yield state
 
@@ -136,6 +123,7 @@ class Dies(Event):
                 yield from dead_player.character.killed(state, self.player)
             return
 
+
 class NightEvent:
     """
     Doesn't extend the Event interface, because deaths are not publically 
@@ -150,3 +138,21 @@ class NightDeath(NightEvent):
 @dataclass
 class NightResurrection(NightEvent):
     player: PlayerID
+
+
+class Doomsayer:
+    """
+    If 4 or more players live, each living player may publically choose (once
+    per game) that a player of their own alignment dies.
+    """
+    @dataclass
+    class Call(Event):
+        died: PlayerID
+        player: PlayerID | None = None
+        def __call__(self, state: State) -> StateGen:
+            a = info.IsEvil(self.player)(state, self.player)
+            b = info.IsEvil(self.died)(state, self.player)
+            if a ^ b is not info.TRUE:
+                yield from state.players[self.died].character.killed(
+                    state, self.died
+                )
