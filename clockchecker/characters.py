@@ -10,6 +10,7 @@ from clockchecker.info import PlayerID
 
 if TYPE_CHECKING:
     from .core import Player, State, StateGen
+    from .events import Event
     from .info import PlayerID, ExternalInfo, STBool
 
 from . import core
@@ -1244,6 +1245,36 @@ class Goblin(Character):
     category: ClassVar[Categories] = MINION
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+    
+@dataclass
+class Golem(Character):
+    """
+    You may only nominate once per game.
+    When you do, if the nominee is not the Demon, they die.
+    """
+    category: ClassVar[Categories] = OUTSIDER
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    spent: bool = False
+
+    def nominates(self, state: State, nomination: Event) -> StateGen:
+        if isinstance(nomination, events.UneventfulNomination):
+            # if self.spent:
+            #     return?
+            raise NotImplementedError("TODO: Golem misfires")
+
+        assert isinstance(nomination, events.Dies)
+        golem = state.players[nomination.after_nominated_by]
+        nominee = state.players[nomination.player]
+        is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
+        if (
+            not self.spent 
+            and not golem.droison_count
+            and is_demon is not info.TRUE
+        ):
+            self.spent = True
+            yield from nominee.character.killed(state, nominee.id, golem.id)
 
 @dataclass
 class Gossip(Character):
@@ -3216,8 +3247,26 @@ class Virgin(Character):
 
     spent: bool = False
 
-    # Virgin nominations are checked in the ExecutedByST and 
-    # UneventfulExecution events
+    def uneventful_nomination(
+        self,
+        state: State,
+        nomination: events.UneventfulNomination,
+    ) -> StateGen:
+        player = state.players[nomination.player]
+        townsfolk_nominator = info.IsCategory(nomination.nominator, TOWNSFOLK)(
+            state, nomination.player
+        )
+        if (
+            player.is_dead
+            or self.spent
+            or townsfolk_nominator is not info.TRUE
+        ):
+            self.spent = True
+            yield state
+        elif player.droison_count:
+            state.math_misregistration(nomination.player)
+            self.spent = True
+            yield state
 
 @dataclass
 class Vortox(GenericDemon):
@@ -3430,6 +3479,7 @@ INACTIVE_CHARACTERS = [
     Butler,
     Drunk,
     Goblin,
+    Golem,
     Hermit,
     Lunatic,
     Marionette,

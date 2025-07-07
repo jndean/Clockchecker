@@ -1849,7 +1849,7 @@ puzzle = Puzzle(
     },
     night_deaths={2: Chris, 3: Josef},
     hidden_characters=[Imp, Witch, Drunk, Lunatic],
-    hidden_self=[Lunatic],
+    hidden_self=[Imp, Lunatic],
 )`
 }, {
 name: 'NQT43',
@@ -2130,7 +2130,7 @@ claims: ['Recluse', 'Investigator', 'Undertaker', 'Saint', 'Saint', 'Butler', 'W
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
 value: 
 `# Other: NQT47
-# NQT47: URL TODO
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1lq1bt7/weekly_puzzle_47_we_have_evil_twin_at_home/
 
 You, Olivia, Steph, Josh, Sula, Oscar, Jasmine, Tom, Fraser = range(9)
 puzzle = Puzzle(
@@ -2161,6 +2161,60 @@ puzzle = Puzzle(
     night_deaths={2: Fraser, 3: Oscar, 4: Olivia},
     hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
     hidden_self=[Drunk],
+)`
+}, {
+name: 'NQT48',
+claims: ['Mathematician', 'Chambermaid', 'VillageIdiot', 'VillageIdiot', 'Juggler', 'Golem', 'Puzzlemaster', 'Artist'],
+hidden: ['Leviathan', 'Xaan', 'Poisoner'],
+value: 
+`# Other: NQT48
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1ltxd8a/weekly_puzzle_48_solving_for_x/
+
+You, Matthew, Olivia, Jasmine, Fraser, Sula, Dan, Tom = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Mathematician, night_info={
+            1: Mathematician.Ping(1),
+            2: Mathematician.Ping(0),
+            3: Mathematician.Ping(1),
+        }),
+        Player('Matthew', claim=Chambermaid, night_info={
+            1: Chambermaid.Ping(Olivia, Jasmine, 2),
+            2: Chambermaid.Ping(Olivia, Dan, 2),
+            3: Chambermaid.Ping(Olivia, Fraser, 0),
+        }),
+        Player('Olivia', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Tom, is_evil=True),
+            2: VillageIdiot.Ping(Matthew, is_evil=True),
+            3: VillageIdiot.Ping(Dan, is_evil=False),
+        }),
+        Player('Jasmine', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Tom, is_evil=False),
+            2: VillageIdiot.Ping(Fraser, is_evil=False),
+            3: VillageIdiot.Ping(Matthew, is_evil=True),
+        }),
+        Player('Fraser', claim=Juggler,
+            day_info={1: Juggler.Juggle({Olivia: VillageIdiot, Sula: Golem})},
+            night_info={2: Juggler.Ping(0)}
+        ),
+        Player('Sula', claim=Golem),
+        Player('Dan', claim=Puzzlemaster, day_info={
+            3: Puzzlemaster.Ping(guess=Tom, demon=Matthew),
+        }),
+        Player('Tom', claim=Artist, day_info={
+            3: Artist.Ping(
+                IsCharacter(Jasmine, Poisoner)
+                | IsCharacter(Fraser, Poisoner)
+                | IsCharacter(Dan, Poisoner)
+            )
+        }),
+        
+    ],
+    day_events={3: Dies(player=Tom, after_nominated_by=Sula)},
+    night_deaths={},
+    hidden_characters=[Leviathan, Xaan, Poisoner],
+    hidden_self=[],
+    allow_good_double_claims=True,
 )`
 }
 ], "Other": [{

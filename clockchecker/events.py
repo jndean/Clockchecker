@@ -80,40 +80,25 @@ class UneventfulNomination(Event):
     nominator: PlayerID
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        nominator = state.players[self.nominator].character
-        nominee = state.players[self.player].character
-        if info.has_ability_of(nominator, characters.Princess):
-            nominator.nominates(state, self.nominator, self.player)
-        if info.has_ability_of(nominee, characters.Virgin):
-            yield from self._virgin_check(state)
-        else:
-            yield state
-
-    def _virgin_check(self, state: State) -> StateGen:
-        virgin = state.players[self.player]
-        if not isinstance(virgin.character, characters.Virgin):
-            raise NotImplementedError('Recording a Philo Virgin is spent.')
-        townsfolk_nominator = info.IsCategory(
-            self.nominator, characters.TOWNSFOLK
-        )(state, self.player)
-        if (
-            virgin.is_dead
-            or virgin.character.spent
-            or townsfolk_nominator is not info.TRUE
-        ):
-            virgin.character.spent = True
-            yield state
-        elif virgin.droison_count:
-            state.math_misregistration(self.player)
-            virgin.character.spent = True
-            yield state
+        nominator = state.players[self.nominator]
+        nominee = state.players[self.player]
+        if info.has_ability_of(nominator.character, characters.Princess):
+            nominator.character.nominates(state, self.nominator, self.player)
+        states = [state]
+        if (virgin := nominee.get_ability(characters.Virgin)) is not None:
+            states = virgin.uneventful_nomination(state, self)
+        if (golem := nominator.get_ability(characters.Golem)) is not None:
+            raise NotImplementedError("Need to put a generator stack here")
+            # yield from golem.nominates(state, self)
+        yield from states
 
 @dataclass
 class Dies(Event):
     """
     A player dies during the day without execution, e.g. Witch-cursed or Tinker.
     """
-    after_nominating: bool
+    after_nominating: bool = False
+    after_nominated_by: PlayerID | None = None
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
         dead_player = state.players[self.player]
@@ -121,7 +106,11 @@ class Dies(Event):
             if (witch := getattr(dead_player, 'witch_cursed', None)) is not None:
                 dead_player.character.death_explanation = f"cursed by {witch}"
                 yield from dead_player.character.killed(state, self.player)
-            return
+        elif self.after_nominated_by is not None:
+            nominator = state.players[self.after_nominated_by]
+            if (golem := nominator.get_ability(characters.Golem)) is not None:
+                yield from golem.nominates(state, self)
+
 
 
 class NightEvent:

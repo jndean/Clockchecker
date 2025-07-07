@@ -1953,7 +1953,7 @@ def puzzle_NQT41():
         },
         night_deaths={2: Chris, 3: Josef},
         hidden_characters=[Imp, Witch, Drunk, Lunatic],
-        hidden_self=[Lunatic],
+        hidden_self=[Imp, Lunatic],
     )
     solutions = (
         (Lunatic, FortuneTeller, Seamstress, Slayer, Chef, Noble, Witch, Imp),
@@ -2114,7 +2114,7 @@ def puzzle_NQT44_alt():
 
 
 def puzzle_NQT45a():
-    # URL: TODO
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
 
     Hermit.set_outsiders(Saint, Recluse, Drunk)
 
@@ -2162,7 +2162,7 @@ def puzzle_NQT45a():
 
 
 def puzzle_NQT45b():
-    # URL: TODO
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
 
     Hermit.set_outsiders(Saint, Recluse, Drunk)
 
@@ -2255,7 +2255,7 @@ def puzzle_NQT46():
 
 
 def puzzle_NQT47():
-    # NQT47: URL TODO
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lq1bt7/weekly_puzzle_47_we_have_evil_twin_at_home/
 
     You, Olivia, Steph, Josh, Sula, Oscar, Jasmine, Tom, Fraser = range(9)
     puzzle = Puzzle(
@@ -2293,6 +2293,61 @@ def puzzle_NQT47():
     )
     return puzzle, solutions, None
 
+
+def puzzle_NQT48():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ltxd8a/weekly_puzzle_48_solving_for_x/
+    
+    You, Matthew, Olivia, Jasmine, Fraser, Sula, Dan, Tom = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+                2: Mathematician.Ping(0),
+                3: Mathematician.Ping(1),
+            }),
+            Player('Matthew', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(Olivia, Jasmine, 2),
+                2: Chambermaid.Ping(Olivia, Dan, 2),
+                3: Chambermaid.Ping(Olivia, Fraser, 0),
+            }),
+            Player('Olivia', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Tom, is_evil=True),
+                2: VillageIdiot.Ping(Matthew, is_evil=True),
+                3: VillageIdiot.Ping(Dan, is_evil=False),
+            }),
+            Player('Jasmine', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Tom, is_evil=False),
+                2: VillageIdiot.Ping(Fraser, is_evil=False),
+                3: VillageIdiot.Ping(Matthew, is_evil=True),
+            }),
+            Player('Fraser', claim=Juggler,
+                day_info={1: Juggler.Juggle({Olivia: VillageIdiot, Sula: Golem})},
+                night_info={2: Juggler.Ping(0)}
+            ),
+            Player('Sula', claim=Golem),
+            Player('Dan', claim=Puzzlemaster, day_info={
+                3: Puzzlemaster.Ping(guess=Tom, demon=Matthew),
+            }),
+            Player('Tom', claim=Artist, day_info={
+                3: Artist.Ping(
+                    IsCharacter(Jasmine, Poisoner)
+                    | IsCharacter(Fraser, Poisoner)
+                    | IsCharacter(Dan, Poisoner)
+                )
+            }),
+            
+        ],
+        day_events={3: Dies(player=Tom, after_nominated_by=Sula)},
+        night_deaths={},
+        hidden_characters=[Leviathan, Xaan, Poisoner],
+        hidden_self=[],
+        allow_good_double_claims=True,
+    )
+    solutions = (
+        (Mathematician, Chambermaid, VillageIdiot, Leviathan, Juggler, Golem, 
+            Puzzlemaster, Xaan),
+    )
+    return puzzle, solutions, None
 
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
@@ -2598,7 +2653,10 @@ def _puzzle_emerald_tb():
         hidden_characters=[Imp, Poisoner, Baron, Spy, ScarletWoman, Drunk],
         hidden_self=[Drunk],
     )
-    solutions = () # TODO
+    solutions = (
+        (Librarian, FortuneTeller, Imp, Spy, Empath, Washerwoman, Butler,
+            Poisoner, Chef, Virgin, Drunk, Ravenkeeper),
+    )
     return puzzle, solutions, None
 
 

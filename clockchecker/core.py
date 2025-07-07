@@ -84,6 +84,13 @@ class Player:
 
     def woke(self) -> None:
         self.woke_tonight = True
+    
+    def get_ability(self, character_t: type[Character]) -> Character | None:
+        # TODO: Make this recurse into wrapped characters, 
+        # make self.character private.
+        if isinstance(self.character, character_t):
+            return self.character
+        return None
 
     @property
     def vigormortised(self):

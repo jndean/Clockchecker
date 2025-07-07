@@ -225,6 +225,11 @@
                                 while (stream.next() != null) {};
                                 return null;
                             }
+                            for (let token of blueTokens) {
+                                if (stream.match(token, true, false)) {
+                                    return "custom-blue-tokens";
+                                }
+                            }
                             for (let token of Evils) {
                                 if (stream.match(token, true, false)) {
                                     return "custom-red-tokens";
@@ -233,11 +238,6 @@
                             for (let token of purpleTokens) {
                                 if (stream.match(token, true, false)) {
                                     return "custom-purple-tokens";
-                                }
-                            }
-                            for (let token of blueTokens) {
-                                if (stream.match(token, true, false)) {
-                                    return "custom-blue-tokens";
                                 }
                             }
                             for (let token of DataTokens) {
@@ -283,6 +283,11 @@
                     }
                 });
                 
+                puzzleSamples["NotQuiteTangible"].forEach(puzzle => {
+                    if (puzzle.name == 'NQT41') {
+                        codeMirrorEditor.setValue(puzzle.value);
+                    }
+                });
                 saveInputState(codeMirrorEditor.getValue() || "");
                 codeMirrorEditor.focus();
             } catch (e) {
@@ -618,7 +623,7 @@
         // --- Initialization ---
         populateLongSamplesTray(); 
         populateShortSamplesTray();
-        updateOutputStats(); 
+        updateOutputStats();
         // Focus is handled by CodeMirror after initialization in DOMContentLoaded
 
     </script>
