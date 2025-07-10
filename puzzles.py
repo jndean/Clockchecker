@@ -1961,7 +1961,57 @@ def puzzle_NQT41():
     return puzzle, solutions, None
 
 
-# TODO: NQT42 (Widow)
+def puzzle_NQT42():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kwr1mx/weekly_puzzle_42_life_the_universe_and_everything/
+
+    You, Adam, Oscar, Hannah, Matthew, Jasmine, Fraser, Sula = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Philosopher, night_info={
+                1: [
+                    Philosopher.Choice(Empath),
+                    Empath.Ping(0),
+                ],
+            }),
+            Player('Adam', claim=Artist, day_info={
+                1: Artist.Ping(
+                    WidowPoisoned(Oscar)
+                    | WidowPoisoned(Hannah)
+                    | WidowPoisoned(Jasmine)
+                )
+            }),
+            Player('Oscar', claim=Empath, night_info={
+                1: Empath.Ping(1),
+                2: Empath.Ping(0),
+            }),
+            Player('Hannah', claim=Undertaker, night_info={
+                2: Undertaker.Ping(You, Baron),
+                3: Undertaker.Ping(Oscar, Empath),
+            }),
+            Player('Matthew', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Fraser, Matthew, demon=True),
+                2: FortuneTeller.Ping(Oscar, Sula, demon=True),
+                3: FortuneTeller.Ping(Hannah, Sula, demon=True),
+            }),
+            Player('Jasmine', claim=Recluse),
+            Player('Fraser', claim=Juggler,
+                day_info={1: Juggler.Juggle({You: Philosopher, Matthew: Imp})},
+                night_info={
+                    1: Widow.IsInPlay(),
+                    2: Juggler.Ping(1)
+                }
+            ),
+            Player('Sula', claim=Saint),
+        ],
+        day_events={1: Execution(You), 2: Execution(Oscar)},
+        night_deaths={2: Adam, 3: Jasmine},
+        hidden_characters=[Imp, Baron, Widow, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Philosopher, Artist, Empath, Undertaker, Widow, Imp, Juggler, Saint),
+    )
+    return puzzle, solutions, None
 
 
 def puzzle_NQT43():
@@ -2335,7 +2385,6 @@ def puzzle_NQT48():
                     | IsCharacter(Dan, Poisoner)
                 )
             }),
-            
         ],
         day_events={3: Dies(player=Tom, after_nominated_by=Sula)},
         night_deaths={},
@@ -2348,6 +2397,57 @@ def puzzle_NQT48():
             Puzzlemaster, Xaan),
     )
     return puzzle, solutions, None
+
+
+def puzzle_NQT49():
+    # URL: TODO
+
+    You, Sula, Matthew, Adam, Tom, Oscar, Fraser, Anna = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Matthew, Tom, Empath)
+            }),
+            Player('Sula', claim=Librarian, night_info={
+                1: Librarian.Ping(You, Matthew, Drunk)
+            }),
+            Player('Matthew', claim=Chef, night_info={
+                1: Chef.Ping(1)
+            }),
+            Player('Adam', claim=Recluse),
+            Player('Tom', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+                3: Empath.Ping(1),
+            }),
+            Player('Oscar', claim=Saint),
+            Player('Fraser', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Adam, Drunk),
+            }),
+            Player('Anna', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Adam, Tom, demon=False),
+                2: FortuneTeller.Ping(Tom, Fraser, demon=False),
+                3: FortuneTeller.Ping(Sula, Anna, demon=False),
+            }),
+        ],
+        day_events={
+            1: Execution(Adam),
+            2: Execution(Fraser),
+            3: [
+                Dies(player=Matthew, after_nominated_by=Oscar),
+                Dies(player=Tom, after_nominated_by=Matthew),
+                Dies(player=You, after_nominated_by=Tom),
+            ],
+        },
+        night_deaths={},
+        hidden_characters=[Riot, Poisoner, Baron, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = ((
+        Washerwoman, Baron, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller
+    ),)
+    return puzzle, solutions, None
+
 
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death

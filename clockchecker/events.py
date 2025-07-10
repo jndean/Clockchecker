@@ -90,6 +90,9 @@ class UneventfulNomination(Event):
         if (golem := nominator.get_ability(characters.Golem)) is not None:
             raise NotImplementedError("Need to put a generator stack here")
             # yield from golem.nominates(state, self)
+        if getattr(state, "rioting_count", 0):
+            raise NotImplementedError("Riot nomination doesn't kill, gen stack")
+            # yielf from characters.Riot.day_three_nomination(state, self)
         yield from states
 
 @dataclass
@@ -101,17 +104,17 @@ class Dies(Event):
     after_nominated_by: PlayerID | None = None
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        dead_player = state.players[self.player]
+        dying = state.players[self.player]
         if self.after_nominating:
-            if (witch := getattr(dead_player, 'witch_cursed', None)) is not None:
-                dead_player.character.death_explanation = f"cursed by {witch}"
-                yield from dead_player.character.killed(state, self.player)
+            if (witch := getattr(dying, 'witch_cursed', None)) is not None:
+                dying.character.death_explanation = f"cursed by {witch}"
+                yield from dying.character.killed(state, self.player)
         elif self.after_nominated_by is not None:
             nominator = state.players[self.after_nominated_by]
-            if (golem := nominator.get_ability(characters.Golem)) is not None:
+            if getattr(state, "rioting_count", 0):
+                yield from characters.Riot.day_three_nomination(state, self)
+            elif (golem := nominator.get_ability(characters.Golem)) is not None:
                 yield from golem.nominates(state, self)
-
-
 
 class NightEvent:
     """

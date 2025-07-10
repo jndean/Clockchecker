@@ -30,7 +30,7 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    # (3023, 4, 0)
+    # (327, 5, 1, 3)
 ]
 
 
@@ -281,7 +281,7 @@ class State:
                 states = player.character.run_setup(self, pid)
 
         for state in states:
-            if hasattr(states, 'debug_cull'):
+            if hasattr(state, 'debug_cull'):
                 continue
             # Recursive tail-calls can set up a variable-depth generator stack
             # corresponding to how many players have the active ability, and
@@ -328,6 +328,9 @@ class State:
         yield self
 
     def end_night(self) -> StateGen:
+        for char_t in self.puzzle.script:
+            if not char_t.global_end_night(self):
+                return
         for player in self.players:
             player.woke_tonight = False
 
@@ -588,11 +591,11 @@ class Puzzle:
         self.external_info_registry = dict(self.external_info_registry)
 
         # Compute script and character orderings.
-        self.script = set(
+        self.script = list(set(
             [p.claim for p in self.players]
             + hidden_characters
             + self.hidden_self
-        )
+        ))
         self.setup_order = [
             character for character in characters.GLOBAL_SETUP_ORDER
             if character in self.script
@@ -774,15 +777,15 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         # possible world states flow. Only valid worlds are able to reach the
         # end of the pipe.
         worlds = [world]
-        for player in range(len(puzzle.setup_order)):
+        for _ in range(len(puzzle.setup_order)):
             worlds = apply_all(worlds, 'run_next_character')
         worlds = apply_all(worlds, 'end_setup')
         for round_ in range(1, puzzle._max_night + 1):
-            for player in range(len(puzzle.night_order)):
+            for _ in range(len(puzzle.night_order)):
                 worlds = apply_all(worlds, 'run_next_character')
             worlds = apply_all(worlds, 'end_night')
             if round_ <= puzzle._max_day:
-                for player in range(len(puzzle.day_order)):
+                for _ in range(len(puzzle.day_order)):
                     worlds = apply_all(worlds, 'run_next_character')
                 for event in range(event_counts[round_]):
                     worlds = apply_all(worlds, 'run_event', (round_, event))

@@ -461,6 +461,7 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
 def info_creator(info: Info) -> type[Character]:
     return getattr(characters, type(info).__qualname__.split('.')[0])
 
+
 # ------------------ Custom Info For Specific Puzzles -------------------- #
 
 
@@ -506,3 +507,22 @@ class LongestRowOfTownsfolk(Info):
             return STBool(longest == self.length)
         else:
             return STBool(self.minimum <= longest <= self.maximum)
+
+
+# Required for a Artist statement in Puzzle #42
+@dataclass
+class WidowPoisoned(Info):
+    player: PlayerID
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        target = state.players[self.player]
+        if not target.droison_count:
+            return FALSE  # Early Exit
+        return STBool(any(
+            (
+                not player.is_dead
+                and not player.droison_count
+                and (widow := player.get_ability(characters.Widow)) is not None
+                and widow.target == target.id
+            )
+            for player in state.players
+        ))

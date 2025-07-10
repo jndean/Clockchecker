@@ -157,6 +157,16 @@ class Character:
         """
         return True
 
+    @staticmethod
+    def global_end_night(state: State) -> bool:
+        """
+        Do accounting at end of night. Runs for every character on the script,
+        regardless of what is in play. This is useful for asserting that a
+        character's effects are invalid when that character is not in play, e.g.
+        reject worlds with Widow pings if there is no Widow.
+        """
+        return True
+
     def default_info_check(
         self: Character, 
         state: State,
@@ -247,7 +257,7 @@ class Character:
         for substate in state.pre_death_in_town(me):
             player = substate.players[me]
             player.is_dead = True
-            self.maybe_deactivate_effects(substate, me, Reason.DEATH)
+            player.character.maybe_deactivate_effects(substate, me, Reason.DEATH)
             yield from substate.post_death_in_town(me)
 
     def attacked_at_night(
@@ -351,11 +361,8 @@ class Character:
         # - Others, definitely.
         player = state.players[me]
         if (
-            player.is_dead
-            or (
-                self.category is DEMON
-                and getattr(player, 'exorcised_count', 0)
-            )
+            player.is_dead or
+            (self.category is DEMON and getattr(player, 'exorcised_count', 0))
         ):
             return False
 
@@ -1258,22 +1265,35 @@ class Golem(Character):
 
     spent: bool = False
 
+    # Golem abilities are checked by this method if there is an
+    # "UneventfulNomination" or "Dies" event in the day events.
     def nominates(self, state: State, nomination: Event) -> StateGen:
+        if self.spent:
+            raise ValueError("Golem nominated twice?")  # Likely a puzzle typo
+
         if isinstance(nomination, events.UneventfulNomination):
-            # if self.spent:
-            #     return?
-            raise NotImplementedError("TODO: Golem misfires")
+            golem = state.players[nomination.nominator]
+            nominee = state.players[nomination.player]
+            is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
+            if is_demon is info.FALSE and golem.droison_count:
+                state.math_misregistration(golem.id)
+                yield state
+            elif is_demon is info.MAYBE:
+                if nominee.character.category is not DEMON:
+                    state.math_misregistration(golem.id)
+                yield state
+            elif is_demon is info.TRUE:
+                yield state
+            return
 
         assert isinstance(nomination, events.Dies)
         golem = state.players[nomination.after_nominated_by]
         nominee = state.players[nomination.player]
         is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
-        if (
-            not self.spent 
-            and not golem.droison_count
-            and is_demon is not info.TRUE
-        ):
+        if not golem.droison_count and is_demon is not info.TRUE:
             self.spent = True
+            if nominee.character.category is DEMON:
+                state.math_misregistration(golem.id)  # ...Boffin-Alchemist-Spy?
             yield from nominee.character.killed(state, nominee.id, golem.id)
 
 @dataclass
@@ -2024,7 +2044,7 @@ class Philosopher(Character):
             for drunk_targets in drunk_combinations:
                 new_state = (
                     substate if len(drunk_combinations) == 1
-                    else state.fork()
+                    else substate.fork()
                 )
                 new_philo = new_state.players[me].character
                 new_philo.drunk_targets = drunk_targets
@@ -2051,14 +2071,14 @@ class Philosopher(Character):
             return
         for player in self.drunk_targets:
             state.players[player].droison(state, me)
-        self.active_ability._activate_effects_impl(state, me)
+        self.active_ability.maybe_activate_effects(state, me)
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
         if self.active_ability is None:
             return
         for player in self.drunk_targets:
             state.players[player].undroison(state, me)
-        self.active_ability._deactivate_effects_impl(state, me)
+        self.active_ability.maybe_deactivate_effects(state, me)
 
     def apply_death(self, *args, **kwargs) -> StateGen:
         if self.active_ability is None:
@@ -2508,6 +2528,87 @@ class Recluse(Character):
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
+class Riot(Character):
+    """
+    On day 3, Minions become Riot & nominees die but nominate an alive player
+    immediately. This must happen.
+    """
+    # This Riot implementation doesn't (m)any of the NUMEROUS Riot jinxes,
+    # since they tend to completely change the way characters work. We can add
+    # them if they become relevant I guess.
+
+    category: ClassVar[Categories] = DEMON
+    is_liar: ClassVar[bool] = True
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    currently_causing_riot: bool = False
+
+    def run_day(self, state: State, me: PlayerID) -> StateGen:
+        riot = state.players[me]
+        if riot.is_dead:
+            yield state; return
+
+        self.maybe_deactivate_effects(state, me)
+        self.maybe_activate_effects(state, me)
+
+        if (
+            state.day != 3
+            or riot.droison_count
+            or getattr(riot, 'exorcised_count', 0)  # Riot-Exorcist jinx
+        ):
+            state.math_misregistration(me)
+            yield state
+            return
+
+        # Turn minions into Riot. Include Recluse :D
+        def _make_riot(states: StateGen, pid: PlayerID) -> StateGen:
+            for substate in states:
+                for subsubstate in substate.character_change(pid, Riot):
+                    subsubstate.players[pid].character.maybe_activate_effects(
+                        subsubstate, pid, Reason.CHARACTER_CHANGE
+                    )
+                    yield subsubstate
+
+        minion_combinations = list(info.all_registration_combinations(
+            [info.IsCategory(p.id, MINION)(state, me) for p in state.players]
+        ))
+        for minions in minion_combinations:
+            states = [state if len(minion_combinations) == 1 else state.fork()]
+            for minion in minions:
+                states = _make_riot(states, minion)
+            yield from states
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        riot = state.players[me]
+        if state.day == 3 and not riot.is_dead and riot.droison_count == 0:
+            state.rioting_count = getattr(state, 'rioting_count', 0) + 1
+            self.currently_causing_riot = True
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.currently_causing_riot:
+            self.currently_causing_riot = False
+            state.rioting_count -= 1
+
+    @staticmethod
+    def day_three_nomination(state: State, nomination: Event) -> StateGen:
+        riot = None
+        for player in state.players:
+            if (
+                not player.is_dead
+                and player.droison_count == 0
+                and info.has_ability_of(player.character, Riot)
+            ):
+                riot = player
+        assert riot is not None
+
+        if isinstance(nomination, events.UneventfulNomination):
+            raise NotImplementedError('TODO: Riot nomination without death')
+
+        assert isinstance(nomination, events.Dies)
+        nominee = state.players[nomination.player]
+        yield from nominee.character.killed(state, nominee.id, riot.id)
+
+@dataclass
 class Sage(Character):
     """
     If the Demon kills you, you learn that it is 1 of 2 players.
@@ -2865,8 +2966,6 @@ class Saint(Character):
         if droisoned:
             state.math_misregistration(me)
         if droisoned or not died:
-            if state._is_world():
-                print(f'Running saint executed, {droisoned=}')
             yield from super().executed(state, me, died)
 
 
@@ -3042,52 +3141,93 @@ class Widow(Character):
 
     target: PlayerID | None = None
 
+    @dataclass
+    class IsInPlay(info.ExternalInfo):
+        def __call__(self, state: State, src: PlayerID) -> bool:
+            return True
+
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        if state.current_phase is not core.Phase.SETUP:
-            yield from self._run_creation(state, me, Reason.CHARACTER_CHANGE)
+        if state.current_phase is not core.Phase.SETUP and self.target is None:
+            yield from self._run_first_night(state, me, Reason.CHARACTER_CHANGE)
+        else:
+            yield state
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        if state.night == 1:
-            yield from self._run_creation(state, me, None)
+        if state.night == 1 and self.target is None:
+            yield from self._run_first_night(state, me, None)
+        else:
+            yield state
+
+    @staticmethod
+    def _good_pings_heard_tonight(state: State) -> list[PlayerID]:
+        all_pings = state.puzzle.external_info_registry.get(
+            (Widow, state.night), []
+        )
+        return [pid for _, pid in all_pings if not info.behaves_evil(state, pid)]
 
     def _run_first_night(
         self,
         state: State,
         me: PlayerID,
-        reason: Reason
+        reason: Reason,
     ) -> StateGen:
         """
         Run the Widow's first night. On the first night of the game this
         happens just after the Poisoner (according to night order), but if
-        created mid-game it (as far as I can see) always happens at the moment
-        of creation, ignoring night-order.
+        created mid-game (as far as I can see) it always happens at the
+        moment of creation, ignoring night-order.
         """
-        raise NotImplementedError('Widow not finished')
-        # TODO: This impl doesn't reject worlds where two good players claim
-        # to have been told about 1 Widow.
-        for pid, player in enumerate(state.players):
-            if (
-                not player.is_evil
-                and state.get_night_info(Widow, pid, state.night) is not None
-            ):
-                widow_ping = True
-                break
-        else:
-            widow_ping = False
+        good_pings_heard_tonight = Widow._good_pings_heard_tonight(state)
+        maybe_heard_by_liar = any(
+            info.behaves_evil(state, player.id) and not player.is_evil
+            for player in state.players
+        )
+        # TODO: Once we have alignment change callbacks, record who heard the
+        # Widow.Ping so it can be moved if they become evil.
 
         for target in range(len(state.players)):
             substate = state.fork()
-            widow = substate.players[me]
-            widow.character.target = target
-            widow.character.maybe_activate_effects(substate, me, reason)
-            if widow.droison_count == 0 and not widow_ping:
-                pass
+            widow_player = substate.players[me]
+            widow_character = widow_player.get_ability(Widow)
+            widow_character.target = target
+            widow_character.maybe_activate_effects(substate, me, reason)
+
+            if widow_player.droison_count and target != me:
+                state.math_misregistration(me)
+                yield substate
+                continue
+            if good_pings_heard_tonight or maybe_heard_by_liar:
+                substate.widow_pinged_night = state.night
+                yield substate
+
+    @staticmethod
+    def global_end_night(state: State) -> bool:
+        """
+        Validate Pings this night made sense. Called at the end of the night
+        if Widow is on the script, regardless of whether it's in play.
+        """
+        good_pings_heard_tonight = Widow._good_pings_heard_tonight(state)
+        if len(good_pings_heard_tonight) > 1:
+            # I read the rules as only one good player will ever be informed
+            # Ofc, not yet handled case of alignment change within the night...
+            return False
+        if getattr(state, 'widow_pinged_night', None) != state.night:
+            return not good_pings_heard_tonight
+        maybe_heard_by_liar = any(
+            info.behaves_evil(state, player.id) and not player.is_evil
+            for player in state.players
+        )
+        return good_pings_heard_tonight or maybe_heard_by_liar
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.target == me:
             state.players[me].droison_count += 1
         elif self.target is not None:
             state.players[self.target].droison(state, me)
+        if not hasattr(state, 'widow_pinged_night'):
+            state.widow_pinged_night = (
+                state.night if state.night is not None else state.day + 1
+            )
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
         if self.target == me:
@@ -3095,6 +3235,8 @@ class Widow(Character):
         elif self.target is not None:
             state.players[self.target].undroison(state, me)
 
+    def _world_str(self, state: State) -> str:
+        return f'Widow (Poisoned {state.players[self.target].name})'
 
 @dataclass
 class Witch(Character):
@@ -3396,6 +3538,7 @@ class Zombuul(Character):
     registering_dead: bool = False
 
 
+# https://script.bloodontheclocktower.com/data/nightsheet.json
 
 GLOBAL_SETUP_ORDER = [
     Atheist,
@@ -3465,6 +3608,7 @@ GLOBAL_NIGHT_ORDER = [
 ]
 
 GLOBAL_DAY_ORDER = [
+    Riot,
     Alsaahir,
     Artist,
     Savant,
