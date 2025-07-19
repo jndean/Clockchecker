@@ -30,7 +30,6 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    # (327, 5, 1, 3)
 ]
 
 
@@ -542,6 +541,10 @@ class Puzzle:
             self._max_day,
             max((
                 max((n for n, _ in p.night_info), default=0)
+                for p in self.players
+            )),
+            max((
+                max((n for n, _ in p.external_night_info), default=0)
                 for p in self.players
             )),
             max(self.night_deaths, default=0),

@@ -3142,7 +3142,7 @@ class Widow(Character):
     target: PlayerID | None = None
 
     @dataclass
-    class IsInPlay(info.ExternalInfo):
+    class InPlay(info.ExternalInfo):
         def __call__(self, state: State, src: PlayerID) -> bool:
             return True
 
@@ -3191,13 +3191,12 @@ class Widow(Character):
             widow_character = widow_player.get_ability(Widow)
             widow_character.target = target
             widow_character.maybe_activate_effects(substate, me, reason)
-
-            if widow_player.droison_count and target != me:
-                state.math_misregistration(me)
+            if widow_player.droison_count:
+                if target != me:
+                    substate.math_misregistration(me)
                 yield substate
-                continue
-            if good_pings_heard_tonight or maybe_heard_by_liar:
-                substate.widow_pinged_night = state.night
+            elif good_pings_heard_tonight or maybe_heard_by_liar:
+                substate.widow_pinged_night = substate.night
                 yield substate
 
     @staticmethod
@@ -3209,7 +3208,7 @@ class Widow(Character):
         good_pings_heard_tonight = Widow._good_pings_heard_tonight(state)
         if len(good_pings_heard_tonight) > 1:
             # I read the rules as only one good player will ever be informed
-            # Ofc, not yet handled case of alignment change within the night...
+            # Not yet handled case of alignment change within the same night...
             return False
         if getattr(state, 'widow_pinged_night', None) != state.night:
             return not good_pings_heard_tonight
@@ -3224,10 +3223,10 @@ class Widow(Character):
             state.players[me].droison_count += 1
         elif self.target is not None:
             state.players[self.target].droison(state, me)
-        if not hasattr(state, 'widow_pinged_night'):
-            state.widow_pinged_night = (
-                state.night if state.night is not None else state.day + 1
-            )
+            if not hasattr(state, 'widow_pinged_night'):
+                state.widow_pinged_night = (
+                    state.night if state.night is not None else state.day + 1
+                )
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
         if self.target == me:

@@ -1997,7 +1997,7 @@ def puzzle_NQT42():
             Player('Fraser', claim=Juggler,
                 day_info={1: Juggler.Juggle({You: Philosopher, Matthew: Imp})},
                 night_info={
-                    1: Widow.IsInPlay(),
+                    1: Widow.InPlay(),
                     2: Juggler.Ping(1)
                 }
             ),
