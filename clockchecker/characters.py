@@ -1991,7 +1991,7 @@ class Philosopher(Character):
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     active_ability: Character | None = None
-    drunk_targets: list[PlayerID] | None = None
+    drunk_target: PlayerID | None = None
     droisoned_philo_choice: bool = False
 
     @dataclass
@@ -2020,13 +2020,12 @@ class Philosopher(Character):
         choice = state.get_night_info(Philosopher, me, state.night)
         if choice is None:
             yield state; return
-
         new_character = choice.character(first_night=state.night)
         if philo.droison_count:
             # If Philo is is droisoned when they make their choice, they become
             # a Drunk-like player who thinks they have an ability thereafter.
             self.active_ability = Drunklike(simulated_character=new_character)
-            self.drunk_targets = []
+            self.drunk_target = None
             self.droisoned_philo_choice = True
             state.math_misregistration(me)
             yield state; return
@@ -2035,19 +2034,21 @@ class Philosopher(Character):
         self.is_liar = choice.character.is_liar  # Philo-Mutant...?
 
         for substate in self.active_ability.run_setup(state, me):
-            drunk_combinations = list(
-                info.all_registration_combinations([
-                    info.IsCharacter(player, choice.character)(substate, me)
-                    for player in range(len(state.players))
-                ])
-            )
-            for drunk_targets in drunk_combinations:
+            drunk_targets = [
+                player for player in range(len(state.players))
+                if info.IsCharacter(player, choice.character)(substate, me)
+                is not info.FALSE
+            ]
+            if not drunk_targets:
+                drunk_targets.append(None)
+
+            for drunk_target in drunk_targets:
                 new_state = (
-                    substate if len(drunk_combinations) == 1
+                    substate if len(drunk_targets) == 1
                     else substate.fork()
                 )
                 new_philo = new_state.players[me].character
-                new_philo.drunk_targets = drunk_targets
+                new_philo.drunk_target = drunk_target
                 new_philo.maybe_activate_effects(new_state, me)
                 yield new_state
 
@@ -2069,15 +2070,15 @@ class Philosopher(Character):
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.active_ability is None:
             return
-        for player in self.drunk_targets:
-            state.players[player].droison(state, me)
+        if self.drunk_target is not None:
+            state.players[self.drunk_target].droison(state, me)
         self.active_ability.maybe_activate_effects(state, me)
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
         if self.active_ability is None:
             return
-        for player in self.drunk_targets:
-            state.players[player].undroison(state, me)
+        if self.drunk_target is not None:
+            state.players[self.drunk_target].undroison(state, me)
         self.active_ability.maybe_deactivate_effects(state, me)
 
     def apply_death(self, *args, **kwargs) -> StateGen:
