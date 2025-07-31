@@ -1,3 +1,4 @@
+from copy import deepcopy
 import unittest
 
 from clockchecker import *
@@ -41,8 +42,12 @@ class NQTPuzzles(unittest.TestCase):
                 print(f'\033[31;1m.', end='', flush=True)
                 # print(puzzle_name)
 
-                puzzle, solutions, condition = all_puzzles[puzzle_name]()
-                worlds = list(solve(puzzle))
+                test_def = all_puzzles[puzzle_name]()
+                worlds = list(
+                    test_def.solve_override
+                    if test_def.solve_override is not None
+                    else solve(test_def.puzzle)
+                )
 
                 prediction_str = sorted(tuple(
                     ', '.join(x.__name__ for x in world.initial_characters)
@@ -50,13 +55,13 @@ class NQTPuzzles(unittest.TestCase):
                 ))
                 solution_str = sorted(tuple(
                     ', '.join(x.__name__ for x in solution)
-                    for solution in solutions
+                    for solution in test_def.solutions
                 ))
                 self.assertEqual(prediction_str, solution_str)
 
-                if condition is not None:
+                if test_def.solution_condition is not None:
                     for world in worlds:
-                        self.assertTrue(condition(world))
+                        self.assertTrue(test_def.solution_condition(world))
                 
                 print('\033[32;1m\b✓', end='')
         print('\033[0m')
@@ -64,15 +69,15 @@ class NQTPuzzles(unittest.TestCase):
 
 class TestRiot(unittest.TestCase):
     def test_minions_become_riot(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(IsCharacter(C, Riot) & IsCharacter(D, Goblin)),
                 }),
                 Player('B', claim=Undertaker),
                 Player('C', claim=Investigator, night_info={
-                    1: Investigator.Ping(D, A, Goblin)
+                    1: Investigator.Ping(D, You, Goblin)
                 }),
                 Player('D', claim=Empath, night_info={
                     1: Empath.Ping(1),
@@ -90,17 +95,17 @@ class TestRiot(unittest.TestCase):
         ))
 
     def test_minions_not_riot_day_2(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(IsCharacter(D, Riot) & IsCharacter(C, Goblin)),
                 }),
                 Player('B', claim=Slayer, day_info={
                     2: Slayer.Shot(C, died=True),
                 }),
                 Player('C', claim=Investigator, night_info={
-                    1: Investigator.Ping(D, A, Goblin)
+                    1: Investigator.Ping(D, You, Goblin)
                 }),
                 Player('D', claim=Empath, night_info={
                     1: Empath.Ping(1),
@@ -116,17 +121,17 @@ class TestRiot(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=())
 
     def test_recluse_can_become_riot(self):
-        A, B, C, D, E = range(5)
+        You, B, C, D, E = range(5)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(IsCharacter(C, Riot) & IsCharacter(D, Goblin)),
                 }),
                 Player('B', claim=Slayer, day_info={
                     3: Slayer.Shot(C, died=True),
                 }),
                 Player('C', claim=Investigator, night_info={
-                    1: Investigator.Ping(D, A, Goblin)
+                    1: Investigator.Ping(D, You, Goblin)
                 }),
                 Player('D', claim=Empath, night_info={
                     1: Empath.Ping(1),
@@ -147,15 +152,15 @@ class TestRiot(unittest.TestCase):
 
 class TestWidow(unittest.TestCase):
     def test_widow_creates_ping(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(IsCharacter(C, Imp) & IsCharacter(D, Widow))
                 }),
                 Player('B', claim=Investigator, night_info={
                     1: [
-                        Investigator.Ping(A, B, Widow),
+                        Investigator.Ping(You, B, Widow),
                         Widow.InPlay(),
                     ],
                 }),
@@ -180,20 +185,20 @@ class TestWidow(unittest.TestCase):
         )
 
     def test_widow_self_poisones_with_no_ping(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(IsCharacter(C, Imp) & IsCharacter(D, Widow))
                 }),
                 Player('B', claim=Investigator, night_info={
-                    1: Investigator.Ping(D, A, Widow),
+                    1: Investigator.Ping(D, You, Widow),
                 }),
                 Player('C', claim=Clockmaker, night_info={
                     1: Clockmaker.Ping(1)
                 }),
                 Player('D', claim=Balloonist, night_info={
-                    1: Balloonist.Ping(A),
+                    1: Balloonist.Ping(You),
                     2: Balloonist.Ping(B),
                 }),
             ],
@@ -211,10 +216,10 @@ class TestWidow(unittest.TestCase):
         )
 
     def test_widow_goo_pings_not_allowed_if_widow_not_in_play(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(
                         IsCharacter(C, Leviathan)
                         & IsCharacter(D, Goblin)
@@ -222,7 +227,7 @@ class TestWidow(unittest.TestCase):
                 }),
                 Player('B', claim=Investigator, night_info={
                     1: [
-                        Investigator.Ping(D, A, Goblin),
+                        Investigator.Ping(D, You, Goblin),
                         Widow.InPlay(),
                     ],
                 }),
@@ -230,7 +235,7 @@ class TestWidow(unittest.TestCase):
                     1: Clockmaker.Ping(1),
                 }),
                 Player('D', claim=Balloonist, night_info={
-                    1: Balloonist.Ping(A),
+                    1: Balloonist.Ping(You),
                     2: Balloonist.Ping(B),
                 }),
             ],
@@ -243,24 +248,24 @@ class TestWidow(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=())
 
     def test_widow_evil_pings_allowed(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist, day_info={
+                Player('You', claim=Artist, day_info={
                     1: Artist.Ping(
                         IsCharacter(C, Leviathan)
                         & IsCharacter(D, Goblin)
                     )
                 }),
                 Player('B', claim=Investigator, night_info={
-                    1: Investigator.Ping(D, A, Goblin),
+                    1: Investigator.Ping(D, You, Goblin),
                 }),
                 Player('C', claim=Clockmaker, night_info={
                     1: Clockmaker.Ping(1)
                 }),
                 Player('D', claim=Balloonist, night_info={
-                    1: [Balloonist.Ping(A), Widow.InPlay()],
-                    2: Balloonist.Ping(A),
+                    1: [Balloonist.Ping(You), Widow.InPlay()],
+                    2: Balloonist.Ping(You),
                 }),
             ],
             day_events={},
@@ -274,10 +279,10 @@ class TestWidow(unittest.TestCase):
         ))
 
     def test_widow_pings_when_unpoisoned(self):
-        A, B, C, D = range(4)
+        You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
-                Player('A', claim=Artist,
+                Player('You', claim=Artist,
                     day_info={
                         1: Artist.Ping(
                             IsCharacter(B, Poisoner)
@@ -303,3 +308,192 @@ class TestWidow(unittest.TestCase):
             solutions=((Artist, Poisoner, Widow, Leviathan),),
             conditions=~CharAttrEq(C, 'target', C),
         )
+
+
+class TestVirgin(unittest.TestCase):
+    def test_virgin_procs_on_tf(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(C, Goblin) & IsCharacter(D, Imp)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=ScarletWoman),
+                Player('D', claim=Imp),
+            ],
+            day_events={1: ExecutionByST(You, after_nominating=B)},
+            night_deaths={},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Virgin, Goblin, Imp),
+        ))
+
+    def test_virgin_procs_on_spy(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(D, Imp)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=Soldier),
+                Player('D', claim=Imp),
+            ],
+            day_events={1: ExecutionByST(C, after_nominating=B)},
+            night_deaths={},
+            hidden_characters=[Imp, Spy, Poisoner],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Virgin, Spy, Imp),
+        ))
+
+    def test_virgin_spent(self):
+        You, B, C, D = range(4)
+        puzzle_base = dict(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(C, Spy) & IsCharacter(D, Leviathan)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=Soldier),
+                Player('D', claim=Leviathan),
+            ],
+            night_deaths={},
+            hidden_characters=[Leviathan, Spy],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle=Puzzle(
+                **deepcopy(puzzle_base),
+                day_events={
+                    1: UneventfulNomination(player=B, nominator=C),
+                    2: UneventfulNomination(player=B, nominator=C),
+                },
+            ),
+            solutions=((Artist, Virgin, Spy, Leviathan),),
+        )
+        assert_solutions(
+            self,
+            puzzle=Puzzle(
+                **deepcopy(puzzle_base),
+                day_events={
+                    1: UneventfulNomination(player=B, nominator=C),
+                    2: UneventfulNomination(player=B, nominator=You),
+                },
+            ),
+            solutions=((Artist, Virgin, Spy, Leviathan),),
+        )
+        assert_solutions(
+            self,
+            puzzle=Puzzle(
+                **deepcopy(puzzle_base),
+                day_events={
+                    1: UneventfulNomination(player=B, nominator=C),
+                    2: ExecutionByST(You, after_nominating=B),
+                },
+            ),
+            solutions=(),
+        )
+
+    def test_virgin_poisoned(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(C, Poisoner) & IsCharacter(D, Imp)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=Poisoner),
+                Player('D', claim=Imp),
+            ],
+            day_events={1: UneventfulNomination(player=B, nominator=You)},
+            night_deaths={},
+            hidden_characters=[Imp, Poisoner],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Virgin, Poisoner, Imp),),
+            conditions=CharAttrEq(C, 'target', B),
+        )
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(C, Poisoner) & IsCharacter(D, Imp)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=Poisoner),
+                Player('D', claim=Imp),
+            ],
+            day_events={
+                1: UneventfulNomination(player=B, nominator=You),
+                2: UneventfulNomination(player=B, nominator=You),
+            },
+            night_deaths={2: C},
+            hidden_characters=[Imp, Poisoner],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Virgin, Poisoner, Imp),
+        ))
+
+    def test_virgin_dead(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(C, Goblin) & IsCharacter(D, Imp)),
+                }),
+                Player('B', claim=Virgin),
+                Player('C', claim=Virgin),
+                Player('D', claim=Imp),
+            ],
+            day_events={2: UneventfulNomination(player=B, nominator=You)},
+            night_deaths={2: B},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Virgin, Goblin, Imp),
+        ))
+
+    def test_philo_virgin(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(D, Goblin) & IsCharacter(E, Imp)),
+                }),
+                Player('B', claim=Philosopher, night_info={
+                    1: Philosopher.Choice(Virgin),
+                }),
+                Player('C', claim=Virgin),
+                Player('D', claim=Goblin),
+                Player('E', claim=Imp),
+            ],
+            day_events={
+                1: [
+                    UneventfulNomination(player=C, nominator=You),
+                    ExecutionByST(player=C, after_nominating=B),
+                ],
+            },
+            night_deaths={},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Philosopher, Virgin, Goblin, Imp),
+        ))

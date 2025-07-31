@@ -10,22 +10,20 @@
 
 - EASY: I have implemented Philo drunks every player of the chosen character, but I think actually they just drunk a single one? Easy to remove the extra functionality :)
 
-- GOOD: Make Player.character private (Player._character?) and any time something wants to access player's character it should call player.get_character(CharacterType) with the expected character type. (Maybe it can call with None explicitly to get the root character?). This can then recurse into wrapped characters and return the instance of the ability that is expected.
+- GOOD: Make Player.character private (Player.\_character?) and any time something wants to access player's character it should call player.get_character(CharacterType) with the expected character type. (Maybe it can call with None explicitly to get the root character?). This can then recurse into wrapped characters and return the instance of the ability that is expected
 
- - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
+- Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
 
- - Seperately track night number and a character's personal night number
-   e.g. so that a Chef created on night 3 will register as waking up. Partially done this, but need to go through each character to check they respect the correct night number. I think in general "each night*" refers to true game night number, whereas "you start knowing" means your personal first night.
+- Seperately track night number and a character's personal night number
+  e.g. so that a Chef created on night 3 will register as waking up. Partially donethis, but need to go through each character to check they respect the correctnight number. I think in general "each night*" refers to true game night number,whereas "you start knowing" means your personal first night.
 
  - Could easily(?) filter out worlds where a player has a ping not in line with their wake_pattern
 
  - Several characters directly access attributes on a player's character (e.g., FortuneTeller.Ping accessed state.players[me].character.redherring) which doesn't play nicely when wrapped by other characters (such as Philo wrapping their chosen ability, or, in the extreme, a Hermit wrapping a Drunk wrapping a Philosopher wrapping a Drunklike wrapping their chosen ability :D). Possibly these need to go through a more serious API that can be passed through to wrapped abilities. I have implemented a one-off passthrough for some common attributes like `character.spent`, see Philo. 
 
- - Get rid of player.woke_tonight. Rather than characters recording if they woke during run_night, make every WakePattern.MANUAL character override the .wakes_tonight() method so that this can always be checked statically? [This is made hard by characters such as SW who can't be determined statically in advance..., so right now we awkwards have both `character.wakes_tonight()` (which makes a best effort in advance), and `player..woke_tonight` (which records the truth after the fact)]
+ - Get rid of player.woke_tonight. Rather than characters recording if they woke during run_night, make every WakePattern.MANUAL character override the .wakes_tonight() method so that this can always be checked statically? [This is made hard by characters such as SW who can't be determined statically in advance..., so right now we awkwards have both `character.wakes_tonight()` (which makes a best effort in advance), and `player.woke_tonight` (which records the truth after the fact)]
 
  - Allow claiming mid-game character changes. I think they need to be in the player's night info lists so the puzzle can specify when the change happened relative to the player's normal info... Right now, the SnakeCharmer has a wonderfully satisfying implementation that successfully swaps with demons, and triggeres abilities in the correct order, but there is no way for a player to claim to have changed role, so it can not yet be a utilised by a puzzle :( .
-
- - If no solutions are found and Atheist is in Puzzle statement, return the Atheist world
 
  - The EvilTwin ExternalInfo system is _awful_, it was supposed to account for night order but it really doesn't, because if an EvilTwin is claimed to be created mid game the claimed Ping just won't be checked at the moment the twin is created. Feels like ExternalInfo should be scrapped since that's all it does now, and all logic could be put into the EvilTwin... or perhaps ExternalInfo needs to be a stateful thing, state tracks what claims have been made and EvilTwin ticks off the ones it has fulfilled at the moment it does it...
 

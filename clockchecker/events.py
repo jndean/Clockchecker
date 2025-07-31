@@ -65,9 +65,15 @@ class ExecutionByST(Execution):
     Inheriting from Execution lets things like Vortox easily check Executions.
     """
     # E.g. like nominating virgin
-    nominating: PlayerID | None = None
+    after_nominating: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        raise NotImplementedError()
+        if self.after_nominating is not None:
+            nominee = state.players[self.after_nominating]
+            if (virgin := nominee.get_ability(characters.Virgin)) is not None:
+                yield from virgin.execution_on_nomination(state, self)
+        else:
+            raise NotImplementedError("TODO: Madness breaks etc.")
+
 
 @dataclass
 class UneventfulNomination(Event):

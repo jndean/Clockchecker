@@ -483,3 +483,7 @@ class NoDashii(GenericDemon):
         state.players[self.tf_neighbour2].undroison(state, me)
 ```
 </details>
+
+---
+
+<img src="README_imgs/nightorder.png">

@@ -84,7 +84,32 @@ class Player:
     def woke(self) -> None:
         self.woke_tonight = True
     
-    def get_ability(self, character_t: type[Character]) -> Character | None:
+    def get_ability(
+        self,
+        character_t: type[Character] | None,
+    ) -> Character | None:
+        if character_t is None:
+            return self.character
+
+        # character = self.character
+        # while 1:
+        #     if (
+        #         isinstance(character, characters.Philosopher)
+        #         and character.active_ability is not None
+        #     ):
+        #         # This method says Philo doeosn't have Philo ability after making a
+        #         # sober choice. This is convenient when computing night order.
+        #         return acts_like(character_instance.active_ability, ability)
+        #     if isinstance(character_instance, characters.Hermit):
+        #         return any(
+        #             acts_like(subability, ability)
+        #             for subability in character_instance.active_abilities
+        #         )
+
+        #     # TODO: Alchemist and Boffin'd Demon
+        #     return isinstance(character_instance, ability)
+
+
         # TODO: Make this recurse into wrapped characters, 
         # make self.character private.
         if isinstance(self.character, character_t):
@@ -189,7 +214,7 @@ class State:
             if fork_id is None:
                 fork_id = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
                 _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
-            else:
+            elif fork_id:
                 _DEBUG_STATE_FORK_COUNTS.clear()
             ret.debug_key = self.debug_key + (fork_id,)
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
@@ -511,11 +536,18 @@ class Puzzle:
     category_counts: tuple[int, int, int, int] | None = None
     deduplicate_initial_characters: bool = True
 
+    user_interrupt: Callable[[], bool] | None = None
+
+    # --------- SOLVER OPTIONS --------- #
+    # Generally puzzles are posed towards the end of the day, before executions
     finish_final_day: bool = False
+    # Enable for e.g. oops all seamstresses
     allow_good_double_claims: bool = False
+    # You cannot lie to yourself, so player 0 gets special treatment
+    player_zero_is_you: bool = True
+    # Some BMR-style puzzles set this False # TODO: NotImplementedYet?
     allow_killing_dead_players: bool = True
 
-    user_interrupt: Callable[[], bool] | None = None
 
     def __post_init__(self, hidden_characters):
         """Finish building Puzzle representation from user inputs."""
@@ -592,6 +624,10 @@ class Puzzle:
                         (item, pid)
                     )
         self.external_info_registry = dict(self.external_info_registry)
+
+        assert self.player_zero_is_you ^ (self.players[0].name != 'You'), (
+            "Player 0 must be called 'You' iff puzzle.player_zero_is_you=True"
+        )
 
         # Compute script and character orderings.
         self.script = list(set(
@@ -702,6 +738,8 @@ class Puzzle:
         ret.append(')')
         return '\n'.join(ret)
 
+    def __repr__(self) -> str:
+        return str(self)
 
 def _check_valid_character_counts(
     puzzle: Puzzle,
@@ -712,7 +750,10 @@ def _check_valid_character_counts(
     setup = [p.claim for p in puzzle.players]
     for liar, position in zip(liar_characters, liar_positions):
         setup[position] = liar
-        if position == 0 and liar not in puzzle.hidden_self:
+        if (
+            position == 0 and puzzle.player_zero_is_you
+            and liar not in puzzle.hidden_self
+        ):
             return False
     T, O, M, D = puzzle.category_counts
     bounds = ((T, T), (O, O), (M, M), (D, D))
@@ -801,17 +842,33 @@ def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
     """
     Filter solutions, e.g., deduplicating by identical starting characters.
     """
-    if not puzzle.deduplicate_initial_characters:
-        yield from solutions
-        return
+    any_solution_found = False
 
-    seen_solutions = set()
-    for solution in solutions:
-        if solution.initial_characters not in seen_solutions:
-            seen_solutions.add(solution.initial_characters)
+    if puzzle.deduplicate_initial_characters:
+        seen_solutions = set()
+        for solution in solutions:
+            key = solution.initial_characters + tuple(
+                type(p.character) for p in solution.players
+            )
+            if key not in seen_solutions:
+                seen_solutions.add(key)
+                yield solution
+        any_solution_found = bool(seen_solutions)
+    else:
+        for solution in solutions:
             yield solution
+            any_solution_found = True
 
-    
+    if not any_solution_found:
+        atheist_state = puzzle.state_template.fork(fork_id=-1)
+        atheist_state.begin_game(True)
+        if any(
+            info.has_ability_of(player.character, characters.Atheist)
+            for player in atheist_state.players
+        ):
+            yield atheist_state
+
+
 def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
     puzzle.unserialise_extra_state()
     def liars_gen():

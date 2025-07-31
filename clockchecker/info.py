@@ -345,7 +345,11 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
     character's info. E.g. the lunatic is good but may lie about receiving a 
     Nightwatchman ping, whilst the drunk lies about their character and info but
     would truthfully report a Nightwatchman ping.
+    This puzzle state is defined from the perspective of Player 0, so Player 0
+    never lies to themselves.
     """
+    if player_id == 0 and state.puzzle.player_zero_is_you:
+        return False
     player = state.players[player_id]
     character = type(player.character)
     if character in (
@@ -371,10 +375,10 @@ def has_ability_of(
     ):
         # This method says Philo doeosn't have Philo ability after making a
         # sober choice. This is convenient when computing night order.
-        return acts_like(character_instance.active_ability, ability)
+        return has_ability_of(character_instance.active_ability, ability)
     if isinstance(character_instance, characters.Hermit):
         return any(
-            acts_like(subability, ability)
+            has_ability_of(subability, ability)
             for subability in character_instance.active_abilities
         )
 

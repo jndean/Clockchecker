@@ -1282,7 +1282,8 @@ puzzle = Puzzle(
         }),
     ],
     hidden_characters=[Imp, Spy, Drunk],
-    hidden_self=[Drunk],
+    player_zero_is_you=False,
+    hidden_self=[],
 )`
 }, {
 name: 'NQT30b',
@@ -1313,7 +1314,8 @@ puzzle = Puzzle(
         }),
     ],
     hidden_characters=[Imp, Spy, Drunk],
-    hidden_self=[Drunk],
+    player_zero_is_you=False,
+    hidden_self=[],
 )`
 }, {
 name: 'NQT31',
@@ -1891,7 +1893,7 @@ puzzle = Puzzle(
         Player('Fraser', claim=Juggler,
             day_info={1: Juggler.Juggle({You: Philosopher, Matthew: Imp})},
             night_info={
-                1: Widow.IsInPlay(),
+                1: Widow.InPlay(),
                 2: Juggler.Ping(1)
             }
         ),
@@ -2315,6 +2317,107 @@ puzzle = Puzzle(
     hidden_characters=[Riot, Poisoner, Baron, Drunk],
     hidden_self=[Drunk],
 )`
+}, {
+name: 'NQT50',
+claims: ['Knight', 'Librarian', 'Clockmaker', 'Investigator', 'Juggler', 'Artist', 'Juggler', 'Artist', 'Clockmaker', 'Librarian', 'Knight', 'Investigator'],
+hidden: ['Leviathan', 'Goblin', 'Drunk'],
+value: 
+`# Other: NQT50
+# TODO: URL
+
+Dan, Fraser, Tom, Sula, Josh, Olivia = range(6)
+puzzle_a = Puzzle(
+    players=[
+        Player('Dan', claim=Knight, night_info={
+            1: Knight.Ping(Sula, Josh)
+        }),
+        Player('Fraser', claim=Librarian, night_info={
+            1: Librarian.Ping(Dan, Olivia, Drunk)
+        }),
+        Player('Tom', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(3)
+        }),
+        Player('Sula', claim=Investigator, night_info={
+            1: Investigator.Ping(Dan, Fraser, Goblin)
+        }),
+        Player('Josh', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    Dan: Drunk,
+                    Sula: Investigator,
+                    Olivia: Goblin,
+                })
+            },
+            night_info={2: Juggler.Ping(3)}
+        ),
+        Player('Olivia', claim=Artist),
+    ],
+    hidden_characters=[Leviathan, Goblin, Drunk],
+    player_zero_is_you=False,
+    hidden_self=[],
+)
+
+Sarah, Anna, Matthew, Oscar, Adam, Steph = range(6)
+puzzle_b = Puzzle(
+    players=[
+        Player('Sarah', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    Anna: Leviathan,
+                    Steph: Leviathan,
+                    Oscar: Goblin,
+                    Adam: Goblin,
+                    Matthew: Clockmaker,
+                })
+            },
+            night_info={2: Juggler.Ping(3)}
+        ),
+        Player('Anna', claim=Artist),
+        Player('Matthew', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(2)
+        }),
+        Player('Oscar', claim=Librarian, night_info={
+            1: Librarian.Ping(Anna, Steph, Drunk)
+        }),
+        Player('Adam', claim=Knight, night_info={
+            1: Knight.Ping(Matthew, Oscar)
+        }),
+        Player('Steph', claim=Investigator, night_info={
+            1: Investigator.Ping(Anna, Oscar, Goblin)
+        }),
+        
+    ],
+    hidden_characters=[Leviathan, Goblin, Drunk],
+    player_zero_is_you=False,
+    hidden_self=[],
+)
+
+anna_ping = Artist.Ping(~IsCategory(Tom, TOWNSFOLK))
+olivia_ping = Artist.Ping(
+    IsCharacter(Sarah, Goblin)
+    | IsCharacter(Anna, Goblin)
+    | IsCharacter(Steph, Goblin)
+)
+
+def solve_override():
+    # Define a solve_override to implement more complex custom solve logic.
+    # For this puzzle, we must eval each game's Artist ping on the other
+    # game, so long as the Artist claim is True. We can write both Artist
+    # checks as one big compound Info statement.
+    solutions_a = list(solve(puzzle_a))
+    solutions_b = list(solve(puzzle_b))
+    for A in solutions_a:
+        for B in solutions_b:
+            cross_artist_info = ((
+                olivia_ping(B, None) | ~IsCharacter(Olivia, Artist)(A, None)
+            ) & (
+                anna_ping(A, None) | ~IsCharacter(Anna, Artist)(B, None)
+            ))
+            if cross_artist_info is not FALSE:
+                yield A
+                yield B
+
+puzzle = (puzzle_a, puzzle_b)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',
@@ -2465,6 +2568,48 @@ puzzle = Puzzle(
     },
     night_deaths={2: Riley, 3: You},
     hidden_characters=[Imp, Goblin, Drunk],
+    hidden_self=[Drunk],
+)`
+}, {
+name: 'nqt_sw_test',
+claims: ['Washerwoman', 'Empath', 'Undertaker', 'Slayer', 'Ravenkeeper', 'Investigator', 'Librarian', 'Chef'],
+hidden: ['Imp', 'ScarletWoman', 'Spy', 'Drunk'],
+value: 
+`# Other: nqt_sw_test
+# A discord user requested a puzzle requiring a SW to catch an Imp, 
+# NQT kindly obliged with this test case.
+You, Tom, Fraser, Aoife, Dan, Adam, Jasmine, Matthew = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Washerwoman, night_info={
+            1: Washerwoman.Ping(Aoife, Dan, Ravenkeeper)
+        }),
+        Player('Tom', claim=Empath, night_info={
+            1: Empath.Ping(2),
+            2: Empath.Ping(2),
+        }),
+        Player('Fraser', claim=Undertaker, night_info={
+            2: Undertaker.Ping(Adam, Investigator),
+        }),
+        Player('Aoife', claim=Slayer, day_info={
+            3: Slayer.Shot(You, died=False),
+        }),
+        Player('Dan', claim=Ravenkeeper, night_info={
+            2: Ravenkeeper.Ping(Jasmine, Librarian)
+        }),
+        Player('Adam', claim=Investigator, night_info={
+            1: Investigator.Ping(Dan, Matthew, ScarletWoman)
+        }),
+        Player('Jasmine', claim=Librarian, night_info={
+            1: Librarian.Ping(Fraser, Matthew, Drunk)
+        }),
+        Player('Matthew', claim=Chef, night_info={
+            1: Chef.Ping(0)
+        }),
+    ],
+    day_events={1: Execution(Adam), 2: Execution(Tom)},
+    night_deaths={2: Dan, 3: Fraser},
+    hidden_characters=[Imp, ScarletWoman, Spy, Drunk],
     hidden_self=[Drunk],
 )`
 }, {

@@ -6,14 +6,20 @@ from pyscript.ffi import create_proxy
 from clockchecker import *
 
 
+global_env = {}
+exec("from clockchecker import *\n", global_env)
+
 apply_btn = document.getElementById("applyButton")
 
 
-def _stream_solve_to_output(puzzle: Puzzle):
-    puzzle.user_interrupt = check_for_user_interrupt
+def _stream_solve_to_output(puzzle, solve_override):
+    for p in puzzle if isinstance(puzzle, tuple) else [puzzle]:
+        p.user_interrupt = check_for_user_interrupt
+
     try:
         world_count = 0
-        for world in solve(puzzle):
+        world_gen = solve(puzzle) if solve_override is None else solve_override()
+        for world in world_gen:
             world_count += 1
             window.GUI_worldFound(format_world(world))
             if window.stopRequested:
@@ -30,7 +36,13 @@ def apply_button_handler(event):
     window.GUI_startProcessing()
     puzzle_str = window.codeMirrorEditor.getValue()
     try:
-        exec(puzzle_str + "\n_stream_solve_to_output(puzzle)\n")
+        exec(puzzle_str + (
+            "\n_stream_solve_to_output("
+            "puzzle, "
+            #"puzzle if 'puzzle' in locals().keys() else None,"
+            "solve_override if 'solve_override' in locals().keys() else None,"
+            ")\n"
+        ), global_env.copy())
     except Exception as e:
         msg = traceback.format_exc()
         window.GUI_returnError('Error in input:\n' + msg)
@@ -61,6 +73,7 @@ def format_world(world: State) -> str:
     world = world.replace('\033[0m', '</span>')
     return world
 
+global_env['_stream_solve_to_output'] = _stream_solve_to_output
 
 apply_proxy = create_proxy(apply_button_handler)
 keydown_proxy = create_proxy(keydown_handler)

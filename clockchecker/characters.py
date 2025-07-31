@@ -1423,6 +1423,7 @@ class Hermit(Character):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         for ability in self.active_abilities:
+            # This catches Drunklike acts_like current character, so run sim.
             if info.acts_like(ability, state.currently_acting_character):
                 yield from ability.run_night(state, me)
                 break
@@ -3408,6 +3409,31 @@ class Virgin(Character):
             state.math_misregistration(nomination.player)
             self.spent = True
             yield state
+
+    def execution_on_nomination(
+        self,
+        state: State,
+        execution: events.ExecutionByST,
+    ) -> StateGen:
+        nominee = state.players[execution.after_nominating]
+        virgin_abilty = nominee.get_ability(Virgin)
+        tf_nom = info.IsCategory(execution.player, TOWNSFOLK)(state, nominee.id)
+
+        if (
+            nominee.is_dead
+            or nominee.droison_count
+            or virgin_abilty.spent
+            or tf_nom is info.FALSE
+        ):
+            return
+        virgin_abilty.spent = True
+
+        executee = state.players[execution.player].character
+        for ss in executee.executed(state, execution.player, execution.died):
+            ss.players[execution.player].character.death_explanation = (
+                'nominated Virgin'
+            )
+            yield ss
 
 @dataclass
 class Vortox(GenericDemon):

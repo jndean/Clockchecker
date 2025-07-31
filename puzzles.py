@@ -1,4 +1,20 @@
+from dataclasses import dataclass
+from typing import Callable
+
 from clockchecker import *
+
+
+@dataclass
+class PuzzleDef:
+    # The puzzle(s) to be solved
+    puzzle: Puzzle | tuple[Puzzle, ...]
+    # All allowed solutions, in the form of tuples of starting characters
+    solutions: tuple[tuple[type[Character], ...]] = ()
+    # An extra validation function, runs on each solution
+    solution_condition: Callable[[State], bool] | None = None
+    # Defines a custom solve method that generates solutions
+    solve_override: Callable[[Puzzle | tuple[Puzzle]], StateGen] | None = None
+
 
 def puzzle_NQT1():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1erb5e2/can_the_sober_savant_solve_the_puzzle
@@ -42,7 +58,7 @@ def puzzle_NQT1():
     solutions = (
         (Savant, Goblin, Steward, Drunk, Noble, Leviathan),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT2():
@@ -94,7 +110,7 @@ def puzzle_NQT2():
         (Drunk, Knight, FortuneTeller, Saint, Goblin, Leviathan, Clockmaker,
             Balloonist),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT3a():
@@ -129,7 +145,7 @@ def puzzle_NQT3a():
     solutions = (
         (Slayer, Baron, Recluse, Investigator, Imp, Drunk, Empath),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT3b():
@@ -165,7 +181,7 @@ def puzzle_NQT3b():
     solutions = (
         (Slayer, Librarian, Imp, Spy, Chef, Recluse, Washerwoman, Empath),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT4():
@@ -221,7 +237,7 @@ def puzzle_NQT4():
         (Investigator, Drunk, Poisoner, LordOfTyphon, Marionette, Recluse, 
             Juggler, Dreamer),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT5a():
@@ -257,7 +273,7 @@ def puzzle_NQT5a():
         (Alsaahir, Noble, Knight, Investigator, Empath, Leviathan, Goblin),
         (Alsaahir, Noble, Knight, Investigator, Goblin, Steward, Leviathan),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT5b():
@@ -295,7 +311,7 @@ def puzzle_NQT5b():
         (Juggler, Goblin, Seamstress, Steward, Investigator, Leviathan, Knight),
         (Juggler, Empath, Seamstress, Steward, Goblin, Leviathan, Knight),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT6():
@@ -348,7 +364,7 @@ def puzzle_NQT6():
         (Marionette, Saint, Noble, Seamstress, Investigator, Juggler, Drunk,
             Empath, Vortox),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT7():
@@ -421,7 +437,7 @@ def puzzle_NQT7():
         (Savant, VillageIdiot, FortuneTeller, Goblin, Leviathan, Shugenja,
             Mutant, VillageIdiot),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT8():
@@ -460,7 +476,7 @@ def puzzle_NQT8():
         (Seamstress, Imp, Poisoner) + (Seamstress,) * 4,
         (Seamstress, Poisoner, Imp) + (Seamstress,) * 4,
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT9():
@@ -511,7 +527,7 @@ def puzzle_NQT9():
     solutions = (
         (Acrobat, Balloonist, Gossip, Drunk, Imp, Juggler, Goblin),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT10():
@@ -549,7 +565,7 @@ def puzzle_NQT10():
     solutions = (
         (Slayer, Ravenkeeper, Imp, FortuneTeller, Chef, Poisoner, Washerwoman),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT12a():
@@ -586,7 +602,7 @@ def puzzle_NQT12a():
     solutions = (
         (Dreamer, Clockmaker, Lunatic, Slayer, Spy, Vortox),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT12b():
@@ -631,7 +647,7 @@ def puzzle_NQT12b():
         (Librarian, Vortox, Lunatic, Mayor, Slayer, Dreamer, Clockmaker, 
             ScarletWoman),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT13():
@@ -669,7 +685,7 @@ def puzzle_NQT13():
     solutions = (
         (Investigator, Clockmaker, Baron, Drunk, FortuneTeller, Imp, Recluse),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT14():
@@ -712,7 +728,7 @@ def puzzle_NQT14():
     solutions = (
         (Slayer, Washerwoman, Undertaker, FortuneTeller, Empath, Imp, Poisoner),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT15():
@@ -789,7 +805,7 @@ def puzzle_NQT15():
         (Savant, Klutz, Juggler, SnakeCharmer, Clockmaker, Seamstress, Vortox,
             EvilTwin),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT16():
@@ -831,7 +847,7 @@ def puzzle_NQT16():
         (Saint, Empath, FortuneTeller, Poisoner, Imp, Washerwoman, Investigator,
             Chef),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT17():
@@ -887,7 +903,7 @@ def puzzle_NQT17():
     def condition(world: State):
         return world.players[You].character.puzzle_drunk == Steph
 
-    return puzzle, solutions, condition
+    return PuzzleDef(puzzle, solutions, solution_condition=condition)
 
 
 def puzzle_NQT18():
@@ -935,7 +951,7 @@ def puzzle_NQT18():
         (Drunk, Juggler, Leviathan, FortuneTeller, Balloonist, Saint, Xaan, 
             Recluse),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT19():
@@ -975,7 +991,7 @@ def puzzle_NQT19():
     solutions = (
         (Librarian, Spy, Recluse, Slayer, Imp, Ravenkeeper, Washerwoman, Empath),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT20():
@@ -1016,7 +1032,7 @@ def puzzle_NQT20():
     solutions = (
         (Investigator, VillageIdiot, Saint, VillageIdiot, Baron, Imp, Drunk),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT21():
@@ -1065,7 +1081,7 @@ def puzzle_NQT21():
     solutions = (
         (Juggler, Juggler, Drunk, Juggler, Goblin, Juggler, Juggler, Leviathan),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT22():
@@ -1105,7 +1121,7 @@ def puzzle_NQT22():
     solutions = (
         (Drunk, Investigator, Slayer, Imp, Saint, Recluse, Librarian, Baron),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT23():
@@ -1146,7 +1162,7 @@ def puzzle_NQT23():
         (Chef, Washerwoman, Investigator, FortuneTeller, Goblin, Lunatic,
             Librarian, Imp),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT24():
@@ -1194,7 +1210,7 @@ def puzzle_NQT24():
         (Investigator, Klutz, FortuneTeller, Washerwoman, Virgin, Librarian, 
             Imp, Poisoner),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT26():
@@ -1231,7 +1247,7 @@ def puzzle_NQT26():
     solutions = (
         (Empath, Saint, Slayer, Imp, Poisoner, Soldier, Undertaker, Chef),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT28():
@@ -1279,7 +1295,7 @@ def puzzle_NQT28():
         (Chambermaid, Drunk, ScarletWoman, Librarian, Clockmaker, Empath,
             NoDashii, Oracle),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT29():
@@ -1328,7 +1344,7 @@ def puzzle_NQT29():
     solutions = (
         (Dreamer, Poisoner, Imp, Dreamer, Dreamer, Dreamer, Drunk, Dreamer),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT30a():
@@ -1355,12 +1371,13 @@ def puzzle_NQT30a():
             }),
         ],
         hidden_characters=[Imp, Spy, Drunk],
-        hidden_self=[Drunk],
+        player_zero_is_you=False,
+        hidden_self=[],
     )
     solutions = (
         (Drunk, Spy, Artist, Clockmaker, Imp, Seamstress),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT30b():
@@ -1387,10 +1404,11 @@ def puzzle_NQT30b():
             }),
         ],
         hidden_characters=[Imp, Spy, Drunk],
-        hidden_self=[Drunk],
+        player_zero_is_you=False,
+        hidden_self=[],
     )
-    solutions = () # Atheist game! TODO: return the Atheist world
-    return puzzle, solutions, None
+    solutions = ((Clockmaker, Atheist, Knight, Seamstress, Artist, Noble),)
+    return PuzzleDef(puzzle, solutions)
 
     
 def puzzle_NQT31():
@@ -1430,7 +1448,7 @@ def puzzle_NQT31():
     solutions = (
         (Chef, Empath, Drunk, Imp, Recluse, Baron, FortuneTeller),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT32():
@@ -1487,7 +1505,7 @@ def puzzle_NQT32():
         (Dreamer, Poisoner, Imp, Empath, Juggler, Saint, Undertaker, 
             FortuneTeller),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT33():
@@ -1528,7 +1546,7 @@ def puzzle_NQT33():
         (Empath, Recluse, Ravenkeeper, Washerwoman, Imp, FortuneTeller,
             Poisoner, Investigator),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT34():
@@ -1573,7 +1591,7 @@ def puzzle_NQT34():
     solutions = (
         (Mathematician, Sage, Artist, Vortox, Witch, Juggler, SnakeCharmer),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT35():
@@ -1617,7 +1635,7 @@ def puzzle_NQT35():
         (Librarian, Clockmaker, Undertaker, FortuneTeller, Spy, LordOfTyphon,
             Poisoner, Drunk),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT36():
@@ -1657,7 +1675,7 @@ def puzzle_NQT36():
         (Empath, Saint, Slayer, Ravenkeeper, Investigator, FortuneTeller, Imp, 
             Poisoner),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT37():
@@ -1702,7 +1720,7 @@ def puzzle_NQT37():
         (Undertaker, Washerwoman, Chef, Drunk, Librarian, FortuneTeller, Imp, 
             Poisoner),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT38():
@@ -1748,7 +1766,7 @@ def puzzle_NQT38():
         (Recluse, Drunk, Imp, Investigator, Baron, SnakeCharmer, FortuneTeller,
             Saint),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT38_alt():
@@ -1805,7 +1823,7 @@ def puzzle_NQT38_alt():
         (Empath, Clockmaker, Philosopher, NoDashii, Chef, Mathematician, Witch,
             Drunk)
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT39():
@@ -1869,7 +1887,7 @@ def puzzle_NQT39():
         (Oracle, NoDashii, Mutant, Seamstress, Sage, Artist, 
             Mathematician, Witch),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT40():
@@ -1912,7 +1930,7 @@ def puzzle_NQT40():
         (Investigator, FortuneTeller, Recluse, Drunk, Saint, Librarian, Baron,
             Butler, Imp),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT41():
@@ -1958,7 +1976,7 @@ def puzzle_NQT41():
     solutions = (
         (Lunatic, FortuneTeller, Seamstress, Slayer, Chef, Noble, Witch, Imp),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT42():
@@ -2011,7 +2029,7 @@ def puzzle_NQT42():
     solutions = (
         (Philosopher, Artist, Empath, Undertaker, Widow, Imp, Juggler, Saint),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT43():
@@ -2050,7 +2068,7 @@ def puzzle_NQT43():
     solutions = (
         (Drunk, Imp, Baron, Chef, Recluse, FortuneTeller, Empath, Saint),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT44():
@@ -2104,7 +2122,7 @@ def puzzle_NQT44():
         (Juggler, Leviathan, FortuneTeller, Drunk, ScarletWoman, Investigator, 
             Progidy, Progidy),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT44_alt():
@@ -2160,7 +2178,7 @@ def puzzle_NQT44_alt():
         (Washerwoman, Progidy, ScarletWoman, Knight, Shugenja, Drunk,
             Leviathan, Juggler),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT45a():
@@ -2208,7 +2226,7 @@ def puzzle_NQT45a():
         (Ravenkeeper, Empath, Drunk, Investigator, Chef, ScarletWoman, Imp, 
             Slayer),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT45b():
@@ -2253,7 +2271,7 @@ def puzzle_NQT45b():
     solutions = (
         (Slayer, Hermit, Spy, Empath, Ravenkeeper, Imp, Investigator, Chef),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT46():
@@ -2301,7 +2319,7 @@ def puzzle_NQT46():
     solutions = (
         (Clockmaker, Exorcist, Investigator, Poisoner, Gossip, Princess, Imp),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT47():
@@ -2341,7 +2359,7 @@ def puzzle_NQT47():
         (Recluse, Investigator, Drunk, Baron, Saint, Butler, Washerwoman, Chef,
             Imp),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT48():
@@ -2396,11 +2414,12 @@ def puzzle_NQT48():
         (Mathematician, Chambermaid, VillageIdiot, Leviathan, Juggler, Golem, 
             Puzzlemaster, Xaan),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_NQT49():
-    # URL: TODO
+    # https://www.reddit.com/r/botc/comments/1lzoqct/weekly_puzzle_49_bastille_day/
+    # (I.e., the one that saved the subreddit).
 
     You, Sula, Matthew, Adam, Tom, Oscar, Fraser, Anna = range(8)
     puzzle = Puzzle(
@@ -2446,7 +2465,109 @@ def puzzle_NQT49():
     solutions = ((
         Washerwoman, Baron, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller
     ),)
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
+
+
+def puzzle_NQT50():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1m6a7k1/weekly_puzzle_50_art_imitates_life_life_imitates/
+
+    Dan, Fraser, Tom, Sula, Josh, Olivia = range(6)
+    puzzle_a = Puzzle(
+        players=[
+            Player('Dan', claim=Knight, night_info={
+                1: Knight.Ping(Sula, Josh)
+            }),
+            Player('Fraser', claim=Librarian, night_info={
+                1: Librarian.Ping(Dan, Olivia, Drunk)
+            }),
+            Player('Tom', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(3)
+            }),
+            Player('Sula', claim=Investigator, night_info={
+                1: Investigator.Ping(Dan, Fraser, Goblin)
+            }),
+            Player('Josh', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Dan: Drunk,
+                        Sula: Investigator,
+                        Olivia: Goblin,
+                    })
+                },
+                night_info={2: Juggler.Ping(3)}
+            ),
+            Player('Olivia', claim=Artist),
+        ],
+        hidden_characters=[Leviathan, Goblin, Drunk],
+        player_zero_is_you=False,
+        hidden_self=[],
+    )
+
+    Sarah, Anna, Matthew, Oscar, Adam, Steph = range(6)
+    puzzle_b = Puzzle(
+        players=[
+            Player('Sarah', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Anna: Leviathan,
+                        Steph: Leviathan,
+                        Oscar: Goblin,
+                        Adam: Goblin,
+                        Matthew: Clockmaker,
+                    })
+                },
+                night_info={2: Juggler.Ping(3)}
+            ),
+            Player('Anna', claim=Artist),
+            Player('Matthew', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(2)
+            }),
+            Player('Oscar', claim=Librarian, night_info={
+                1: Librarian.Ping(Anna, Steph, Drunk)
+            }),
+            Player('Adam', claim=Knight, night_info={
+                1: Knight.Ping(Matthew, Oscar)
+            }),
+            Player('Steph', claim=Investigator, night_info={
+                1: Investigator.Ping(Anna, Oscar, Goblin)
+            }),
+        ],
+        hidden_characters=[Leviathan, Goblin, Drunk],
+        player_zero_is_you=False,
+        hidden_self=[],
+    )
+
+    anna_ping = Artist.Ping(~IsCategory(Tom, TOWNSFOLK))
+    olivia_ping = Artist.Ping(
+        IsCharacter(Sarah, Goblin)
+        | IsCharacter(Anna, Goblin)
+        | IsCharacter(Steph, Goblin)
+    )
+
+    def solve_override():
+        # Define a solve_override to implement more complex custom solve logic.
+        # For this puzzle, we must eval each game's Artist ping on the other
+        # game, so long as the Artist claim is True. We can write both Artist
+        # checks as one big compound Info statement.
+        solutions_a = list(solve(puzzle_a))
+        solutions_b = list(solve(puzzle_b))
+        for A in solutions_a:
+            for B in solutions_b:
+                cross_artist_info = ((
+                    olivia_ping(B, None) | ~IsCharacter(Olivia, Artist)(A, None)
+                ) & (
+                    anna_ping(A, None) | ~IsCharacter(Anna, Artist)(B, None)
+                ))
+                if cross_artist_info is not FALSE:
+                    yield A
+                    yield B
+
+    puzzle = (puzzle_a, puzzle_b)
+    solutions = (
+        (Knight, Goblin, Leviathan, Investigator, Drunk, Artist),
+        (Goblin, Artist, Clockmaker, Librarian, Leviathan, Drunk),
+    )
+    return PuzzleDef(puzzle, solutions, None, solve_override())
 
 
 def puzzle_josef_yes_but_dont():
@@ -2500,7 +2621,7 @@ def puzzle_josef_yes_but_dont():
         (Ravenkeeper, Slayer, Imp, Investigator, FortuneTeller, Recluse, Empath,
             Spy, Soldier, ScarletWoman, Washerwoman),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_ali_adversarial1():
@@ -2546,7 +2667,7 @@ def puzzle_ali_adversarial1():
     solutions = (
         (Shugenja, Noble, Imp, Investigator, Drunk, Knight, Seamstress, Goblin),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_ali_adversarial2():
@@ -2601,7 +2722,51 @@ def puzzle_ali_adversarial2():
     solutions = ((
         Juggler, Goblin, Shugenja, Seamstress, Knight, Imp, Drunk, Chambermaid
     ),)
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
+
+
+def puzzle_nqt_sw_test():
+    # A discord user requested a puzzle requiring a SW to catch an Imp,
+    # NQT kindly obliged with this test case.
+    You, Tom, Fraser, Aoife, Dan, Adam, Jasmine, Matthew = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Aoife, Dan, Ravenkeeper)
+            }),
+            Player('Tom', claim=Empath, night_info={
+                1: Empath.Ping(2),
+                2: Empath.Ping(2),
+            }),
+            Player('Fraser', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Adam, Investigator),
+            }),
+            Player('Aoife', claim=Slayer, day_info={
+                3: Slayer.Shot(You, died=False),
+            }),
+            Player('Dan', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Jasmine, Librarian)
+            }),
+            Player('Adam', claim=Investigator, night_info={
+                1: Investigator.Ping(Dan, Matthew, ScarletWoman)
+            }),
+            Player('Jasmine', claim=Librarian, night_info={
+                1: Librarian.Ping(Fraser, Matthew, Drunk)
+            }),
+            Player('Matthew', claim=Chef, night_info={
+                1: Chef.Ping(0)
+            }),
+        ],
+        day_events={1: Execution(Adam), 2: Execution(Tom)},
+        night_deaths={2: Dan, 3: Fraser},
+        hidden_characters=[Imp, ScarletWoman, Spy, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Washerwoman, Imp, Drunk, Slayer, Ravenkeeper, Investigator, Librarian,
+            ScarletWoman),
+    )
+    return PuzzleDef(puzzle, solutions)
 
 
 def puzzle_emerald_snv():
@@ -2688,7 +2853,7 @@ def puzzle_emerald_snv():
         (Klutz, Clockmaker, Witch, NoDashii, Oracle, Artist, Juggler, Savant,
             Mutant),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def _puzzle_emerald_tb():
@@ -2757,7 +2922,7 @@ def _puzzle_emerald_tb():
         (Librarian, FortuneTeller, Imp, Spy, Empath, Washerwoman, Butler,
             Poisoner, Chef, Virgin, Drunk, Ravenkeeper),
     )
-    return puzzle, solutions, None
+    return PuzzleDef(puzzle, solutions)
 
 
 def _puzzle_empty_template():
@@ -2791,22 +2956,31 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     make_puzzle = globals()[f'{PREFIX}{args.puzzle_name}']
-    puzzle, solutions, solve_condition = make_puzzle()
+    puzzle_def = make_puzzle()
 
-    print(puzzle)
+    if isinstance(puzzle_def.puzzle, Puzzle):
+        print(puzzle_def.puzzle)
+    else:
+        for puzzle in puzzle_def.puzzle:
+            print(puzzle)
+
     print('\nSolving...')
 
-    worlds = list(solve(puzzle))
+    if puzzle_def.solve_override is None:
+        worlds = list(solve(puzzle_def.puzzle))
+    else:
+        worlds = list(puzzle_def.solve_override())
 
-    success = (set(w.initial_characters for w in worlds) == set(solutions))
-    if solve_condition is not None:
+    output = set(w.initial_characters for w in worlds)
+    success = (output == set(puzzle_def.solutions))
+    if puzzle_def.solution_condition is not None:
         for world in worlds:
-            success &= solve_condition(world)
+            success &= puzzle_def.solution_condition(world)
     if success:
         print(f'Success, found the following {len(worlds)} worlds.\n')
     else:
         print('\033[31;1mERROR - Mismatch with desired Solutions:\033[0m')
-        for solution in solutions:
+        for solution in puzzle_def.solutions:
             print(f"Solution: [{','.join(c.__name__ for c in solution)}]")
     
     for world in worlds:
