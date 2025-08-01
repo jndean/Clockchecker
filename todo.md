@@ -8,8 +8,6 @@
 
 - Easy: Make wrapper characters (Philosopher, Hermit, Drunklike) passthrough global_end_night method, e.g. for Widow.
 
-- EASY: I have implemented Philo drunks every player of the chosen character, but I think actually they just drunk a single one? Easy to remove the extra functionality :)
-
 - GOOD: Make Player.character private (Player.\_character?) and any time something wants to access player's character it should call player.get_character(CharacterType) with the expected character type. (Maybe it can call with None explicitly to get the root character?). This can then recurse into wrapped characters and return the instance of the ability that is expected
 
 - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
