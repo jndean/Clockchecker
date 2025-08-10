@@ -88,33 +88,25 @@ class Player:
         self,
         character_t: type[Character] | None,
     ) -> Character | None:
+        """
+        Retrieve ability implementation from a player. If the character_t
+        is None, returns the player's root character. Otherwise, recursively
+        searches for any wrapped character of the given type. E.g., if
+        called on the Philo-Alchemist-Goblin, you would want to specify
+        whether you were accessing the Philosopher, Alchemist or Goblin
+        instance stored on the player.
+        """
         if character_t is None:
             return self.character
+        return self.character.get_ability(character_t)
 
-        # character = self.character
-        # while 1:
-        #     if (
-        #         isinstance(character, characters.Philosopher)
-        #         and character.active_ability is not None
-        #     ):
-        #         # This method says Philo doeosn't have Philo ability after making a
-        #         # sober choice. This is convenient when computing night order.
-        #         return acts_like(character_instance.active_ability, ability)
-        #     if isinstance(character_instance, characters.Hermit):
-        #         return any(
-        #             acts_like(subability, ability)
-        #             for subability in character_instance.active_abilities
-        #         )
-
-        #     # TODO: Alchemist and Boffin'd Demon
-        #     return isinstance(character_instance, ability)
-
-
-        # TODO: Make this recurse into wrapped characters, 
-        # make self.character private.
-        if isinstance(self.character, character_t):
-            return self.character
-        return None
+    def has_ability(self, character_t: type[Character]) -> bool:
+        """
+        Only concerned with whether it is legal for this player to use
+        the specified ability, does not consider droisoning, which
+        should be handled by the ability implementation.
+        """
+        return self.character.get_ability(character_t) is not None
 
     @property
     def vigormortised(self):
@@ -264,7 +256,7 @@ class State:
         self.currently_acting_character = character_t
         self.players_still_to_act = [
             pid for pid in range(len(self.players))
-            if info.acts_like(self.players[pid].character, character_t)
+            if self.players[pid].character.acts_like(character_t)
         ]
         for state in self.run_all_players_with_currently_acting_character():
             state.phase_order_index += 1
@@ -863,7 +855,7 @@ def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
         atheist_state = puzzle.state_template.fork(fork_id=-1)
         atheist_state.begin_game(True)
         if any(
-            info.has_ability_of(player.character, characters.Atheist)
+            player.has_ability(characters.Atheist)
             for player in atheist_state.players
         ):
             yield atheist_state

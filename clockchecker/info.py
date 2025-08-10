@@ -159,9 +159,9 @@ class IsEvil(Info):
     def __call__(self, state: State, src: PlayerID = None):
         player = state.players[self.player]
         if not player.droison_count:  # Misregistrations are part of ability
-            if has_ability_of(player.character, characters.Recluse):
+            if player.has_ability(characters.Recluse):
                 return TRUE if player.is_evil else MAYBE
-            if has_ability_of(player.character, characters.Spy):
+            if player.has_ability(characters.Spy):
                 return MAYBE if player.is_evil else FALSE
         return STBool(player.is_evil)
 
@@ -178,8 +178,8 @@ class IsAlive(Info):
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
         if (
-            has_ability_of(player.character, characters.Zombuul)
-            and player.character.registering_dead
+            (z := player.get_ability(characters.Zombuul)) is not None
+            and z.registering_dead
         ):
             return FALSE
         return STBool(not player.is_dead)
@@ -358,50 +358,6 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
     ):
         return True
     return player.is_evil
-
-
-def has_ability_of(
-    character_instance: Character,
-    ability: type[Character]
-) -> bool:
-    """
-    For checking if it is legal for a player to use a character's ability.
-    Is only concenred with characters who gain other character's abilities, does
-    not handle anything like poisoning etc.
-    """
-    if (
-        isinstance(character_instance, characters.Philosopher)
-        and character_instance.active_ability is not None
-    ):
-        # This method says Philo doeosn't have Philo ability after making a
-        # sober choice. This is convenient when computing night order.
-        return has_ability_of(character_instance.active_ability, ability)
-    if isinstance(character_instance, characters.Hermit):
-        return any(
-            has_ability_of(subability, ability)
-            for subability in character_instance.active_abilities
-        )
-
-    # TODO: Alchemist and Boffin'd Demon
-    return isinstance(character_instance, ability)
-
-
-def acts_like(
-    character_instance: Character,
-    character: type[Character]
-) -> bool:
-    """
-    Like `has_ability_of` but also includes characters that think they have
-    another character's ability.
-    """
-    if has_ability_of(character_instance, character):
-        return True
-    sim_char = getattr(character_instance, 'simulated_character', None)
-    if sim_char is not None:
-        return acts_like(sim_char, character)
-    # TODO: Lunatic currently doesn't decide what demon they think they are.
-    return False
-
 
 def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
     """For printing human-readable str representations of Info."""
