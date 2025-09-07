@@ -333,7 +333,7 @@ def tf_candidates_in_direction(
         player = (src + direction * step) % N
         is_tf = IsCategory(player, characters.TOWNSFOLK)(state, src)
         if is_tf is not FALSE:
-            candidates.add(player)
+            candidates.append(player)
         if is_tf is TRUE:
             break
     return candidates

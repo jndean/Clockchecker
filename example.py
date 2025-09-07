@@ -9,48 +9,57 @@ if __name__ == '__main__':
     multiprocessing.set_start_method('spawn')
 
 
-    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
-
-    Hermit.set_outsiders(Saint, Recluse, Drunk)
-
-    You, Tim, Adam, Dan, Oscar, Sula, Sarah, Fraser = range(8)
+    Eevee, Amy, Ethan, Barrow, Lyra, JC, Emerald, Sincerity = range(8)
     puzzle = Puzzle(
         players=[
-            Player('You', claim=Slayer, day_info={
-                2: Slayer.Shot(Adam, died=False),
+            Player('Eevee', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Emerald, Amy, same=False),
             }),
-            Player('Tim', claim=Undertaker, night_info={
-                2: Undertaker.Ping(Dan, Drunk),
-                3: Undertaker.Ping(Fraser, Chef),
+            Player('Amy', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Eevee, Seamstress, Vigormortis),
+                2: Dreamer.Ping(JC, Oracle, NoDashii),
+                3: Dreamer.Ping(Lyra, Sage, Vigormortis),
             }),
-            Player('Adam', claim=Investigator, night_info={
-                1: Investigator.Ping(Tim, Dan, ScarletWoman)
+            Player('Ethan', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Barrow),
             }),
-            Player('Dan', claim=Empath, night_info={
-                1: Empath.Ping(1),
+            Player('Barrow', claim=Artist, day_info={
+                # 1: Artist.Ping(IsCharacter(Louisa, Drunk))
             }),
-            Player('Oscar', claim=Ravenkeeper, night_info={
-                2: Ravenkeeper.Ping(Adam, Investigator),
+            Player('Lyra', claim=Sage, night_info={
+                3: Sage.Ping(Amy, Eevee),
             }),
-            Player('Sula', claim=Washerwoman, night_info={
-                1: Washerwoman.Ping(Tim, Fraser, Undertaker)
+            Player('JC', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+                3: Oracle.Ping(1),
             }),
-            Player('Sarah', claim=Investigator, night_info={
-                1: Investigator.Ping(Tim, Fraser, Spy)
+            Player('Emerald', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(2)
             }),
-            Player('Fraser', claim=Chef, night_info={
-                1: Chef.Ping(1)
+            Player('Sincerity', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+                2: Mathematician.Ping(0),
             }),
         ],
-        day_events={1: Execution(Dan), 2: Execution(Fraser)},
-        night_deaths={2: Oscar, 3: You},
-        hidden_characters=[Imp, ScarletWoman, Spy, Drunk, Hermit],
-        hidden_self=[Drunk, Hermit],
+        day_events={
+            1: Execution(Ethan),
+            2: Execution(Sincerity),
+            3: Dies(player=JC, after_nominating=True),
+        },
+        night_deaths={2: Barrow, 3: Lyra},
+        hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+        player_zero_is_you=False,
     )
 
     print(puzzle, '\n\nSolving...\n')
     count = 0
     for world in solve(puzzle):
+        if any(
+            isinstance(p.character, Mutant) and p.is_dead
+            for p in world.players
+        ): 
+            continue
         print(world)
         count += 1
     print(f'Found {count} worlds')

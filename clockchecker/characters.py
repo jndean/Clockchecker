@@ -3340,7 +3340,7 @@ class Vigormortis(GenericDemon):
 
             # 4. The killed minion world
             minion_state = state.fork()
-            minion = minion_state.players[minion].character
+            minion = minion_state.players[target].character
             minion.vigormortised = True
             poison_candidates = (
                 info.tf_candidates_in_direction(minion_state, target, -1)
@@ -3355,7 +3355,11 @@ class Vigormortis(GenericDemon):
                     new_vig.maybe_activate_effects(ss2, me)
                     new_vig.killed_minions.append(target)
                     new_vig.poisoned_tf.append(poison_candidate)
+                    if state._is_world():
+                        print('POISONING?', poison_candidate)
                     if self.effects_active:
+                        if state._is_world():
+                            print('POISONING', poison_candidate)
                         ss2.players[poison_candidate].droison(ss2, me)
                     yield ss2
 
@@ -3363,14 +3367,17 @@ class Vigormortis(GenericDemon):
         # TODO: Possibly remove both these things. I think maybe a reactivated
         # vigormortis doesn't reanimate dead minions (or repoison their 
         # neighbours?) but I'm on a plane with no wifi right now so can't check.
-        for target in self.poison_targets:
+        if state._is_world():
+            print('ACTIVATING VIGORMORTIS')
+            print(self.poisoned_tf)
+        for target in self.poisoned_tf:
             state.players[target].droison(state, me)
         for minion in self.killed_minions:
             state.players[minion].character.vigormortised = True
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
         # TODO: Clear self.poison_targets and self.killed_minions here too?
-        for target in self.poison_targets:
+        for target in self.poisoned_tf:
             state.players[target].droison(state, me)
         for minion in self.killed_minions:
             minion_char = state.players[minion].character
