@@ -349,6 +349,47 @@ class Character:
         # It is the responsibility of the ExternalInfo to account for Vortox.
         return external_info(state, me)
 
+    def get_ability(
+        self,
+        character_t: type[Character],
+    ) -> Character | None:
+        """
+        Recursive ability finder handling characters that wrap other characters,
+        so that you can query the
+        Psychopath[holding LilMonsta[with Boffin[Philo[Alchemist[Seamstress]]]
+        and extract the Seamstress character instance.
+        """
+        if isinstance(self, character_t):
+            return self
+
+        if (
+            isinstance(self, Philosopher)
+            and self.active_ability is not None
+            and (ret := self.active_ability.get_ability(character_t)) is not None
+        ):
+            return ret
+        if isinstance(self, Hermit):
+            for subability in self.active_abilities:
+                if (ret := subability.get_ability(character_t)) is not None:
+                    return ret
+
+        # TODO: Boffin
+        # TODO: Alchemist
+        return None
+
+    def acts_like(self, character: type[Character]) -> bool:
+        """
+        Checks if this character is treated like the query character by the ST.
+        Like 'has_ability', but also returns True on characters that think they
+        have the queried ability.
+        """
+        if self.get_ability(character) is not None:
+            return True
+        if (sim := getattr(self, 'simulated_character', None)) is not None:
+            return sim.acts_like(character)
+        # TODO: Lunatic currently doesn't decide what demon they think they are.
+        return False
+
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         """
         Evaluated at the point the character is about to be woken according to
@@ -416,7 +457,7 @@ class Acrobat(Character):
             yield state
         elif (
             (chosen := state.players[choice.player]).droison_count
-            or info.has_ability_of(chosen.character, Drunk)  # See Acrobat Almanac
+            or chosen.has_ability(Drunk)  # See Acrobat Almanac
         ):
             if acrobat.droison_count:
                 state.math_misregistration(me)
@@ -592,7 +633,7 @@ class Chambermaid(Character):
                     # Handle Chambermaid-Mathematician Jinx,
                     # or multiple players having Chambermaid ability.
                     state.player_upcoming_in_night_order(player.id)
-                    and player.character.wakes_tonight(state, player)
+                    and player.character.wakes_tonight(state, player.id)
                 )
                 for player in (
                     state.players[self.player1],
@@ -955,11 +996,8 @@ class EvilTwin(Character):
         """The 'good' twin reports an EvilTwin using EvilTwin.Is(player)."""
         eviltwin: PlayerID
         def __call__(self, state: State, src: PlayerID) -> bool:
-            eviltwin = state.players[self.eviltwin].character
-            return (
-                info.has_ability_of(eviltwin, EvilTwin)
-                and eviltwin.twin == src
-            )
+            eviltwin = state.players[self.eviltwin].get_ability(EvilTwin)
+            return eviltwin is not None and eviltwin.twin == src
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         eviltwin = state.players[me]
@@ -1217,7 +1255,7 @@ class Gambler(Character):
         character: type[Character]
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        """Override Reason: Die on error, fork on MAYBE, ignore vortox"""
+        """Override Reason: Die on error, fork on MAYBE, ignore vortox."""
         gambler = state.players[me]
         if gambler.is_evil:
             raise NotImplementedError("Evil Gambler")
@@ -1424,7 +1462,7 @@ class Hermit(Character):
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         for ability in self.active_abilities:
             # This catches Drunklike acts_like current character, so run sim.
-            if info.acts_like(ability, state.currently_acting_character):
+            if ability.acts_like(state.currently_acting_character):
                 yield from ability.run_night(state, me)
                 break
         else:
@@ -1635,8 +1673,8 @@ class Klutz(Character):
         player: PlayerID | None = None
         def __call__(self, state: State) -> StateGen:
             klutz = state.players[self.player]
-            assert klutz.is_dead, "Unlikely the puzzle says that."
-            if not info.has_ability_of(klutz.character, Klutz):
+            assert klutz.is_dead, "Unlikely the puzzle says Klutz alive."
+            if not klutz.has_ability(Klutz):
                 if info.behaves_evil(state, self.player):
                     yield state
                 return
@@ -2598,7 +2636,7 @@ class Riot(Character):
             if (
                 not player.is_dead
                 and player.droison_count == 0
-                and info.has_ability_of(player.character, Riot)
+                and player.has_ability(Riot)
             ):
                 riot = player
         assert riot is not None
@@ -2723,16 +2761,15 @@ class ScarletWoman(Character):
             # On MAYBE, spawn an extra world where no catch happened
             if catches is info.MAYBE:
                 substate = state.fork()
-                if info.has_ability_of(dying_player.character, ScarletWoman):  # TODO: What is this line doing?!?! Pls test me.
+                if dying_player.has_ability(ScarletWoman):  # TODO: What is this line doing?!?! Pls test me.
                     substate.math_misregistration(me, ~droison)
                 yield substate
 
             possible_demons = set([type(dying_player.character)])
             # Recluse could have registered as any Demon on the script
-            if info.has_ability_of(dying_player.character, Recluse):
+            if dying_player.has_ability(Recluse):
                 possible_demons.update(state.puzzle.demons)
-            possible_demons.discard(Recluse) # This ruling feels best to me.
-
+            possible_demons.discard(Recluse)  # This ruling feels best to me.
 
             # Yield worlds where the SW catches the death
             for demon in possible_demons:
@@ -2991,7 +3028,8 @@ class Slayer(Character):
 
         def __call__(self, state: State) -> StateGen:
             shooter = state.players[self.player]
-            if not info.has_ability_of(shooter.character, Slayer):
+            ability = shooter.get_ability(Slayer)
+            if ability is None:
                 if info.behaves_evil(state, self.player):
                     yield state
                 return
@@ -2999,8 +3037,7 @@ class Slayer(Character):
             if (
                 shooter.is_dead
                 or target.is_dead
-                or not isinstance(shooter.character, Slayer)
-                or shooter.character.spent
+                or ability.spent
             ):
                 should_die = info.FALSE
             else:
@@ -3012,8 +3049,7 @@ class Slayer(Character):
                     state.math_misregistration(self.player, ~should_die)
                 should_die = info.FALSE
 
-            if isinstance(shooter.character, Slayer):
-                shooter.character.spent = True
+            ability.spent = True
 
             if self.died and should_die is not info.FALSE:
                 state.math_misregistration(self.player, should_die)

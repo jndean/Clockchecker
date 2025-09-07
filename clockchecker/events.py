@@ -88,8 +88,8 @@ class UneventfulNomination(Event):
     def __call__(self, state: State) -> StateGen:
         nominator = state.players[self.nominator]
         nominee = state.players[self.player]
-        if info.has_ability_of(nominator.character, characters.Princess):
-            nominator.character.nominates(state, self.nominator, self.player)
+        if (princess := nominator.get_ability(characters.Princess)) is not None:
+            princess.nominates(state, self.nominator, self.player)
         states = [state]
         if (virgin := nominee.get_ability(characters.Virgin)) is not None:
             states = virgin.uneventful_nomination(state, self)

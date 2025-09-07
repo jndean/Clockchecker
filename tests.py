@@ -497,3 +497,183 @@ class TestVirgin(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=(
             (Artist, Philosopher, Virgin, Goblin, Imp),
         ))
+
+
+class TestSlayer(unittest.TestCase):
+    def test_slayer_kills_demon(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: Slayer.Shot(D, died=True)
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Imp),
+                Player('D', claim=Imp),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Imp],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 2),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Slayer, Soldier, Imp, Imp),
+        ))
+
+    def test_slayer_misses_minion(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: Slayer.Shot(D, died=False)
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Imp),
+                Player('D', claim=Goblin),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Slayer, Soldier, Imp, Goblin),
+        ))
+
+    def test_slayer_may_kill_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: Slayer.Shot(D, died=False)  # Recluse survives
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Imp),
+                Player('D', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Slayer, Soldier, Imp, Recluse),
+        ))
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: Slayer.Shot(D, died=True)  # Recluse dies
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Imp),
+                Player('D', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Slayer, Soldier, Imp, Recluse),
+        ))
+
+    def test_slayer_poisoned(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: Slayer.Shot(C, died=False)
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Pukka),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Pukka],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Slayer, Soldier, Pukka),),
+            conditions=CharAttrEq(C, 'target', You),
+        )
+
+    def test_slayer_spent(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Slayer, day_info={
+                    1: [
+                        Slayer.Shot(B, died=False),
+                        Slayer.Shot(C, died=False),
+                    ],
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Imp),
+                Player('D', claim=Imp),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Imp],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 2),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Slayer, Soldier, Imp, Imp),
+        ))
+
+    def test_others_cant_slay(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(B, Goblin) & IsCharacter(C, Imp))
+                }),
+                Player('B', claim=Slayer, day_info={
+                    1: Slayer.Shot(C, died=False)
+                }),
+                Player('C', claim=Imp, day_info={
+                    1: Slayer.Shot(C, died=False)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            category_counts=(1, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Goblin, Imp),
+        ))
+
+    def test_philo_slayer(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Philosopher,
+                    night_info={1: Philosopher.Choice(Slayer)},
+                ),
+                Player('B', claim=Imp),
+                Player('C', claim=Imp),
+                Player('D', claim=Soldier),
+            ],
+            day_events={
+                1: [
+                    Slayer.Shot(B, died=True, player=You),
+                    Slayer.Shot(C, died=False, player=You),
+                ]
+            },
+            night_deaths={},
+            hidden_characters=[Imp, Imp],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 2),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Philosopher, Imp, Imp, Soldier),
+        ))

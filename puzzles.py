@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TypeAlias
+import unittest
 
 from clockchecker import *
 
@@ -10,10 +11,12 @@ class PuzzleDef:
     puzzle: Puzzle | tuple[Puzzle, ...]
     # All allowed solutions, in the form of tuples of starting characters
     solutions: tuple[tuple[type[Character], ...]] = ()
+    # Some solutions are also determined by the end-state characters
+    solution_endchars: tuple[tuple[type[Character], ...]] = None
     # An extra validation function, runs on each solution
     solution_condition: Callable[[State], bool] | None = None
     # Defines a custom solve method that generates solutions
-    solve_override: Callable[[Puzzle | tuple[Puzzle]], StateGen] | None = None
+    solve_override: StateGen | None = None
 
 
 def puzzle_NQT1():
@@ -2462,10 +2465,16 @@ def puzzle_NQT49():
         hidden_characters=[Riot, Poisoner, Baron, Drunk],
         hidden_self=[Drunk],
     )
-    solutions = ((
-        Washerwoman, Baron, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller
-    ),)
-    return PuzzleDef(puzzle, solutions)
+    solutions = (
+        (Washerwoman, Baron, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller),
+        (Washerwoman, Baron, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller),
+    )
+    solution_endchars = (
+        (Washerwoman, Riot, Riot, Recluse, Empath, Saint, Drunk, FortuneTeller),
+        (Washerwoman, Riot, Riot, Riot,    Empath, Saint, Drunk, FortuneTeller),
+    )
+
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
 
 def puzzle_NQT50():
@@ -2567,7 +2576,7 @@ def puzzle_NQT50():
         (Knight, Goblin, Leviathan, Investigator, Drunk, Artist),
         (Goblin, Artist, Clockmaker, Librarian, Leviathan, Drunk),
     )
-    return PuzzleDef(puzzle, solutions, None, solve_override())
+    return PuzzleDef(puzzle, solutions, solve_override=solve_override())
 
 
 def puzzle_josef_yes_but_dont():
@@ -2941,6 +2950,40 @@ def _puzzle_empty_template():
     raise ValueError("This puzzle should never be run")
 
 
+def assert_solutions(
+    puzzle_def: PuzzleDef,
+    testcase: unittest.TestCase = None,
+) -> tuple[list[State], bool]:
+    """Solve a puzzle_def and assert the solutions fit the constraints."""
+    if puzzle_def.solve_override is None:
+        worlds = list(solve(puzzle_def.puzzle))
+    else:
+        worlds = list(puzzle_def.solve_override)
+
+    if puzzle_def.solution_endchars is None:
+        output = set(w.initial_characters for w in worlds)
+        target = set(puzzle_def.solutions)
+    else:
+        output = set(
+            (w.initial_characters, tuple(type(p.character) for p in w.players))
+            for w in worlds
+        )
+        target = set(zip(puzzle_def.solutions, puzzle_def.solution_endchars))
+
+    success = (output == target)
+    if testcase is not None:
+        testcase.assertEqual(output, target)
+
+    if puzzle_def.solution_condition is not None:
+        for world in worlds:
+            result = puzzle_def.solution_condition(world)
+            success &= puzzle_def.solution_condition(world)
+            if testcase is not None:
+                testcase.assertTrue(result)
+
+    return worlds, success
+
+
 if __name__ == '__main__':
     # Running this file will solve a puzzle of your choice, because why not?
     import argparse
@@ -2965,23 +3008,15 @@ if __name__ == '__main__':
             print(puzzle)
 
     print('\nSolving...')
+    worlds, success = assert_solutions(puzzle_def)
 
-    if puzzle_def.solve_override is None:
-        worlds = list(solve(puzzle_def.puzzle))
-    else:
-        worlds = list(puzzle_def.solve_override())
-
-    output = set(w.initial_characters for w in worlds)
-    success = (output == set(puzzle_def.solutions))
-    if puzzle_def.solution_condition is not None:
-        for world in worlds:
-            success &= puzzle_def.solution_condition(world)
     if success:
         print(f'Success, found the following {len(worlds)} worlds.\n')
     else:
         print('\033[31;1mERROR - Mismatch with desired Solutions:\033[0m')
         for solution in puzzle_def.solutions:
             print(f"Solution: [{','.join(c.__name__ for c in solution)}]")
+        print('\033[31;1mActually found:\033[0m')
     
     for world in worlds:
         print(world)
