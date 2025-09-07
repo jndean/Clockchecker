@@ -158,11 +158,18 @@ class IsEvil(Info):
     player: PlayerID
     def __call__(self, state: State, src: PlayerID = None):
         player = state.players[self.player]
-        if not player.droison_count:  # Misregistrations are part of ability
-            if player.has_ability(characters.Recluse):
-                return TRUE if player.is_evil else MAYBE
-            if player.has_ability(characters.Spy):
-                return MAYBE if player.is_evil else FALSE
+        if (
+            ((recluse := player.get_ability(characters.Recluse)) is not None)
+            and not recluse.is_droisoned(state, player.id)
+        ):
+            return TRUE if player.is_evil else MAYBE
+
+        if (
+            ((spy := player.get_ability(characters.Spy)) is not None)
+            and not spy.is_droisoned(state, player.id)
+        ):
+            return MAYBE if player.is_evil else FALSE
+
         return STBool(player.is_evil)
 
 @dataclass
@@ -190,13 +197,9 @@ class IsCharacter(Info):
     character: type[Character]
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        actual_character = type(player.character)
-        if (
-            self.character.category in actual_character.misregister_categories
-            and not player.droison_count  # Misregistrations are part of ability
-        ):
+        if self.character.category in player.get_misreg_categories(state):
             return MAYBE
-        return STBool(actual_character is self.character)
+        return STBool(type(player.character) is self.character)
 
 @dataclass
 class IsCategory(Info): 
@@ -204,13 +207,9 @@ class IsCategory(Info):
     category: characters.Categories
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        character = type(player.character)
-        if (
-            self.category in character.misregister_categories
-            and not player.droison_count  # Misregistrations are part of ability
-        ):
+        if self.category in player.get_misreg_categories(state):
             return MAYBE
-        return STBool(character.category is self.category)
+        return STBool(player.character.category is self.category)
 
 @dataclass
 class CharAttrEq(Info):
@@ -253,19 +252,6 @@ class IsInPlay(Info):
                 return TRUE  # Early exit on TRUE not MAYBE
         return result
 
-@dataclass
-class SameCategory(Info): 
-    a: type[Character]
-    b: type[Character]
-    def __call__(self, state: State, src: PlayerID) -> STBool:
-        # TODO: This is not correct. Doesn't account for poisoning of 
-        # misregistration, and doesn't account for both a & b misregistering as
-        # the same category.
-        if self.a.category in self.b.misregister_categories:
-            return MAYBE
-        if self.b.category in self.a.misregister_categories:
-            return MAYBE
-        return STBool(self.a.category is self.b.category)
 
 @dataclass
 class CustomInfo(Info):

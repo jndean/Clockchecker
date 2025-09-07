@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, InitVar
 import enum
 import itertools as it
 import os
+import traceback
 from typing import Any, Callable, TypeAlias
 
 try:
@@ -107,6 +108,20 @@ class Player:
         should be handled by the ability implementation.
         """
         return self.character.get_ability(character_t) is not None
+
+    def get_misreg_categories(
+        self,
+        state: State,
+    ) -> tuple[characters.Categories]:
+        """
+        Get the Categories this Player can misregister as. Recurses into wrapped
+        characters, and handles droisoning, including awkward droisoned
+        Boffin abilities.
+        """
+        if not self.droison_count:
+            return self.character.misregister_categories
+        # TODO: Add Boffin-provided misreg here
+        return ()
 
     @property
     def vigormortised(self):
@@ -866,8 +881,11 @@ def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
     def liars_gen():
         while (liars := liars_q.get()) is not None:
             yield liars
-    for solution in _world_check_gen(puzzle, liars_gen()):
-        solutions_q.put(solution)
+    try:
+        for solution in _world_check_gen(puzzle, liars_gen()):
+            solutions_q.put(solution)
+    except Exception as e:
+        solutions_q.put(traceback.format_exc())
     solutions_q.put(None)  # Finished Sentinel
 
 def _liar_placement_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
@@ -878,15 +896,21 @@ def _liar_placement_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
 
 def _solution_collecting_worker(solutions_q: Queue, num_procs: int) -> StateGen:
     finish_count = 0
+    err_str = None
     while True:
-        solution = solutions_q.get()
-        if solution is None:  # Finished Sentinel
+        recvd = solutions_q.get()
+        if isinstance(recvd, State):
+            yield recvd
+        else:  # Finished. Maybe sentinel, maybe error
+            if recvd is not None:
+                err_str = recvd
             finish_count += 1
             if finish_count == num_procs:
-                return
-        else:
-            yield solution
-
+                break
+    if err_str is not None:
+        exc = RuntimeError('Exception during solve, see below')
+        exc.add_note(f'\n{err_str}')
+        raise exc
 
 def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
     """Top level solver method, accepts a puzzle and generates solutions."""

@@ -2,6 +2,8 @@
  - Why are there Categories, why do Characters not instead inherit from 4 subclasses of Character? Then Category checks are performed by isinstance?
  	- Would be a good time to switch to proper ABCs?
 
+ - EASY: Remove uneeded logic in NoDashii setup that considers Poisoning misregistering characters, since they will be poisoned and immediately unable to misregister.
+ 
  - EASY: Check vigormortis unpoisoned rule (see note in \_activate_effects_impl)
 
  - EASY: Could add a puzzle flag: disallow_killing_dead_players, which NQT adds as a rule in #46. Potentially this could be added just as a world rejection inside the 'attacked_at_night' default method.
