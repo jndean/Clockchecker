@@ -2,25 +2,25 @@ body {
     font-family: 'Inter', sans-serif;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
-    height: 100vh; 
+    min-height: 100dvh;
+    height: 100dvh;
     margin: 0;
-    background-color: #1f2937; 
-    color: #d1d5db; 
+    background-color: #1f2937;
+    color: #d1d5db;
     overflow: hidden; 
 }
 .main-app-container {
     position: relative;
     flex-grow: 1;
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
     overflow: hidden; 
 }
 
 /* Common styles for Sample Tray Wrappers */
 .samples-tray-wrapper {
     position: fixed;
-    right: 0; 
+    right: 0;
     width: calc(45vw + 40px); 
     transform: translateX(45vw); 
     transition: transform 0.3s ease-in-out;
