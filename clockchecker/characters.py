@@ -2632,7 +2632,7 @@ class Riot(Character):
 
         if (
             state.day != 3
-            or riot.droison_count
+            or self.is_droisoned(state, me)
             or getattr(riot, 'exorcised_count', 0)  # Riot-Exorcist jinx
         ):
             state.math_misregistration(me)
@@ -2659,7 +2659,11 @@ class Riot(Character):
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         riot = state.players[me]
-        if state.day == 3 and not riot.is_dead and riot.droison_count == 0:
+        if (
+            state.day == 3
+            and not riot.is_dead
+            and not self.is_droisoned(state, me)
+        ):
             state.rioting_count = getattr(state, 'rioting_count', 0) + 1
             self.currently_causing_riot = True
 
@@ -2670,22 +2674,23 @@ class Riot(Character):
 
     @staticmethod
     def day_three_nomination(state: State, nomination: Event) -> StateGen:
-        riot = None
+        riot_id = None
         for player in state.players:
             if (
                 not player.is_dead
-                and player.droison_count == 0
-                and player.has_ability(Riot)
+                and (riot := player.get_ability(Riot)) is not None
+                and not riot.is_droisoned(state, player.id)
             ):
-                riot = player
-        assert riot is not None
+                riot_id = player.id
+                break
+        assert riot_id is not None
 
         if isinstance(nomination, events.UneventfulNomination):
             raise NotImplementedError('TODO: Riot nomination without death')
 
         assert isinstance(nomination, events.Dies)
         nominee = state.players[nomination.player]
-        yield from nominee.character.killed(state, nominee.id, riot.id)
+        yield from nominee.character.killed(state, nominee.id, riot_id)
 
 @dataclass
 class Sage(Character):
@@ -2768,7 +2773,7 @@ class Savant(Character):
             yield state
             return
         result = ping(state, me)
-        if savant.droison_count:
+        if self.is_droisoned(state, me):
             state.math_misregistration(me, result)
             yield state
         elif result is not info.FALSE:
@@ -2835,10 +2840,8 @@ class ScarletWoman(Character):
             - STBool specifying if a fumble would be due to poison. This is so
               the caller can increment Math number appropriately.
         """
-        is_sw = info.IsCharacter(scarletwoman.id, ScarletWoman)(
-            state, scarletwoman.id
-        )
-        if is_sw is info.FALSE:
+        sw_ability = scarletwoman.get_ability(ScarletWoman)
+        if sw_ability is None:
             return info.FALSE, info.FALSE
 
         living_player_count = sum(
@@ -2851,8 +2854,9 @@ class ScarletWoman(Character):
         )
         demon_dying = info.IsCategory(dying.id, DEMON)(state, scarletwoman.id)
 
-        would_catch = is_sw & demon_dying & ability_active
-        if would_catch is not info.FALSE and scarletwoman.droison_count:
+        would_catch = demon_dying & ability_active
+        sw_droisoned = sw_ability.is_droisoned(state, scarletwoman.id)
+        if would_catch is not info.FALSE and sw_droisoned:
             return info.FALSE, ~would_catch
         return would_catch, info.FALSE
 
@@ -2959,7 +2963,7 @@ class SnakeCharmer(Character):
         else:
             jump_state = state
 
-        if snakecharmer.droison_count:
+        if self.is_droisoned(state, me):
             if not self.self_droison:
                 jump_state.math_misregistration(me)
             yield jump_state; return
@@ -3042,7 +3046,7 @@ class Saint(Character):
         Override Reason: Game is not over, execution is not a valid world.
         We let the super method handle any non-Saint-related execution details.
         """
-        droisoned = state.players[me].droison_count
+        droisoned = self.is_droisoned(state, me)
         if droisoned:
             state.math_misregistration(me)
         if droisoned or not died:
@@ -3085,7 +3089,7 @@ class Slayer(Character):
                 should_die = info.IsCategory(self.target, DEMON)(
                     state, self.player
                 )
-            if shooter.droison_count:
+            if ability.is_droisoned(state, shooter.id):
                 if should_die is not info.FALSE and not self.died:
                     state.math_misregistration(self.player, ~should_die)
                 should_die = info.FALSE
@@ -3269,11 +3273,10 @@ class Widow(Character):
 
         for target in range(len(state.players)):
             substate = state.fork()
-            widow_player = substate.players[me]
-            widow_character = widow_player.get_ability(Widow)
-            widow_character.target = target
-            widow_character.maybe_activate_effects(substate, me, reason)
-            if widow_player.droison_count:
+            widow = substate.players[me].get_ability(Widow)
+            widow.target = target
+            widow.maybe_activate_effects(substate, me, reason)
+            if widow.is_droisoned(substate, me):
                 if target != me:
                     substate.math_misregistration(me)
                 yield substate
@@ -3344,7 +3347,7 @@ class Witch(Character):
         ):
             yield state; return
        
-        if witch.droison_count:
+        if self.is_droisoned(state, me):
             state.math_misregistration(me) # TODO: I thnk this is wrong, see todo.md
             yield state; return
         
@@ -3402,7 +3405,7 @@ class Vigormortis(GenericDemon):
                 continue
 
             # 2. The droison world
-            if vig.droison_count:
+            if self.is_droisoned(state, me):
                 droison_state = state.fork()
                 droison_state.math_misregistration(me)
                 yield droison_state
@@ -3484,19 +3487,19 @@ class Virgin(Character):
         state: State,
         nomination: events.UneventfulNomination,
     ) -> StateGen:
-        player = state.players[nomination.player]
-        townsfolk_nominator = info.IsCategory(nomination.nominator, TOWNSFOLK)(
-            state, nomination.player
+        virgin = state.players[nomination.player]
+        nominator_is_tf = info.IsCategory(nomination.nominator, TOWNSFOLK)(
+            state, virgin.id
         )
         if (
-            player.is_dead
+            virgin.is_dead
             or self.spent
-            or townsfolk_nominator is not info.TRUE
+            or nominator_is_tf is not info.TRUE
         ):
             self.spent = True
             yield state
-        elif player.droison_count:
-            state.math_misregistration(nomination.player)
+        elif self.is_droisoned(state, virgin.id):
+            state.math_misregistration(virgin.id)
             self.spent = True
             yield state
 
@@ -3506,17 +3509,17 @@ class Virgin(Character):
         execution: events.ExecutionByST,
     ) -> StateGen:
         nominee = state.players[execution.after_nominating]
-        virgin_abilty = nominee.get_ability(Virgin)
+        virgin_ability = nominee.get_ability(Virgin)
         tf_nom = info.IsCategory(execution.player, TOWNSFOLK)(state, nominee.id)
 
         if (
             nominee.is_dead
-            or nominee.droison_count
-            or virgin_abilty.spent
+            or virgin_ability.is_droisoned(state, nominee.id)
+            or virgin_ability.spent
             or tf_nom is info.FALSE
         ):
             return
-        virgin_abilty.spent = True
+        virgin_ability.spent = True
 
         executee = state.players[execution.player].character
         for ss in executee.executed(state, execution.player, execution.died):
@@ -3600,7 +3603,7 @@ class Xaan(Character):
         ]
         maybes = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.MAYBE]
         trues = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.TRUE]
-        if xaan.droison_count and trues:
+        if self.is_droisoned(state, me) and trues:
             # This is a best-effort at maintining Mathematician count, but
             # technically should only really trigger if one of the targets
             # doesn't misfire tonight. See todo.md.
