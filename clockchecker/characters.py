@@ -354,7 +354,7 @@ class Character:
         Check night info that this player claims was caused by another player's
         ability, e.g. being told your Evil Twin or that NightWatchman chose you.
         """
-        if info.behaves_evil(state, me) or self.is_liar:
+        if info.behaves_evil(state, me):
             return True
         # It is the responsibility of the ExternalInfo to account for Vortox.
         return external_info(state, me)
@@ -366,8 +366,8 @@ class Character:
         """
         Recursive ability finder handling characters that wrap other characters,
         so that you can query the
-        Psychopath[holding LilMonsta[with Boffin[Philo[Alchemist[Seamstress]]]
-        and extract the Seamstress character instance.
+        Psychopath[holding LilMonsta[with Boffin[Philo[Alchemist[Witch]]]
+        and extract the Witch character instance.
         """
         if isinstance(self, character_t):
             return self
@@ -383,7 +383,6 @@ class Character:
                 if (ret := subability.get_ability(character_t)) is not None:
                     return ret
 
-        # TODO: Boffin
         # TODO: Alchemist
         return None
 
@@ -617,6 +616,70 @@ class Baron(Character):
         return bounds
 
 @dataclass
+class Boffin(Character):
+    """
+    The Demon (even if drunk or poisoned) has a not-in-play good character's
+    ability. You both know which.
+    """
+    category: ClassVar[Categories] = MINION
+    is_liar: ClassVar[bool] = True
+    # TODO: Wake pattern is actually whenever the ability changes.
+    wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
+
+    target_demon: PlayerID  | None = None
+    inactive_ability: Character | None = None
+
+    # TODO: In `death_in_town``, if demon dies boffin should reassign ability
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        if state.current_phase is not core.Phase.SETUP:
+            raise NotImplementedError("TODO: Mid-game Boffin creation.")
+
+        demon_ids = [
+            player.id for player in state.players
+            if info.IsCategory(player.id, DEMON)(state, me) is not info.FALSE
+            # and player.is_alive  # Not relevant during SETUP...
+        ]
+        abilities = [
+            character for character in state.puzzle.script
+            if character.category in (TOWNSFOLK, OUTSIDER)
+        ]
+        assert len(abilities) and len(demon_ids)
+        for demon_id, ability_t in itertools.product(demon_ids, abilities):
+            new_state = state.fork()
+            boffin = new_state.players[me].get_ability(Boffin)
+            boffin.target_demon = demon_id
+            boffin.effects_active = True
+            ability = ability_t()
+            ability.ability_src = me
+            demon = new_state.players[demon_id]
+            assert not hasattr(demon, 'boffin_ability'), "Multiple Boffins? :O"
+            demon.boffin_ability = ability
+            yield from ability.run_setup(new_state, demon_id)
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        demon = state.players[self.target_demon]
+        assert not hasattr(demon, 'boffin_ability'), "Multiple Boffins? :O"
+        demon.boffin_ability = self.inactive_ability
+        self.inactive_ability = None
+        demon.boffin_ability.maybe_activate_effects(state, self.target_demon)
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        """Remove the ability, store on the Boffin until reactivation."""
+        demon = state.players[self.target_demon]
+        demon.boffin_ability.maybe_deactivate_effects(state, self.target_demon)
+        self.inactive_ability = demon.boffin_ability
+        del demon.boffin_ability
+
+    def _world_str(self, state: State) -> str:
+        demon = state.players[self.target_demon]
+        ability = type(
+            demon.boffin_ability if self.inactive_ability is None
+            else self.inactive_ability
+        )
+        return f'Boffin (gives {ability.__name__} ability to {demon.name})'
+
+@dataclass
 class Butler(Character):
     """
     Each night, choose a player (not yourself):
@@ -736,7 +799,7 @@ class Courtier(Character):
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
 
-    target: PlayerID = None
+    target: PlayerID | None = None
     choice_night: int | None = None
     spent: bool = False
 
@@ -1332,14 +1395,22 @@ class Golem(Character):
     # Golem abilities are checked by this method if there is an
     # "UneventfulNomination" or "Dies" event in the day events.
     def nominates(self, state: State, nomination: Event) -> StateGen:
-        if self.spent:
-            raise ValueError("Golem nominated twice?")  # Likely a puzzle typo
 
         if isinstance(nomination, events.UneventfulNomination):
             golem = state.players[nomination.nominator]
-            nominee = state.players[nomination.player]
-            is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
-            if is_demon is info.FALSE and self.is_droisoned(state, me):
+        elif isinstance(nomination, events.Dies):
+            golem = state.players[nomination.after_nominated_by]
+        else:
+            raise ValueError(f'Unknown event type {type(nomination)=}')
+
+        if self.spent and not self.is_droisoned(state, golem.id):
+            raise ValueError("Golem nominated twice. Likely a puzzle typo?")
+        self.spent = True
+        nominee = state.players[nomination.player]
+        is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
+
+        if isinstance(nomination, events.UneventfulNomination):
+            if is_demon is info.FALSE and self.is_droisoned(state, golem.id):
                 state.math_misregistration(golem.id)
                 yield state
             elif is_demon is info.MAYBE:
@@ -1350,15 +1421,18 @@ class Golem(Character):
                 yield state
             return
 
-        assert isinstance(nomination, events.Dies)
-        golem = state.players[nomination.after_nominated_by]
-        nominee = state.players[nomination.player]
-        is_demon = info.IsCategory(nominee.id, DEMON)(state, golem.id)
+        # isinstance(nomination, events.Dies)
         if not self.is_droisoned(state, golem.id) and is_demon is not info.TRUE:
-            self.spent = True
             if nominee.character.category is DEMON:
                 state.math_misregistration(golem.id)  # ...Boffin-Alchemist-Spy?
             yield from nominee.character.killed(state, nominee.id, golem.id)
+
+    def uneventful_nomination(
+        self,
+        state: State,
+        nomination: events.UneventfulNomination,
+    ) -> StateGen:
+        return self.nominates(state, nomination)
 
 @dataclass
 class Gossip(Character):
@@ -1685,6 +1759,19 @@ class Juggler(Character):
         )
 
 @dataclass
+class Kazali(GenericDemon):
+    """
+    Each night*, choose a player: they die.
+    [You choose which players are which Minions. -? to +? Outsiders]
+    """
+
+    @staticmethod
+    def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+        tf, os, mn, dm = bounds
+        return(-99, 99), (-99, 99), mn, dm
+
+
+@dataclass
 class Klutz(Character):
     """
     When you learn that you died, publicly choose 1 alive player:
@@ -1931,28 +2018,97 @@ class NightWatchman(Character):
     class Choice(info.NotInfo):
         """The Choice as reported by the NightWatchman."""
         player: PlayerID
-        confirmed: bool
+
+    @dataclass
+    class Ping(info.ExternalInfo):
+        """The wakeup received by the target of a NightWatchman.Choice."""
+        player: PlayerID
+        def __call__(self, state: State, src: PlayerID) -> bool:
+            nwm = state.players[self.player]
+            choice = state.get_night_info(NightWatchman, nwm.id, state.night)
+            nwm_truthful = not info.behaves_evil(state, nwm.id)
+            ability = nwm.get_ability(NightWatchman)
+            return not (
+                ability is None
+                or ability.is_droisoned(state, nwm.id)
+                or (choice is None and nwm_truthful)
+            )
         
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        """Override Reason: Poisoned NW must not be confirmed by good."""
         nightwatchman = state.players[me]
-        if nightwatchman.is_evil or state.vortox:
-            raise NotImplementedError(
-                "When to be spent if evil, or vortox giving incorrect ping src."
-            )
-        ping = state.get_night_info(NightWatchman, me, state.night)
-        if ping is None:
+        if state.vortox:
+            raise NotImplementedError('TODO: Vortox + NightWatchman')
+
+        if nightwatchman.is_evil:
+            yield from self._run_evil_night(state, me)
+
+        choice = state.get_night_info(NightWatchman, me, state.night)
+        if choice is None:
             yield state; return
         if nightwatchman.is_dead or self.spent:
             return
         self.spent = True
-        if ping.confirmed:
-            if not self.is_droisoned(state, me):
-                yield state
-        elif self.is_droisoned(state, me):
+
+        if info.behaves_evil(state, choice.player):
+            if self.is_droisoned(state, me):
+                state.math_misregistration(me)
+            yield state; return
+
+        all_pings = state.puzzle.external_info_registry.get(
+            (NightWatchman, state.night), []
+        )
+        confirmed_by_good = any(
+            True for ping, pid in all_pings
+            if choice.player == pid and ping.player == me
+        )
+        if self.is_droisoned(state, me):
             state.math_misregistration(me)
+            if not confirmed_by_good:
+                yield state
+        elif confirmed_by_good:
             yield state
-            
+
+    def _run_evil_night(self, state: State, me: PlayerID) -> StateGen:
+        """run_night when an evil player hold the NightWatchman ability."""
+        # Check if a good player received the Ping
+        yield state
+        return
+        all_pings = state.puzzle.external_info_registry.get(
+            (NightWatchman, state.night), []
+        )
+        good_pings = [pid for ping, pid in all_pings if ping.player == me]
+        if len(good_pings) > 1:
+            return
+        if good_pings:
+            if not self.spent:
+                # The world where they used it on a truthful player tonight
+                self.spent = True
+                yield state
+            return
+        if not self.spent:
+            # The world where they use it on someone who needn't report it
+            spent_world = state.fork()
+            spent_nwm = spent_world.player[me].get_ability(NightWatchman)
+            spent_nwm.spent = True
+            yield spent_world
+        # The world where they don't use it
+        yield state
+
+    @staticmethod
+    def global_end_night(state: State) -> bool:
+        """
+        Run global check that nobody without the NightWatchman ability claimed
+        to make a Choice (since `run_night` only executes on true NighWatchman
+        instances).
+        """
+        return not any(
+            state.get_night_info(NightWatchman, pid, state.night) is not None
+            and not player.has_ability(NightWatchman)
+            and not info.behaves_evil(state, pid)
+            and not player.character.is_liar
+            for pid, player in enumerate(state.players)
+        )
+
 @dataclass
 class Noble(Character):
     """
@@ -2327,7 +2483,7 @@ class Princess(Character):
 
     activated: bool = False
 
-    def nominates(self, state: State, me: PlayerID, nominee: PlayerID) -> None:
+    def _nominates(self, state: State, me: PlayerID, nominee: PlayerID) -> None:
         if self.first_night != state.day:
             return
         if any(
@@ -2336,6 +2492,14 @@ class Princess(Character):
         ):
             self.activated = True
             self.maybe_activate_effects(state, me)
+
+    def uneventful_nomination(
+        self,
+        state: State,
+        nomination: events.UneventfulNomination,
+    ) -> StateGen:
+        self._nominates(state, nomination.nominator, nomination.player)
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.activated:
@@ -3075,7 +3239,7 @@ class Slayer(Character):
             shooter = state.players[self.player]
             ability = shooter.get_ability(Slayer)
             if ability is None:
-                if info.behaves_evil(state, self.player):
+                if info.behaves_evil(state, self.player) and not self.died:
                     yield state
                 return
             target = state.players[self.target]
@@ -3656,6 +3820,7 @@ class Zombuul(Character):
 # https://script.bloodontheclocktower.com/data/nightsheet.json
 
 GLOBAL_SETUP_ORDER = [
+    Boffin,
     Atheist,
     Vortox,
     Marionette,
@@ -3694,6 +3859,7 @@ GLOBAL_NIGHT_ORDER = [
     Vortox,
     LordOfTyphon,
     Vigormortis,
+    Kazali,
     Gossip,
     Sage,
     Ravenkeeper,
@@ -3735,6 +3901,7 @@ GLOBAL_DAY_ORDER = [
 INACTIVE_CHARACTERS = [
     Atheist,
     Baron,
+    Boffin,
     Butler,
     Drunk,
     Goblin,
