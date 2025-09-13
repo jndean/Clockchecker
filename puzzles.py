@@ -828,7 +828,7 @@ def puzzle_NQT16():
                 3: FortuneTeller.Ping(Sarah, Jasmine, demon=False),
             }),
             Player('Fraser', claim=NightWatchman, night_info={
-                1: NightWatchman.Choice(Tim, confirmed=False)
+                1: NightWatchman.Choice(Tim)
             }),
             Player('Oscar', claim=Recluse),
             Player('Hannah', claim=Washerwoman, night_info={
@@ -838,7 +838,7 @@ def puzzle_NQT16():
                 1: Investigator.Ping(Olivia, Hannah, Poisoner)
             }),
             Player('Tim', claim=Chef, night_info={
-                1: Chef.Ping(1)
+                1: Chef.Ping(1),
             }),
         ],
         day_events={1: Execution(Hannah),  2: Execution(Fraser)},
@@ -2579,6 +2579,97 @@ def puzzle_NQT50():
     return PuzzleDef(puzzle, solutions, solve_override=solve_override())
 
 
+def puzzle_NQT51():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1md9030/weekly_puzzle_51_weird_science/
+
+    You, Oscar, Sarah, Fraser, Dan, Hannah, Tim, Josh = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(Hannah, Tim, Artist),
+            }),
+            Player('Oscar', claim=Slayer),
+            Player('Sarah', claim=Recluse),
+            Player('Fraser', claim=Golem),
+            Player('Dan', claim=Virgin),
+            Player('Hannah', claim=Noble, night_info={
+                1: Noble.Ping(Sarah, Tim, Josh),
+            }),
+            Player('Tim', claim=Artist,
+                day_info={1: Artist.Ping(~IsCharacter(Hannah, Boffin))},
+                night_info={1: NightWatchman.Ping(Josh)},
+            ),
+            Player('Josh', claim=NightWatchman, night_info={
+                1: NightWatchman.Choice(Tim)
+            }),
+        ],
+        day_events={
+            1: [
+                Slayer.Shot(player=Oscar, target=Sarah, died=True),
+                Dies(player=Tim, after_nominated_by=Fraser),
+                ExecutionByST(player=You, after_nominating=Dan),
+            ],
+        },
+        night_deaths={2: Hannah},
+        hidden_characters=[Kazali, Boffin, Poisoner, ScarletWoman, Spy],
+        hidden_self=[],
+    )
+    solutions = (
+        (Washerwoman, Slayer, Recluse, Golem, Virgin, Noble, Spy, Kazali),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def _puzzle_NQT52():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1n94vcg/weekly_puzzle_52_two_votes_is_enough/
+
+    You, Dan, Olivia, Sarah, Sula, Josh, Anna, Fraser, Steph = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Josh, Imp),
+            }),
+            Player('Dan', claim=Investigator, night_info={
+                1: Investigator.Ping(Anna, Steph, Spy),
+            }),
+            Player('Olivia', claim=Butler),
+            Player('Sarah', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(0),
+                3: Empath.Ping(0),
+                4: Empath.Ping(1),
+            }),
+            Player('Sula', claim=Librarian, night_info={
+                1: Librarian.Ping(You, Steph, Drunk),
+            }),
+            Player('Josh', claim=Virgin),
+            Player('Anna', claim=Recluse),
+            Player('Fraser', claim=Saint),
+            Player('Steph', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Dan, Investigator)
+            }),
+        ],
+        day_events={
+            1: [
+                UneventfulNomination(player=Josh, nominator=Dan),
+                Execution(Josh),
+            ],
+            2: Execution(Dan),
+            3:Execution(Sula),
+        },
+        night_deaths={2: Steph, 3: You, 4: Anna},
+        hidden_characters=[Imp, Baron, Poisoner, ScarletWoman, Spy, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Drunk, Investigator, Butler, Imp, Librarian, Baron, Recluse, Saint,
+            Ravenkeeper),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+# def puzzle_NQT53():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ndehkk/weekly_puzzle_53_lets_do_the_time_warp_again/
+    # TODO
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
@@ -2867,7 +2958,6 @@ def puzzle_emerald_snv():
 
 def _puzzle_emerald_tb():
     # Puzzle set during Aus Clocktower Con 2025
-    # Too slow to run in unittests, so start with underscore.
     (
         You, Reggie, Evin, Steve, BenB, Claire, Lachlan, Amy, Steffen,
         BenD, Jamie, Andy
@@ -2992,14 +3082,20 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
 
-    PREFIX = 'puzzle_'
-    puzzle_names = [p[len(PREFIX):] for p in dir() if p.startswith(PREFIX)]
+    PREFIXES = ('puzzle_', '_puzzle_')
+    puzzle_names = [
+        full_name[len(prefix):]
+        for full_name in dir() for prefix in PREFIXES
+        if full_name.startswith(prefix)
+    ]
     parser = argparse.ArgumentParser()
     parser.add_argument('puzzle_name', choices=puzzle_names, nargs='?', default='1')
     args = parser.parse_args(sys.argv[1:])
 
-    make_puzzle = globals()[f'{PREFIX}{args.puzzle_name}']
-    puzzle_def = make_puzzle()
+    for prefix in PREFIXES:
+        factory = globals().get(f'{prefix}{args.puzzle_name}', None)
+        if factory is not None:
+            puzzle_def = factory()
 
     if isinstance(puzzle_def.puzzle, Puzzle):
         print(puzzle_def.puzzle)

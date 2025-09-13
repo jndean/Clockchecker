@@ -31,7 +31,7 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    (9, 0, 0, 3, 0, 3, 3),
+    # (222, 4),
 ]
 
 
@@ -100,7 +100,11 @@ class Player:
         """
         if character_t is None:
             return self.character
-        return self.character.get_ability(character_t)
+        if (ability := self.character.get_ability(character_t)) is not None:
+            return ability
+        if (b_ability := getattr(self, 'boffin_ability', None)) is not None:
+            return b_ability.get_ability(character_t)
+        return None
 
     def has_ability(self, character_t: type[Character]) -> bool:
         """
@@ -119,10 +123,16 @@ class Player:
         characters, and handles droisoning, including awkward droisoned
         Boffin abilities.
         """
-        if not self.droison_count:
-            return self.character.misregister_categories
-        # TODO: Add Boffin-provided misreg here
-        return ()
+        categories = (
+            () if self.droison_count
+            else self.character.misregister_categories
+        )
+        # boffin_ability is only present when the Boffin is sober-and-healthy
+        if hasattr(self, 'boffin_ability'):
+            categories = tuple(set(
+                categories + self.boffin_ability.misregister_categories
+            ))
+        return categories
 
     @property
     def vigormortised(self):
@@ -274,7 +284,11 @@ class State:
             pid for pid in range(len(self.players))
             if self.players[pid].character.acts_like(character_t)
         ]
-        for state in self.run_all_players_with_currently_acting_character():
+        states = self.run_all_players_with_currently_acting_character()
+        states = State.run_external_night_info(
+            states, self.currently_acting_character, self.night
+        )
+        for state in states:
             state.phase_order_index += 1
             yield state
 
@@ -304,9 +318,6 @@ class State:
                 if player.character.wakes_tonight(self, pid):
                     player.woke()
                 states = player.character.run_night(self, pid)
-                states = State.run_external_night_info(
-                    states, self.currently_acting_character, self.night
-                )
             case Phase.DAY:
                 states = player.character.run_day(self, pid)
             case Phase.SETUP:
@@ -542,11 +553,13 @@ class Puzzle:
     day_events: dict[int, list[Event]] = field(default_factory=dict)
     night_deaths: dict[int, list[PlayerID]] = field(default_factory=dict)
     category_counts: tuple[int, int, int, int] | None = None
-    deduplicate_initial_characters: bool = True
+    also_on_script: list[type[Character]] = field(default_factory=list)
 
     user_interrupt: Callable[[], bool] | None = None
 
     # --------- SOLVER OPTIONS --------- #
+    # Deduplicate solutions if they share the same starting characters
+    deduplicate_initial_characters: bool = True
     # Generally puzzles are posed towards the end of the day, before executions
     finish_final_day: bool = False
     # Enable for e.g. oops all seamstresses
@@ -642,6 +655,7 @@ class Puzzle:
             [p.claim for p in self.players]
             + hidden_characters
             + self.hidden_self
+            + self.also_on_script
         ))
         self.setup_order = [
             character for character in characters.GLOBAL_SETUP_ORDER

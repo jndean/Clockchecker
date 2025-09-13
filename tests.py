@@ -677,3 +677,198 @@ class TestSlayer(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=(
             (Philosopher, Imp, Imp, Soldier),
         ))
+
+class TestBoffin(unittest.TestCase):
+    def test_boffin_slayer(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan) & IsCharacter(C, Boffin)
+                    )},
+                ),
+                Player('B', claim=Slayer),
+                Player('C', claim=Boffin),
+                Player('D', claim=Recluse),
+            ],
+            day_events={
+                1: Slayer.Shot(D, died=True, player=B),
+            },
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            category_counts=(1, 1, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, Boffin, Recluse),
+        ))
+
+    def test_boffin_spent_slayer(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan) & IsCharacter(C, Boffin)
+                    )},
+                ),
+                Player('B', claim=Slayer),
+                Player('C', claim=Boffin),
+                Player('D', claim=Recluse),
+            ],
+            day_events={
+                1: [
+                    Slayer.Shot(C, died=False, player=B),
+                    Slayer.Shot(D, died=True, player=B),
+                ]
+            },
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            category_counts=(1, 1, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_boffin_recluse(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Ravenkeeper)
+                    )},
+                ),
+                Player('B', claim=Slayer),
+                Player('C', claim=Butler),
+                Player('D', claim=Ravenkeeper, night_info={
+                    2: Ravenkeeper.Ping(B, Goblin)
+                }),
+            ],
+            day_events={},
+            night_deaths={2: D},
+            hidden_characters=[Imp, Boffin, Goblin],
+            hidden_self=[],
+            also_on_script=[Recluse],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Imp, Boffin, Ravenkeeper),
+        ))
+
+    def test_boffin_virgin(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Ravenkeeper)
+                    )},
+                ),
+                Player('B', claim=Slayer),
+                Player('C', claim=Butler),
+                Player('D', claim=Ravenkeeper),
+            ],
+            day_events={
+                1: ExecutionByST(player=D, after_nominating=B)
+            },
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            also_on_script=[Virgin],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, Boffin, Ravenkeeper),
+        ))
+
+    def test_boffin_golem(self):
+        You, B, C, D,= range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Ravenkeeper)
+                    )},
+                ),
+                Player('B', claim=Golem),
+                Player('C', claim=Butler),
+                Player('D', claim=Ravenkeeper),
+            ],
+            day_events={1: Dies(player=C, after_nominated_by=B)},
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, Boffin, Ravenkeeper),
+        ))
+
+    # def boffin_philo_philo_empath_wakes(self):
+    def test_boffin_droisoned(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Courtier)
+                        & IsCharacter(E, Butler)
+                    )},
+                ),
+                Player('B', claim=Golem),
+                Player('C', claim=Butler),
+                Player('D', claim=Courtier, night_info={
+                    1: Courtier.Choice(Boffin),
+                }),
+                Player('E', claim=Butler),
+            ],
+            day_events={
+                1: UneventfulNomination(player=D, nominator=B),
+                2: Dies(player=E, after_nominated_by=B),
+            },
+            night_deaths={2: D},
+            hidden_characters=[Imp, Boffin],
+            hidden_self=[],
+            category_counts=(2, 1, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Imp, Boffin, Courtier, Butler),
+        ))
+
+    def test_boffin_on_drunk_demon(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Courtier)
+                    )},
+                ),
+                Player('B', claim=Golem),
+                Player('C', claim=Butler),
+                Player('D', claim=Courtier, night_info={
+                    1: Courtier.Choice(Imp),
+                }),
+            ],
+            day_events={
+                1: Dies(player=D, after_nominated_by=B),
+            },
+            night_deaths={},
+            hidden_characters=[Imp, Boffin],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Imp, Boffin, Courtier),
+        ))

@@ -86,19 +86,20 @@ class UneventfulNomination(Event):
     nominator: PlayerID
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        nominator = state.players[self.nominator]
-        nominee = state.players[self.player]
-        if (princess := nominator.get_ability(characters.Princess)) is not None:
-            princess.nominates(state, self.nominator, self.player)
+        def _run(states: StateGen, pid: PlayerID, character: type[Character]):
+            for _state in states:
+                ability = _state.players[pid].get_ability(character)
+                if ability is not None:
+                    yield from ability.uneventful_nomination(_state, self)
+                else:
+                    yield _state
         states = [state]
-        if (virgin := nominee.get_ability(characters.Virgin)) is not None:
-            states = virgin.uneventful_nomination(state, self)
-        if (golem := nominator.get_ability(characters.Golem)) is not None:
-            raise NotImplementedError("Need to put a generator stack here")
-            # yield from golem.nominates(state, self)
+        states = _run(states, self.nominator, characters.Princess)
+        states = _run(states, self.nominator, characters.Golem)
+        states = _run(states, self.player, characters.Virgin)
         if getattr(state, "rioting_count", 0):
-            raise NotImplementedError("Riot nomination doesn't kill, gen stack")
             # yielf from characters.Riot.day_three_nomination(state, self)
+            raise NotImplementedError("Riot.uneventful_nomination D3")
         yield from states
 
 @dataclass
