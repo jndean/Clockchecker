@@ -31,7 +31,6 @@ _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
-    # (222, 4),
 ]
 
 
@@ -114,6 +113,27 @@ class Player:
         """
         return self.character.get_ability(character_t) is not None
 
+    def get_ability_that_acts_like(
+        self,
+        character_t: type[Character],
+    ) -> Character | None:
+        """
+        Retrieve ability implementation from a player, which acts_like the
+        specified character. (E.g., for running the Drunk at the night-order
+        slot of their simulated ability).
+        """
+        if (ability := self.get_ability(character_t)) is not None:
+            return ability
+        if self.character.acts_like(character_t):
+            return self.character
+        boffin_ability = getattr(self, 'boffin_ability', None)
+        if boffin_ability is not None and boffin_ability.acts_like(character_t):
+            return boffin_ability
+        return None
+
+    def acts_like(self, character_t: type[Character]) -> bool:
+        return self.get_ability_that_acts_like(character_t) is not None
+
     def get_misreg_categories(
         self,
         state: State,
@@ -153,7 +173,6 @@ class Player:
 
         # Reorganise info so it can be easily used in night order
         self.external_night_info = defaultdict(list)
-        all_claims = set([self.claim])
         existing_night_info = list(self.night_info.items())
         self.night_info: Mapping[tuple[int, type[Character]], info.Info] = {}
         for night, night_info in existing_night_info:
@@ -163,14 +182,14 @@ class Player:
                 # Because typing out puzzles is hard :)
                 assert not isinstance(item, events.Event), f"{type(item)=}"
 
-                if isinstance(item, characters.Philosopher.Choice):
-                    all_claims.add(item.character)
-                if (character := info.info_creator(item)) in all_claims:
+                character = info.info_creator(item)
+                if isinstance(item, (info.Info, info.NotInfo)):
                     assert (night, character) not in self.night_info, (
                         "One info per night from own ability (for now?)."
                     )
                     self.night_info[(night, character)] = item
                 else:
+                    assert isinstance(item, info.ExternalInfo)
                     self.external_night_info[(night, character)].append(item)
 
         self.external_night_info = dict(self.external_night_info)
@@ -282,12 +301,13 @@ class State:
         self.currently_acting_character = character_t
         self.players_still_to_act = [
             pid for pid in range(len(self.players))
-            if self.players[pid].character.acts_like(character_t)
+            if self.players[pid].acts_like(character_t)
         ]
         states = self.run_all_players_with_currently_acting_character()
-        states = State.run_external_night_info(
-            states, self.currently_acting_character, self.night
-        )
+        if self.current_phase is Phase.NIGHT:
+            states = State.run_external_night_info(
+                states, self.currently_acting_character, self.night
+            )
         for state in states:
             state.phase_order_index += 1
             yield state
@@ -303,25 +323,38 @@ class State:
 
         pid = self.players_still_to_act.pop()
         player = self.players[pid]
-        
+        ability = player.get_ability_that_acts_like(
+            self.currently_acting_character
+        )
+        if ability is None:
+            raise RuntimeError(
+                "Player appears to have lost an ability within that ability's "
+                "slot in the night order. Is that really possible? If so, "
+                "feel free to remove this error and continue recursing."
+            )
+
         if self._is_world():
+            # Some telemetry that is nice to see when debug mode is enabled
             round_ = self.night if self.night else self.day if self.day else ''
             claim = (
-                '' if isinstance(player.character, player.claim)
+                '' if player.claim is self.currently_acting_character
                 else f' claiming {player.claim.__name__}'
             )
-            print(f'Running {self.current_phase.name} {round_} for '
-                  f'{player.name} ({type(player.character).__name__}{claim})')
+            print(
+                f'Running [{self.current_phase.name} {round_} '
+                f'{type(ability).__name__}] for {player.name} (the '
+                f'{type(player.character).__name__}{claim})'
+            )
 
         match self.current_phase:
             case Phase.NIGHT:
-                if player.character.wakes_tonight(self, pid):
+                if ability.wakes_tonight(self, pid):
                     player.woke()
-                states = player.character.run_night(self, pid)
+                states = ability.run_night(self, pid)
             case Phase.DAY:
-                states = player.character.run_day(self, pid)
+                states = ability.run_day(self, pid)
             case Phase.SETUP:
-                states = player.character.run_setup(self, pid)
+                states = ability.run_setup(self, pid)
 
         for state in states:
             if hasattr(state, 'debug_cull'):
@@ -650,13 +683,15 @@ class Puzzle:
             "Player 0 must be called 'You' iff puzzle.player_zero_is_you=True"
         )
 
-        # Compute script and character orderings.
+        # Compute script and character orderings. Sort script for determinism.
         self.script = list(set(
             [p.claim for p in self.players]
             + hidden_characters
             + self.hidden_self
             + self.also_on_script
         ))
+        self.script.sort(key=lambda character: character.__name__)
+
         self.setup_order = [
             character for character in characters.GLOBAL_SETUP_ORDER
             if character in self.script
@@ -670,6 +705,11 @@ class Puzzle:
             if character in self.script
         ]
         self.state_template = State(self, self.players)
+
+        for character, _ in self.external_info_registry:
+            assert character in self.script, (
+                f"Consider adding {character.__name__} to Puzzle.also_on_script"
+            )
 
         # Annoyingly, the pickle module doesn't store modified class attributes,
         # so when a puzzle is sent between processes, such classes (like the
@@ -747,6 +787,11 @@ class Puzzle:
             )),
             f'    You: [{", ".join(c.__name__ for c in self.hidden_self)}]',
         ])
+        if self.also_on_script:
+            ret.append(
+                '    On script but not claimed: ['
+                f'{", ".join(c.__name__ for c in self.also_on_script)}]'
+            )
         if self.day_events:
             ret.append('\n  \033[0;4mDay Events\033[0m')
             for d, evs in self.day_events.items():

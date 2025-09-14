@@ -643,6 +643,7 @@ class Boffin(Character):
         abilities = [
             character for character in state.puzzle.script
             if character.category in (TOWNSFOLK, OUTSIDER)
+            and info.IsInPlay(character)(state, me) is not info.TRUE
         ]
         assert len(abilities) and len(demon_ids)
         for demon_id, ability_t in itertools.product(demon_ids, abilities):
@@ -2041,6 +2042,7 @@ class NightWatchman(Character):
 
         if nightwatchman.is_evil:
             yield from self._run_evil_night(state, me)
+            return
 
         choice = state.get_night_info(NightWatchman, me, state.night)
         if choice is None:
@@ -2071,8 +2073,6 @@ class NightWatchman(Character):
     def _run_evil_night(self, state: State, me: PlayerID) -> StateGen:
         """run_night when an evil player hold the NightWatchman ability."""
         # Check if a good player received the Ping
-        yield state
-        return
         all_pings = state.puzzle.external_info_registry.get(
             (NightWatchman, state.night), []
         )
@@ -2088,7 +2088,7 @@ class NightWatchman(Character):
         if not self.spent:
             # The world where they use it on someone who needn't report it
             spent_world = state.fork()
-            spent_nwm = spent_world.player[me].get_ability(NightWatchman)
+            spent_nwm = spent_world.players[me].get_ability(NightWatchman)
             spent_nwm.spent = True
             yield spent_world
         # The world where they don't use it
@@ -3884,6 +3884,7 @@ GLOBAL_NIGHT_ORDER = [
     VillageIdiot,
     Progidy,
     NightWatchman,
+    Butler,  # OTHER_NIGHT position, on FIRST_NIGHT it's actually much earlier?
     Chambermaid,
     Mathematician,
 ]
@@ -3902,7 +3903,6 @@ INACTIVE_CHARACTERS = [
     Atheist,
     Baron,
     Boffin,
-    Butler,
     Drunk,
     Goblin,
     Golem,
