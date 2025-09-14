@@ -23,7 +23,7 @@ const characterSamples = {
         { name: "Librarian", value: "Player('Oscar', claim=Librarian, night_info={\n    1: Librarian.Ping(None)\n}),\n"},
         { name: "Mathematician", value: "Player('Karen', claim=Mathematician, night_info={\n    1: Mathematician.Ping(0),\n    2: Mathematician.Ping(1),\n}),\n"},
         { name: "Mayor", value: "Player('Jasmine', claim=Mayor),\n"},
-        { name: "NightWatchman", value: "Player('Fraser', claim=NightWatchman, night_info={\n    1: NightWatchman.Choice(Tim, confirmed=False)\n}),\n"},
+        { name: "NightWatchman", value: "Player('Fraser', claim=NightWatchman, night_info={\n    1: NightWatchman.Choice(Tim)\n}),\n# Give someone else a `NightWatchman.Ping(Fraser)` the same night\n"},
         { name: "Noble", value: "Player('Matt', claim=Noble, night_info={\n    1: Noble.Ping(Tim, Sula, Oscar)\n}),\n"},
         { name: "Oracle", value: "Player('Alanna', claim=Oracle, night_info={\n    2: Oracle.Ping(0),\n    3: Oracle.Ping(1),\n}),\n"},
         { name: "Philosopher", value: "Player('Hannah', claim=Philosopher, night_info={\n    1: [\n        Philosopher.Choice(Chambermaid),\n        Chambermaid.Ping(Aoife, Fraser, 1),\n    ],\n    2: Chambermaid.Ping(Josh, Fraser, 2),\n}),\n"},
@@ -40,13 +40,13 @@ const characterSamples = {
         { name: "Steward", value: "Player('Sula', claim=Steward, night_info={\n    1: Steward.Ping(Matt)\n}),\n"},
         { name: "Undertaker", value: "Player('Steve', claim=Undertaker, night_info={\n    2: Undertaker.Ping(Steffen, Poisoner),\n    3: Undertaker.Ping(You, Poisoner),\n}),\n"},
         { name: "VillageIdiot", value: "Player('Fraser', claim=VillageIdiot, night_info={\n    1: VillageIdiot.Ping(Sarah, is_evil=False),\n    2: VillageIdiot.Ping(Aoife, is_evil=False),\n}),\n"},
-        { name: "Virgin", value: "Player('Mary', claim=Virgin, day_info={\n    1: UneventfulNomination(Balthazar)\n}),\n"},
+        { name: "Virgin", value: "Player('Mary', claim=Virgin, day_info={\n    1: UneventfulNomination(Balthazar)\n}),\n# Or add ExecutionByST(player=Balthazar, after_nominating=Mary) to day_events\n"},
         { name: "Washerwoman", value: "Player('Matthew', claim=Washerwoman, night_info={\n    1: Washerwoman.Ping(Aoife, Oscar, Librarian)\n}),\n"}
     ],
     "Outsiders": [
         { name: "Butler", value: "Player('Hannah', claim=Butler),\n"},
         { name: "Drunk", value: "Player('Dim', claim=Drunk),\n"},
-        { name: "Golem", value: "Player('Rocket', claim=Golem),\n"},
+        { name: "Golem", value: "Player('Rocket', claim=Golem),\n# For Golem punch, put Dies(player=Josh, after_nominated_by=Rocket)\n"},
         { name: "Hermit", value: "# Hermit.set_outsiders(Saint, Recluse, Butler)\nPlayer('Nicola', claim=Hermit),\n"},
         { name: "Klutz", value: "Player('Olivia', claim=Klutz, day_info={\n    2: Klutz.Choice(Adam),\n}),\n"},
         { name: "Lunatic", value: "Player('Tim', claim=Lunatic),\n"},
@@ -57,6 +57,7 @@ const characterSamples = {
     ],
     "Minions": [
         { name: "Baron", value: "Player('Fraser', claim=Baron),\n"},
+        { name: "Boffin", value: "Player('Herrman', claim=Boffin),\n"},
         { name: "EvilTwin", value: "Player('Hannah', claim=Empath, night_info={\n    1: [\n        EvilTwin.Is(Jasmine),\n        Empath.Ping(0),\n    ],\n    2: Empath.Ping(1),\n}),\n"},
         { name: "Goblin", value: "Player('Fraser', claim=Goblin),\n"},
         { name: "Marionette", value: "Player('Frayser', claim=Marionette),\n"},
@@ -70,6 +71,7 @@ const characterSamples = {
     "Demons": [
         { name: "FangGu", value: "Player('Jerry', claim=FangGu),\n"},
         { name: "Imp", value: "Player('Jasmine', claim=Imp),\n"},
+        { name: "Kazali", value: "Player('Jonny', claim=Kazali),\n"},
         { name: "Leviathan", value: "Player('Jenny', claim=Leviathan),\n"},
         { name: "LordOfTyphon", value: "Player('Jeramiah', claim=LordOfTyphon),\n"},
         { name: "NoDashii", value: "Player('Jensen', claim=NoDashii),\n"},

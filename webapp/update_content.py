@@ -5,14 +5,16 @@
 from os.path import dirname, join, realpath
 import re
 from shutil import copyfile
+import subprocess
 
 
 root_dir = realpath(join(dirname(__file__), '..'))
 puzzles_file = join(root_dir, 'puzzles.py')
 puzlesjs_file = join(root_dir, 'webapp', 'puzzles.js')
 blog_file = join(root_dir, 'webapp', 'NQT_blogspot.html')  # TODO: wget the latest page each time
+nqt_page = "https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html"
 
-puzzle_pattern = re.compile(r'def _?puzzle_(.*)\(\):\n([\s\S]*?\n)    solutions =')
+puzzle_pattern = re.compile(r'\ndef _?puzzle_(.*)\(\):\n([\s\S]*?\n)    solutions =')
 claim_pattern = re.compile(r"Player\('.*?', claim=(.+?)[,)]")
 hidden_pattern = re.compile(r"hidden_characters=\[(\w*(?:,\s*\w+)*)\s*\]")
 preamble_pattern = re.compile(r"Player\('.*?', claim=(.+?)[,)]")
@@ -29,7 +31,7 @@ entry_template = """{{
 name: '{name}',
 claims: {claims},
 hidden: {hidden},
-value: \n`{preamble}{puzzle}`
+value:\n`{preamble}{puzzle}`
 }}"""
 
 puzzles_js_template = """
@@ -83,6 +85,11 @@ def parse_body(body):
 
 if __name__ == '__main__':
 
+	result = subprocess.run(
+		["wget", nqt_page, "-O", blog_file],
+		stderr=subprocess.STDOUT,
+		check=True,
+	)
 	with open(blog_file, 'r') as f:
 		nqt_metadata = get_nqt_metadata(f.read())
 

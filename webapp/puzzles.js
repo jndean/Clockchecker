@@ -5,7 +5,7 @@ const puzzleSamples = {
 name: 'NQT1',
 claims: ['Savant', 'Knight', 'Steward', 'Investigator', 'Noble', 'Seamstress'],
 hidden: ['Leviathan', 'Goblin', 'Drunk'],
-value: 
+value:
 `# NQT1: Can the sober Savant solve the puzzle?
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1erb5e2/can_the_sober_savant_solve_the_puzzle/
 You, Tim, Sula, Oscar, Matt, Anna = range(6)
@@ -48,7 +48,7 @@ puzzle = Puzzle(
 name: 'NQT2',
 claims: ['Seamstress', 'Knight', 'FortuneTeller', 'Saint', 'Investigator', 'Juggler', 'Clockmaker', 'Balloonist'],
 hidden: ['Leviathan', 'Goblin', 'Drunk'],
-value: 
+value:
 `# NQT2: Come Fly With Me
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ewxu0r/weekly_puzzle_2_come_fly_with_me/
 You, Steph, Fraser, Tim, Sarah, Matthew, Anna, Sula = range(8)
@@ -97,7 +97,7 @@ puzzle = Puzzle(
 name: 'NQT3a',
 claims: ['Slayer', 'Chef', 'Recluse', 'Investigator', 'Washerwoman', 'Librarian', 'Empath'],
 hidden: ['Imp', 'Baron', 'Spy', 'Poisoner', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT3a: Not Throwing Away My Shot (7-player)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1f2jht3/weekly_puzzle_3a_3b_not_throwing_away_my_shot/
 You, Aoife, Tom, Sula, Matthew, Oscar, Josh = range(7)
@@ -130,7 +130,7 @@ puzzle = Puzzle(
 name: 'NQT3b',
 claims: ['Slayer', 'Librarian', 'Investigator', 'Saint', 'Chef', 'Recluse', 'Washerwoman', 'Empath'],
 hidden: ['Imp', 'Baron', 'Spy', 'Poisoner', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT3b: Not Throwing Away My Shot (8-player)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1f2jht3/weekly_puzzle_3a_3b_not_throwing_away_my_shot/
 You, Tim, Sarah, Hannah, Dan, Anna, Matt, Fraser = range(8)
@@ -164,7 +164,7 @@ puzzle = Puzzle(
 name: 'NQT4',
 claims: ['Investigator', 'Empath', 'Undertaker', 'FortuneTeller', 'Librarian', 'Recluse', 'Juggler', 'Dreamer'],
 hidden: ['LordOfTyphon', 'Marionette', 'Poisoner', 'Drunk'],
-value: 
+value:
 `# NQT4: The Many-Headed Monster
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1f823s4/weekly_puzzle_4_the_manyheaded_monster/
 You, Anna, Dan, Fraser, Sarah, Tim, Matt, Hannah = range(8)
@@ -215,7 +215,7 @@ puzzle = Puzzle(
 name: 'NQT5a',
 claims: ['Alsaahir', 'Noble', 'Knight', 'Investigator', 'Empath', 'Steward', 'Seamstress'],
 hidden: ['Leviathan', 'Goblin'],
-value: 
+value:
 `# NQT5a: You Only Guess Twice (Alsaahir)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fcriex/weekly_puzzle_5a_5b_you_only_guess_twice/
 # Notes: Find an Alsaahir guess to solve the puzzle
@@ -249,7 +249,7 @@ puzzle = Puzzle(
 name: 'NQT5b',
 claims: ['Juggler', 'Empath', 'Seamstress', 'Steward', 'Investigator', 'Noble', 'Knight'],
 hidden: ['Leviathan', 'Goblin'],
-value: 
+value:
 `# NQT5b: You Only Guess Twice (Juggler)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fcriex/weekly_puzzle_5a_5b_you_only_guess_twice/
 # Notes: Find a Juggler guess to solve the puzzle
@@ -283,7 +283,7 @@ puzzle = Puzzle(
 name: 'NQT6',
 claims: ['Librarian', 'Saint', 'Noble', 'Seamstress', 'Investigator', 'Juggler', 'Knight', 'Empath', 'Steward'],
 hidden: ['NoDashii', 'Vortox', 'Pukka', 'Marionette', 'Drunk'],
-value: 
+value:
 `# NQT6: Super Marionette Bros
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fj1h0c/weekly_puzzle_6_super_marionette_bros/
 You, Sarah, Tim, Dan, Aoife, Sula, Steph, Fraser, Matthew = range(9)
@@ -333,7 +333,7 @@ puzzle = Puzzle(
 name: 'NQT7',
 claims: ['Savant', 'VillageIdiot', 'FortuneTeller', 'Investigator', 'Juggler', 'Shugenja', 'Dreamer', 'VillageIdiot'],
 hidden: ['Leviathan', 'Goblin', 'Mutant'],
-value: 
+value:
 `# NQT7: The Savant Strikes Back
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1foeq4d/weekly_puzzle_7_the_savant_strikes_back/
 You, Fraser, Sarah, Oscar, Anna, Aoife, Steph, Tim = range(8)
@@ -403,7 +403,7 @@ puzzle = Puzzle(
 name: 'NQT8',
 claims: ['Seamstress', 'Seamstress', 'Seamstress', 'Seamstress', 'Seamstress', 'Seamstress', 'Seamstress'],
 hidden: ['Imp', 'Poisoner'],
-value: 
+value:
 `# NQT8: The Stitch-Up
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ftqc28/weekly_puzzle_8_the_stitchup/
 # Notes: Every Townsfolk is a Seamstress
@@ -440,7 +440,7 @@ puzzle = Puzzle(
 name: 'NQT9',
 claims: ['Acrobat', 'Balloonist', 'Gossip', 'Knight', 'Gambler', 'Juggler', 'Steward'],
 hidden: ['Imp', 'Po', 'Goblin', 'Drunk'],
-value: 
+value:
 `# NQT9: The New Acrobat
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fz4jqe/weekly_puzzle_9_the_new_acrobat/
 You, Fraser, Oscar, Josh, Anna, Sula, Hannah = range(7)
@@ -489,7 +489,7 @@ puzzle = Puzzle(
 name: 'NQT10',
 claims: ['Slayer', 'Ravenkeeper', 'Undertaker', 'FortuneTeller', 'Chef', 'Recluse', 'Washerwoman'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT10: Don't Overcook It
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it/
 You, Matthew, Dan, Tom, Sula, Fraser, Josh = range(7)
@@ -525,7 +525,7 @@ puzzle = Puzzle(
 name: 'NQT12a',
 claims: ['Dreamer', 'Clockmaker', 'Empath', 'Slayer', 'Courtier', 'Mayor'],
 hidden: ['Vortox', 'Spy', 'ScarletWoman', 'Lunatic'],
-value: 
+value:
 `# NQT12a: Thunderstruck (6-player)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck/
 # Notes: Based on "<a href="https://bloodontheclocktower.com/custom-scripts/race-to-the-bottom">Race To The Bottom</a>"
@@ -561,7 +561,7 @@ puzzle = Puzzle(
 name: 'NQT12b',
 claims: ['Librarian', 'Investigator', 'Empath', 'Mayor', 'Slayer', 'Dreamer', 'Clockmaker', 'Courtier'],
 hidden: ['Vortox', 'Spy', 'ScarletWoman', 'Lunatic'],
-value: 
+value:
 `# NQT12b: Thunderstruck (8-player)
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck/
 # Notes: Based on "<a href="https://bloodontheclocktower.com/custom-scripts/race-to-the-bottom">Race To The Bottom</a>"
@@ -604,7 +604,7 @@ puzzle = Puzzle(
 name: 'NQT13',
 claims: ['Investigator', 'Clockmaker', 'Librarian', 'Ravenkeeper', 'FortuneTeller', 'Slayer', 'Recluse'],
 hidden: ['Imp', 'Baron', 'Spy', 'ScarletWoman', 'Poisoner', 'Drunk'],
-value: 
+value:
 `# NQT13: Clockblocking
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gka3js/weekly_puzzle_13_clockblocking/
 You, Jasmine, Oscar, Tim, Sarah, Fraser, Aoife = range(7)
@@ -640,7 +640,7 @@ puzzle = Puzzle(
 name: 'NQT14',
 claims: ['Slayer', 'Washerwoman', 'Undertaker', 'FortuneTeller', 'Empath', 'Chef', 'Investigator'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'ScarletWoman', 'Marionette'],
-value: 
+value:
 `# NQT14: New Super Marionette Bros
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gpo1xo/weekly_puzzle_14_new_super_marionette_bros/
 You, Danielle, Gwilym, Brett, Rob, Lav, Lydia = range(7)
@@ -681,7 +681,7 @@ puzzle = Puzzle(
 name: 'NQT15',
 claims: ['Savant', 'Klutz', 'Juggler', 'SnakeCharmer', 'Clockmaker', 'Seamstress', 'Artist', 'SnakeCharmer'],
 hidden: ['NoDashii', 'Vortox', 'EvilTwin', 'Mutant'],
-value: 
+value:
 `# NQT15: Wake Up and Choose Violets
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gv12ck/weekly_puzzle_15_wake_up_and_choose_violets/
 You, Oscar, Sarah, Hannah, Fraser, Aoife, Adam, Jasmine = range(8)
@@ -755,7 +755,7 @@ puzzle = Puzzle(
 name: 'NQT16',
 claims: ['Saint', 'Empath', 'FortuneTeller', 'NightWatchman', 'Recluse', 'Washerwoman', 'Investigator', 'Chef'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'ScarletWoman', 'Baron', 'Drunk'],
-value: 
+value:
 `# NQT16: Who Watches the Watchmen?
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1h0f8se/weekly_puzzle_16_who_watches_the_watchmen/
 You, Olivia, Jasmine, Fraser, Oscar, Hannah, Sarah, Tim = range(8)
@@ -772,7 +772,7 @@ puzzle = Puzzle(
             3: FortuneTeller.Ping(Sarah, Jasmine, demon=False),
         }),
         Player('Fraser', claim=NightWatchman, night_info={
-            1: NightWatchman.Choice(Tim, confirmed=False)
+            1: NightWatchman.Choice(Tim)
         }),
         Player('Oscar', claim=Recluse),
         Player('Hannah', claim=Washerwoman, night_info={
@@ -782,7 +782,7 @@ puzzle = Puzzle(
             1: Investigator.Ping(Olivia, Hannah, Poisoner)
         }),
         Player('Tim', claim=Chef, night_info={
-            1: Chef.Ping(1)
+            1: Chef.Ping(1),
         }),
     ],
     day_events={1: Execution(Hannah),  2: Execution(Fraser)},
@@ -794,7 +794,7 @@ puzzle = Puzzle(
 name: 'NQT17',
 claims: ['Puzzlemaster', 'Chef', 'Empath', 'FortuneTeller', 'Undertaker', 'Washerwoman', 'Investigator', 'Slayer'],
 hidden: ['Imp', 'ScarletWoman'],
-value: 
+value:
 `# NQT17: The Missing Piece
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1h5sgc7/weekly_puzzle_17_the_missing_piece/
 # Notes: Find a Puzzlemaster guess to solve the puzzle
@@ -838,7 +838,7 @@ puzzle = Puzzle(
 name: 'NQT18',
 claims: ['Librarian', 'Juggler', 'SnakeCharmer', 'FortuneTeller', 'Balloonist', 'Saint', 'Investigator', 'Recluse'],
 hidden: ['Leviathan', 'Xaan', 'Drunk'],
-value: 
+value:
 `# NQT18: X and the City
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hb72qg/weekly_puzzle_18_starring_the_xaan/
 You, Steph, Fraser, Dan, Aoife, Tim, Olivia, Sarah = range(8)
@@ -883,7 +883,7 @@ puzzle = Puzzle(
 name: 'NQT19',
 claims: ['Librarian', 'Saint', 'Recluse', 'Slayer', 'Undertaker', 'Ravenkeeper', 'Washerwoman', 'Empath'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT19: He Could Be You, He Could Be Me
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hgdsmp/weekly_puzzle_19_he_could_be_you_he_could_be_me/
 You, Fraser, Oscar, Jasmine, Olivia, Matt, Sula, Aoife = range(8)
@@ -921,7 +921,7 @@ puzzle = Puzzle(
 name: 'NQT20',
 claims: ['Investigator', 'VillageIdiot', 'Saint', 'VillageIdiot', 'Virgin', 'VillageIdiot', 'Ravenkeeper'],
 hidden: ['Imp', 'Baron', 'Spy', 'Poisoner', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT20: The Three Wise Men
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hlgh1w/weekly_puzzle_20_the_three_wise_men/
 You, Caspar, Joseph, Melchior, Mary, Balthazar, Gabriel = range(7)
@@ -960,7 +960,7 @@ puzzle = Puzzle(
 name: 'NQT21',
 claims: ['Juggler', 'Juggler', 'Juggler', 'Juggler', 'Juggler', 'Juggler', 'Juggler', 'Juggler'],
 hidden: ['Leviathan', 'Goblin', 'Drunk'],
-value: 
+value:
 `# NQT21: Eight Jugglers Juggling
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hpqhai/weekly_puzzle_21_eight_jugglers_juggling/
 # Notes: Every Townsfolk is a Juggler
@@ -1008,7 +1008,7 @@ puzzle = Puzzle(
 name: 'NQT22',
 claims: ['Chambermaid', 'Investigator', 'Slayer', 'Ravenkeeper', 'Saint', 'Recluse', 'Librarian', 'Washerwoman'],
 hidden: ['Imp', 'Baron', 'Spy', 'Poisoner', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT22: One in the Chamber
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hvum3b/weekly_puzzle_22_one_in_the_chamber/
 You, Anna, Aoife, Sarah, Tim, Fraser, Oscar, Steph = range(8)
@@ -1046,7 +1046,7 @@ puzzle = Puzzle(
 name: 'NQT23',
 claims: ['Chef', 'Washerwoman', 'Investigator', 'FortuneTeller', 'Ravenkeeper', 'Goblin', 'Librarian', 'Slayer'],
 hidden: ['Imp', 'Goblin', 'Lunatic'],
-value: 
+value:
 `# NQT23: Goblincore
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1i199yv/weekly_puzzle_23_goblincore/
 You, Hannah, Matt, Tim, Aoife, Fraser, Tom, Sula = range(8)
@@ -1084,7 +1084,7 @@ puzzle = Puzzle(
 name: 'NQT24',
 claims: ['Investigator', 'Klutz', 'FortuneTeller', 'Washerwoman', 'Virgin', 'Librarian', 'Chef', 'Empath'],
 hidden: ['Imp', 'Poisoner', 'Drunk'],
-value: 
+value:
 `# NQT24: The Ultimate Blunder
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1i6m0ww/weekly_puzzle_24_the_ultimate_blunder/
 You, Olivia, Steph, Fraser, Sula, Oscar, Adam, Josh = range(8)
@@ -1129,7 +1129,7 @@ puzzle = Puzzle(
 name: 'NQT26',
 claims: ['Empath', 'Saint', 'Slayer', 'Recluse', 'Librarian', 'Soldier', 'Undertaker', 'Chef'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT26: A Major Problem
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ihl8vs/weekly_puzzle_26_a_major_problem/
 You, Olivia, Dan, Tom, Matthew, Josh, Sula, Fraser = range(8)
@@ -1164,7 +1164,7 @@ puzzle = Puzzle(
 name: 'NQT28',
 claims: ['Chambermaid', 'Juggler', 'Undertaker', 'Librarian', 'Clockmaker', 'Empath', 'FortuneTeller', 'Oracle'],
 hidden: ['Pukka', 'NoDashii', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT28: A Study in Scarlet
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1iu1vxo/weekly_puzzle_28_a_study_in_scarlet/
 You, Matt, Fraser, Aoife, Adam, Oscar, Olivia, Sarah = range(8)
@@ -1209,7 +1209,7 @@ puzzle = Puzzle(
 name: 'NQT29',
 claims: ['Dreamer', 'Dreamer', 'Dreamer', 'Dreamer', 'Dreamer', 'Dreamer', 'Dreamer', 'Dreamer'],
 hidden: ['Imp', 'Poisoner', 'Drunk'],
-value: 
+value:
 `# NQT29: A Dreamer? I'm Not the Only One
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ixykmz/weekly_puzzle_29_a_dreamer_im_not_the_only_one/
 # Notes: Every Townsfolk is a Dreamer
@@ -1257,7 +1257,7 @@ puzzle = Puzzle(
 name: 'NQT30a',
 claims: ['Atheist', 'Knight', 'Artist', 'Clockmaker', 'Noble', 'Seamstress'],
 hidden: ['Imp', 'Spy', 'Drunk'],
-value: 
+value:
 `# NQT30a: The Babel Fish is a Dead Giveaway
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1j46gtl/weekly_puzzle_30_which_is_the_atheist_game/
 # Notes: Two games, one of which has a genuine Atheist
@@ -1289,7 +1289,7 @@ puzzle = Puzzle(
 name: 'NQT30b',
 claims: ['Clockmaker', 'Atheist', 'Knight', 'Seamstress', 'Artist', 'Noble'],
 hidden: ['Imp', 'Spy', 'Drunk'],
-value: 
+value:
 `# NQT30b: The Babel Fish is a Dead Giveaway
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1j46gtl/weekly_puzzle_30_which_is_the_atheist_game/
 # Notes: Two games, one of which has a genuine Atheist
@@ -1321,7 +1321,7 @@ puzzle = Puzzle(
 name: 'NQT31',
 claims: ['Chef', 'Empath', 'Ravenkeeper', 'Investigator', 'Recluse', 'Undertaker', 'FortuneTeller'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT31: No, Your Other Left
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1j8ub5q/weekly_puzzle_31_no_your_other_left/
 You, Aoife, Tim, Adam, Fraser, Sarah, Olivia = range(7)
@@ -1359,7 +1359,7 @@ puzzle = Puzzle(
 name: 'NQT32',
 claims: ['Dreamer', 'Juggler', 'Recluse', 'Empath', 'Juggler', 'Saint', 'Undertaker', 'FortuneTeller'],
 hidden: ['Imp', 'Poisoner', 'Baron', 'Drunk'],
-value: 
+value:
 `# NQT32: Prepare for Juggle, and Make it Double
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1je8z17/weekly_puzzle_32_prepare_for_juggle_and_make_it/
 You, Matthew, Olivia, Sula, Dan, Fraser, Jasmine, Tim = range(8)
@@ -1413,7 +1413,7 @@ puzzle = Puzzle(
 name: 'NQT33',
 claims: ['Empath', 'Recluse', 'Ravenkeeper', 'Washerwoman', 'Librarian', 'FortuneTeller', 'Saint', 'Investigator'],
 hidden: ['Imp', 'Poisoner', 'Baron', 'Spy', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT33: Twice is Coincidence, Thrice is Proof
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1jl7cuv/weekly_puzzle_33_twice_is_coincidence_thrice_is/
 You, Olivia, Jasmine, Hannah, Tom, Oscar, Sula, Fraser = range(8)
@@ -1451,7 +1451,7 @@ puzzle = Puzzle(
 name: 'NQT34',
 claims: ['Mathematician', 'Sage', 'Artist', 'Clockmaker', 'Seamstress', 'Juggler', 'SnakeCharmer'],
 hidden: ['NoDashii', 'Vortox', 'Witch'],
-value: 
+value:
 `# NQT34: The Vortox Conjecture
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1joxqgy/weekly_puzzle_34_the_vortox_conjecture/
 You, Fraser, Steph, Sula, Sarah, Josh, Aoife = range(7)
@@ -1495,7 +1495,7 @@ puzzle = Puzzle(
 name: 'NQT35',
 claims: ['Librarian', 'Clockmaker', 'Undertaker', 'FortuneTeller', 'Ravenkeeper', 'Saint', 'Investigator', 'Empath'],
 hidden: ['Imp', 'LordOfTyphon', 'Poisoner', 'Spy', 'Drunk'],
-value: 
+value:
 `# NQT35: Typhon Season
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1jv7zh2/weekly_puzzle_35_typhon_season/
 You, Tim, Sula, Fraser, Oscar, Olivia, Sarah, Jasmine = range(8)
@@ -1536,7 +1536,7 @@ puzzle = Puzzle(
 name: 'NQT36',
 claims: ['Empath', 'Saint', 'Slayer', 'Ravenkeeper', 'Investigator', 'FortuneTeller', 'Recluse', 'Slayer'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT36: What is Your Weapon of Choice?
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1k1exb7/weekly_puzzle_36_what_is_your_weapon_of_choice/
 You, Steph, Adam, Josh, Sula, Olivia, Fraser, Oscar = range(8)
@@ -1573,7 +1573,7 @@ puzzle = Puzzle(
 name: 'NQT37',
 claims: ['Undertaker', 'Washerwoman', 'Chef', 'Ravenkeeper', 'Librarian', 'FortuneTeller', 'Empath', 'Imp'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'ScarletWoman', 'Marionette', 'Drunk'],
-value: 
+value:
 `# NQT37: New Super Marionette Bros&nbsp;U
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1k7n8hi/weekly_puzzle_37_new_super_marionette_bros_u/
 You, Matt, Steph, Adam, Sula, Aoife, Fraser, Jasmine = range(8)
@@ -1615,7 +1615,7 @@ puzzle = Puzzle(
 name: 'NQT38',
 claims: ['Recluse', 'Empath', 'Ravenkeeper', 'Investigator', 'SnakeCharmer', 'SnakeCharmer', 'FortuneTeller', 'Saint'],
 hidden: ['Imp', 'Baron', 'Spy', 'Poisoner', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT38: Snakes on a Plane
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kccbp9/weekly_puzzle_38_snakes_on_a_plane/
 You, Hannah, Dan, Adam, Tim, Fraser, Sula, Matt = range(8)
@@ -1658,7 +1658,7 @@ puzzle = Puzzle(
 name: 'NQT38_alt',
 claims: ['Empath', 'Clockmaker', 'Philosopher', 'Juggler', 'Chef', 'Mathematician', 'Chambermaid', 'Oracle'],
 hidden: ['NoDashii', 'Vortox', 'Witch', 'Drunk'],
-value: 
+value:
 `# Other: NQT38_alt
 # This version of NQT Puzzle 38 was posted to the discord, but not Reddit
 # once it was discovered that there is an unintended second solution that 
@@ -1712,7 +1712,7 @@ puzzle = Puzzle(
 name: 'NQT39',
 claims: ['Oracle', 'Juggler', 'Philosopher', 'Seamstress', 'Sage', 'Artist', 'Mathematician', 'Klutz'],
 hidden: ['NoDashii', 'Witch', 'Mutant'],
-value: 
+value:
 `# NQT39: Squid Game
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kg6y94/weekly_puzzle_39_squid_game/
 You, Jasmine, Matt, Aoife, Fraser, Tom, Sula, Hannah = range(8)
@@ -1773,7 +1773,7 @@ puzzle = Puzzle(
 name: 'NQT40',
 claims: ['Investigator', 'FortuneTeller', 'Recluse', 'Washerwoman', 'Saint', 'Librarian', 'Empath', 'Butler', 'Slayer'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'ScarletWoman', 'Baron', 'Drunk'],
-value: 
+value:
 `# NQT40: Nine Lives
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1klqy8j/weekly_puzzle_40_nine_lives/
 You, Matthew, Steph, Jasmine, Hannah, Fraser, Tim, Josh, Adam = range(9)
@@ -1813,7 +1813,7 @@ puzzle = Puzzle(
 name: 'NQT41',
 claims: ['Imp', 'FortuneTeller', 'Seamstress', 'Slayer', 'Chef', 'Noble', 'PoppyGrower', 'Artist'],
 hidden: ['Imp', 'Witch', 'Drunk', 'Lunatic'],
-value: 
+value:
 `# NQT41: No, John, You Are the Demons
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kqfgch/weekly_puzzle_41_in_which_you_might_be_the_lunatic/
 You, Amelia, Edd, Riley, Josef, Gina, Katharine, Chris = range(8)
@@ -1857,7 +1857,7 @@ puzzle = Puzzle(
 name: 'NQT42',
 claims: ['Philosopher', 'Artist', 'Empath', 'Undertaker', 'FortuneTeller', 'Recluse', 'Juggler', 'Saint'],
 hidden: ['Imp', 'Baron', 'Widow', 'Drunk'],
-value: 
+value:
 `# NQT42: Life, the Universe, and Everything
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kwr1mx/weekly_puzzle_42_life_the_universe_and_everything/
 You, Adam, Oscar, Hannah, Matthew, Jasmine, Fraser, Sula = range(8)
@@ -1908,7 +1908,7 @@ puzzle = Puzzle(
 name: 'NQT43',
 claims: ['Ravenkeeper', 'Investigator', 'Chef', 'Chef', 'Recluse', 'FortuneTeller', 'Empath', 'Saint'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'ScarletWoman', 'Baron', 'Drunk'],
-value: 
+value:
 `# NQT43: Two Many Cooks
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1kz0kf2/weekly_puzzle_43_too_many_cooks/
 You, Anna, Josh, Tom, Sarah, Matthew, Fraser, Steph = range(8)
@@ -1945,7 +1945,7 @@ puzzle = Puzzle(
 name: 'NQT44',
 claims: ['Juggler', 'Chef', 'FortuneTeller', 'Noble', 'Shugenja', 'Investigator', 'Progidy', 'Progidy'],
 hidden: ['Leviathan', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT44: Trouble Homebrewing
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lamap3/weekly_puzzle_44_trouble_homebrewing/
 # Notes: Uses homebrew Townsfolk
@@ -1997,7 +1997,7 @@ puzzle = Puzzle(
 name: 'NQT44_alt',
 claims: ['Washerwoman', 'Progidy', 'Progidy', 'Knight', 'Shugenja', 'Clockmaker', 'Noble', 'Juggler'],
 hidden: ['Leviathan', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# Other: NQT44_alt
 # Unreleased Solar/Lunar Prodigy puzzle, because it has unintended solutions
 
@@ -2047,7 +2047,7 @@ puzzle = Puzzle(
 name: 'NQT45a',
 claims: ['Ravenkeeper', 'Empath', 'FortuneTeller', 'Investigator', 'Chef', 'Investigator', 'Washerwoman', 'Slayer'],
 hidden: ['Imp', 'ScarletWoman', 'Spy', 'Drunk', 'Hermit'],
-value: 
+value:
 `# NQT45a: Don't Try This at Home
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
 Hermit.set_outsiders(Saint, Recluse, Drunk)
@@ -2092,7 +2092,7 @@ puzzle = Puzzle(
 name: 'NQT45b',
 claims: ['Slayer', 'Undertaker', 'Investigator', 'Empath', 'Ravenkeeper', 'Washerwoman', 'Investigator', 'Chef'],
 hidden: ['Imp', 'ScarletWoman', 'Spy', 'Drunk', 'Hermit'],
-value: 
+value:
 `# NQT45b: Don't Try This at Home
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lgua6n/weekly_puzzle_45_featuring_a_cursed_hermit_combo/
 Hermit.set_outsiders(Saint, Recluse, Drunk)
@@ -2135,7 +2135,7 @@ puzzle = Puzzle(
 name: 'NQT46',
 claims: ['Clockmaker', 'Exorcist', 'Investigator', 'Chambermaid', 'Gossip', 'Princess', 'Gambler'],
 hidden: ['Imp', 'Poisoner'],
-value: 
+value:
 `# NQT46: The Princess Diaries
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lk83yb/weekly_puzzle_46_the_princess_diaries/
 You, Matthew, Fraser, Adam, Aoife, Jasmine, Josh = range(7)
@@ -2181,7 +2181,7 @@ puzzle = Puzzle(
 name: 'NQT47',
 claims: ['Recluse', 'Investigator', 'Undertaker', 'Saint', 'Saint', 'Butler', 'Washerwoman', 'Chef', 'Ravenkeeper'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# NQT47: We Have Evil Twin at Home
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lq1bt7/weekly_puzzle_47_we_have_evil_twin_at_home/
 You, Olivia, Steph, Josh, Sula, Oscar, Jasmine, Tom, Fraser = range(9)
@@ -2218,7 +2218,7 @@ puzzle = Puzzle(
 name: 'NQT48',
 claims: ['Mathematician', 'Chambermaid', 'VillageIdiot', 'VillageIdiot', 'Juggler', 'Golem', 'Puzzlemaster', 'Artist'],
 hidden: ['Leviathan', 'Xaan', 'Poisoner'],
-value: 
+value:
 `# NQT48: Solving for X
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ltxd8a/weekly_puzzle_48_solving_for_x/
 You, Matthew, Olivia, Jasmine, Fraser, Sula, Dan, Tom = range(8)
@@ -2270,7 +2270,7 @@ puzzle = Puzzle(
 name: 'NQT49',
 claims: ['Washerwoman', 'Librarian', 'Chef', 'Recluse', 'Empath', 'Saint', 'Undertaker', 'FortuneTeller'],
 hidden: ['Riot', 'Poisoner', 'Baron', 'Drunk'],
-value: 
+value:
 `# NQT49: Bastille Day
 # https://www.reddit.com/r/botc/comments/1lzoqct/weekly_puzzle_49_bastille_day/
 You, Sula, Matthew, Adam, Tom, Oscar, Fraser, Anna = range(8)
@@ -2318,7 +2318,7 @@ puzzle = Puzzle(
 name: 'NQT50',
 claims: ['Knight', 'Librarian', 'Clockmaker', 'Investigator', 'Juggler', 'Artist', 'Juggler', 'Artist', 'Clockmaker', 'Librarian', 'Knight', 'Investigator'],
 hidden: ['Leviathan', 'Goblin', 'Drunk'],
-value: 
+value:
 `# NQT50: Art Imitates Life, Life Imitates Art
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1m6a7k1/weekly_puzzle_50_art_imitates_life_life_imitates/
 # Notes: Two games, each with an Artist asking about the other game
@@ -2414,12 +2414,96 @@ def solve_override():
                 yield B
 
 puzzle = (puzzle_a, puzzle_b)`
+}, {
+name: 'NQT51',
+claims: ['Washerwoman', 'Slayer', 'Recluse', 'Golem', 'Virgin', 'Noble', 'Artist', 'NightWatchman'],
+hidden: ['Kazali', 'Boffin', 'Poisoner', 'ScarletWoman', 'Spy'],
+value:
+`# NQT51: Weird Science
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1md9030/weekly_puzzle_51_weird_science/
+You, Oscar, Sarah, Fraser, Dan, Hannah, Tim, Josh = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Washerwoman, night_info={
+            1: Washerwoman.Ping(Hannah, Tim, Artist),
+        }),
+        Player('Oscar', claim=Slayer),
+        Player('Sarah', claim=Recluse),
+        Player('Fraser', claim=Golem),
+        Player('Dan', claim=Virgin),
+        Player('Hannah', claim=Noble, night_info={
+            1: Noble.Ping(Sarah, Tim, Josh),
+        }),
+        Player('Tim', claim=Artist,
+            day_info={1: Artist.Ping(~IsCharacter(Hannah, Boffin))},
+            night_info={1: NightWatchman.Ping(Josh)},
+        ),
+        Player('Josh', claim=NightWatchman, night_info={
+            1: NightWatchman.Choice(Tim)
+        }),
+    ],
+    day_events={
+        1: [
+            Slayer.Shot(player=Oscar, target=Sarah, died=True),
+            Dies(player=Tim, after_nominated_by=Fraser),
+            ExecutionByST(player=You, after_nominating=Dan),
+        ],
+    },
+    night_deaths={2: Hannah},
+    hidden_characters=[Kazali, Boffin, Poisoner, ScarletWoman, Spy],
+    hidden_self=[],
+)`
+}, {
+name: 'NQT52',
+claims: ['Undertaker', 'Investigator', 'Butler', 'Empath', 'Librarian', 'Virgin', 'Recluse', 'Saint', 'Ravenkeeper'],
+hidden: ['Imp', 'Baron', 'Poisoner', 'ScarletWoman', 'Spy', 'Drunk'],
+value:
+`# NQT52: Two Votes Is Enough
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1n94vcg/weekly_puzzle_52_two_votes_is_enough/
+You, Dan, Olivia, Sarah, Sula, Josh, Anna, Fraser, Steph = range(9)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Undertaker, night_info={
+            2: Undertaker.Ping(Josh, Imp),
+        }),
+        Player('Dan', claim=Investigator, night_info={
+            1: Investigator.Ping(Anna, Steph, Spy),
+        }),
+        Player('Olivia', claim=Butler),
+        Player('Sarah', claim=Empath, night_info={
+            1: Empath.Ping(0),
+            2: Empath.Ping(0),
+            3: Empath.Ping(0),
+            4: Empath.Ping(1),
+        }),
+        Player('Sula', claim=Librarian, night_info={
+            1: Librarian.Ping(You, Steph, Drunk),
+        }),
+        Player('Josh', claim=Virgin),
+        Player('Anna', claim=Recluse),
+        Player('Fraser', claim=Saint),
+        Player('Steph', claim=Ravenkeeper, night_info={
+            2: Ravenkeeper.Ping(Dan, Investigator)
+        }),
+    ],
+    day_events={
+        1: [
+            UneventfulNomination(player=Josh, nominator=Dan),
+            Execution(Josh),
+        ],
+        2: Execution(Dan),
+        3:Execution(Sula),
+    },
+    night_deaths={2: Steph, 3: You, 4: Anna},
+    hidden_characters=[Imp, Baron, Poisoner, ScarletWoman, Spy, Drunk],
+    hidden_self=[Drunk],
+)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',
 claims: ['Ravenkeeper', 'Slayer', 'Saint', 'Investigator', 'FortuneTeller', 'Recluse', 'Empath', 'Undertaker', 'Soldier', 'Chef', 'Washerwoman'],
 hidden: ['Imp', 'Spy', 'ScarletWoman'],
-value: 
+value:
 `# Other: josef_yes_but_dont
 # A puzzle that relies on the ScarletWoman catching a Recluse death
 You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
@@ -2471,7 +2555,7 @@ puzzle = Puzzle(
 name: 'ali_adversarial1',
 claims: ['Shugenja', 'Noble', 'Seamstress', 'Investigator', 'Washerwoman', 'Knight', 'Seamstress', 'Chambermaid'],
 hidden: ['Imp', 'Goblin', 'Drunk'],
-value: 
+value:
 `# Other: ali_adversarial1
 # A puzzle made by a hater.
 You, Edd, Riley, Gina, Adam, Katharine, Chris, Josef = range(8)
@@ -2516,7 +2600,7 @@ puzzle = Puzzle(
 name: 'ali_adversarial2',
 claims: ['Juggler', 'Seamstress', 'Shugenja', 'Seamstress', 'Knight', 'Washerwoman', 'Noble', 'Chambermaid'],
 hidden: ['Imp', 'Goblin', 'Drunk'],
-value: 
+value:
 `# Other: ali_adversarial2
 # A puzzle made by a hater.
 You, Gina, Chris, Adam, Riley, Edd, Josef, Katharine = range(8)
@@ -2570,7 +2654,7 @@ puzzle = Puzzle(
 name: 'nqt_sw_test',
 claims: ['Washerwoman', 'Empath', 'Undertaker', 'Slayer', 'Ravenkeeper', 'Investigator', 'Librarian', 'Chef'],
 hidden: ['Imp', 'ScarletWoman', 'Spy', 'Drunk'],
-value: 
+value:
 `# Other: nqt_sw_test
 # A discord user requested a puzzle requiring a SW to catch an Imp,
 # NQT kindly obliged with this test case.
@@ -2612,7 +2696,7 @@ puzzle = Puzzle(
 name: 'emerald_snv',
 claims: ['Klutz', 'Clockmaker', 'Seamstress', 'Flowergirl', 'Oracle', 'Artist', 'Juggler', 'Savant', 'Mathematician'],
 hidden: ['NoDashii', 'Vortox', 'FangGu', 'Vigormortis', 'Witch', 'Mutant'],
-value: 
+value:
 `# Other: emerald_snv
 # Puzzle set during Aus Clocktower Con 2025
 You, Tesso, Beardy, Emerald, Alanna, Aero, Sam, Theo, Karen = range(9)
@@ -2697,10 +2781,9 @@ puzzle = Puzzle(
 name: 'emerald_tb',
 claims: ['Librarian', 'FortuneTeller', 'Virgin', 'Undertaker', 'Empath', 'Washerwoman', 'Butler', 'Soldier', 'Chef', 'Virgin', 'Investigator', 'Ravenkeeper'],
 hidden: ['Imp', 'Poisoner', 'Baron', 'Spy', 'ScarletWoman', 'Drunk'],
-value: 
+value:
 `# Other: emerald_tb
 # Puzzle set during Aus Clocktower Con 2025
-# Too slow to run in unittests, so start with underscore.
 (
     You, Reggie, Evin, Steve, BenB, Claire, Lachlan, Amy, Steffen,
     BenD, Jamie, Andy
@@ -2764,7 +2847,7 @@ puzzle = Puzzle(
 name: 'empty_template',
 claims: [],
 hidden: [''],
-value: 
+value:
 `# Other: empty_template
 # An empty puzzle template for you to populate
 
