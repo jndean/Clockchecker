@@ -9,7 +9,8 @@ def assert_solutions(
     testcase: unittest.TestCase,
     puzzle: Puzzle,
     solutions: tuple[tuple[Character, ...]],
-    conditions: Info| None = None,
+    condition: Callable[[State], bool] | None = None,
+    info_conditions: Info | None = None,
 ):
     predictions = list(solve(puzzle))
     prediction_chars = tuple(
@@ -21,9 +22,12 @@ def assert_solutions(
         for solution in solutions
     )
     testcase.assertEqual(sorted(prediction_chars), sorted(solutions_chars))
-    if conditions is not None:
+    if condition is not None:
         for prediction in predictions:
-            testcase.assertIsNot(conditions(prediction, 0), FALSE)
+            testcase.assertTrue(condition(prediction))
+    if info_conditions is not None:
+        for prediction in predictions:
+            testcase.assertIsNot(info_conditions(prediction, 0), FALSE)
 
 
 class NQTPuzzles(unittest.TestCase):
@@ -181,7 +185,7 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Investigator, Imp, Widow),),
-            conditions=CharAttrEq(D, 'target', B),
+            info_conditions=CharAttrEq(D, 'target', B),
         )
 
     def test_widow_self_poisones_with_no_ping(self):
@@ -212,10 +216,10 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Investigator, Imp, Widow),),
-            conditions=CharAttrEq(D, 'target', D),
+            info_conditions=CharAttrEq(D, 'target', D),
         )
 
-    def test_widow_goo_pings_not_allowed_if_widow_not_in_play(self):
+    def test_widow_good_pings_not_allowed_if_widow_not_in_play(self):
         You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
@@ -306,7 +310,7 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Poisoner, Widow, Leviathan),),
-            conditions=~CharAttrEq(C, 'target', C),
+            info_conditions=~CharAttrEq(C, 'target', C),
         )
 
 
@@ -424,7 +428,7 @@ class TestVirgin(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Virgin, Poisoner, Imp),),
-            conditions=CharAttrEq(C, 'target', B),
+            info_conditions=CharAttrEq(C, 'target', B),
         )
         You, B, C, D = range(4)
         puzzle = Puzzle(
@@ -601,7 +605,7 @@ class TestSlayer(unittest.TestCase):
             self,
             puzzle,
             solutions=((Slayer, Soldier, Pukka),),
-            conditions=CharAttrEq(C, 'target', You),
+            info_conditions=CharAttrEq(C, 'target', You),
         )
 
     def test_slayer_spent(self):
@@ -700,9 +704,12 @@ class TestBoffin(unittest.TestCase):
             hidden_self=[],
             category_counts=(1, 1, 1, 1),
         )
-        assert_solutions(self, puzzle, solutions=(
-            (Artist, Leviathan, Boffin, Recluse),
-        ))
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Boffin, Recluse),),
+            condition=lambda w: isinstance(w.players[B].boffin_ability, Slayer),
+        )
 
     def test_boffin_spent_slayer(self):
         You, B, C, D,= range(4)
@@ -754,9 +761,12 @@ class TestBoffin(unittest.TestCase):
             also_on_script=[Recluse],
             category_counts=(2, 0, 1, 1),
         )
-        assert_solutions(self, puzzle, solutions=(
-            (Artist, Imp, Boffin, Ravenkeeper),
-        ))
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, Boffin, Ravenkeeper),),
+            condition=lambda w: isinstance(w.players[B].boffin_ability, Recluse)
+        )
 
     def test_boffin_virgin(self):
         You, B, C, D,= range(4)
@@ -782,9 +792,12 @@ class TestBoffin(unittest.TestCase):
             also_on_script=[Virgin],
             category_counts=(2, 0, 1, 1),
         )
-        assert_solutions(self, puzzle, solutions=(
-            (Artist, Leviathan, Boffin, Ravenkeeper),
-        ))
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Boffin, Ravenkeeper),),
+            condition=lambda w: isinstance(w.players[B].boffin_ability, Virgin),
+        )
 
     def test_boffin_golem(self):
         You, B, C, D,= range(4)
@@ -807,11 +820,15 @@ class TestBoffin(unittest.TestCase):
             hidden_self=[],
             category_counts=(2, 0, 1, 1),
         )
-        assert_solutions(self, puzzle, solutions=(
-            (Artist, Leviathan, Boffin, Ravenkeeper),
-        ))
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Boffin, Ravenkeeper),),
+            condition=lambda w: isinstance(
+                w.players[C].character.inactive_ability, Golem
+            )
+        )
 
-    # def boffin_philo_philo_empath_wakes(self):
     def test_boffin_droisoned(self):
         You, B, C, D, E = range(5)
         puzzle = Puzzle(
@@ -840,9 +857,12 @@ class TestBoffin(unittest.TestCase):
             hidden_self=[],
             category_counts=(2, 1, 1, 1),
         )
-        assert_solutions(self, puzzle, solutions=(
-            (Artist, Imp, Boffin, Courtier, Butler),
-        ))
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, Boffin, Courtier, Butler),),
+            condition=lambda w: isinstance(w.players[B].boffin_ability, Golem)
+        )
 
     def test_boffin_on_drunk_demon(self):
         You, B, C, D = range(4)
@@ -869,6 +889,250 @@ class TestBoffin(unittest.TestCase):
             hidden_self=[],
             category_counts=(2, 0, 1, 1),
         )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, Boffin, Courtier),),
+            condition=lambda w: isinstance(w.players[B].boffin_ability, Golem)
+        )
+
+    def test_boffin_demon_wakes_until_spent(self):
+        # Fun one where, for Chambermaid info, the Demon must have spent their
+        # Boffin-NightWatchman ability N1 on the Boffin and neither reported it.
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Chambermaid)
+                    )},
+                ),
+                Player('B', claim=Butler),
+                Player('C', claim=Butler),
+                Player('D', claim=Chambermaid, night_info={
+                    1: Chambermaid.Ping(You, B, 1),
+                    2: Chambermaid.Ping(You, B, 0),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            also_on_script=[NightWatchman],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Boffin, Chambermaid),),
+            condition=lambda w: isinstance(
+                w.players[B].boffin_ability, NightWatchman
+            ),
+        )
+
+class TestNightWatchman(unittest.TestCase):
+
+    def test_good_choice_good_ping(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, NightWatchman)
+                        & IsCharacter(D, Chambermaid)
+                    )
+                }),
+                Player('B', claim=Empath),
+                Player('C', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(D)
+                }),
+                Player('D', claim=Chambermaid, night_info={
+                    1: [
+                        Chambermaid.Ping(You, C, 1),
+                        NightWatchman.Ping(C),
+                    ],
+                    2: Chambermaid.Ping(You, C, 0),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
         assert_solutions(self, puzzle, solutions=(
-            (Artist, Imp, Boffin, Courtier),
+            (Artist, Leviathan, NightWatchman, Chambermaid),
         ))
+
+    def test_good_choice_evil_ping(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, NightWatchman)
+                        & IsCharacter(D, Chambermaid)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: NightWatchman.Ping(C),
+                }),
+                Player('C', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(B)
+                }),
+                Player('D', claim=Chambermaid, night_info={
+                    1: Chambermaid.Ping(You, C, 1),
+                    2: Chambermaid.Ping(You, C, 0),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, NightWatchman, Chambermaid),
+        ))
+
+    def test_evil_choice_no_ping(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Empath)
+                    )
+                }),
+                Player('B', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(C),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(1)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, Empath),
+        ))
+
+    def test_no_choice_evil_ping(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Empath)
+                    )
+                }),
+                Player('B', claim=Slayer, night_info={
+                    1: NightWatchman.Ping(C),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(1)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            also_on_script=[NightWatchman],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Leviathan, Empath),
+        ))
+
+    def test_no_choice_good_ping(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, NightWatchman)
+                    )
+                }),
+                Player('B', claim=Slayer),
+                Player('C', claim=NightWatchman, night_info={
+                    1: NightWatchman.Ping(B)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_good_choice_no_ping(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, NightWatchman)
+                    )
+                }),
+                Player('B', claim=Slayer),
+                Player('C', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(You)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_evil_choice_good_ping(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Boffin)
+                        & IsCharacter(D, Chambermaid)
+                    )},
+                ),
+                Player('B', claim=Slayer),
+                Player('C', claim=Butler),
+                Player('D', claim=Chambermaid, night_info={
+                    1: [
+                        Chambermaid.Ping(You, B, 1),
+                        NightWatchman.Ping(B),
+                    ],
+                    2: Chambermaid.Ping(You, B, 0),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Boffin],
+            hidden_self=[],
+            also_on_script=[NightWatchman],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Boffin, Chambermaid),),
+            condition=lambda w: isinstance(
+                w.players[B].boffin_ability, NightWatchman
+            ),
+        )
