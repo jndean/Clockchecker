@@ -2182,9 +2182,8 @@ name: 'NQT47',
 claims: ['Recluse', 'Investigator', 'Undertaker', 'Saint', 'Saint', 'Butler', 'Washerwoman', 'Chef', 'Ravenkeeper'],
 hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
 value: 
-`# Other: NQT47
+`# NQT47: We Have Evil Twin at Home
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1lq1bt7/weekly_puzzle_47_we_have_evil_twin_at_home/
-
 You, Olivia, Steph, Josh, Sula, Oscar, Jasmine, Tom, Fraser = range(9)
 puzzle = Puzzle(
     players=[
@@ -2220,9 +2219,8 @@ name: 'NQT48',
 claims: ['Mathematician', 'Chambermaid', 'VillageIdiot', 'VillageIdiot', 'Juggler', 'Golem', 'Puzzlemaster', 'Artist'],
 hidden: ['Leviathan', 'Xaan', 'Poisoner'],
 value: 
-`# Other: NQT48
+`# NQT48: Solving for X
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ltxd8a/weekly_puzzle_48_solving_for_x/
-
 You, Matthew, Olivia, Jasmine, Fraser, Sula, Dan, Tom = range(8)
 puzzle = Puzzle(
     players=[
@@ -2273,9 +2271,8 @@ name: 'NQT49',
 claims: ['Washerwoman', 'Librarian', 'Chef', 'Recluse', 'Empath', 'Saint', 'Undertaker', 'FortuneTeller'],
 hidden: ['Riot', 'Poisoner', 'Baron', 'Drunk'],
 value: 
-`# Other: NQT49
-# URL: TODO
-
+`# NQT49: Bastille Day
+# https://www.reddit.com/r/botc/comments/1lzoqct/weekly_puzzle_49_bastille_day/
 You, Sula, Matthew, Adam, Tom, Oscar, Fraser, Anna = range(8)
 puzzle = Puzzle(
     players=[
@@ -2322,9 +2319,9 @@ name: 'NQT50',
 claims: ['Knight', 'Librarian', 'Clockmaker', 'Investigator', 'Juggler', 'Artist', 'Juggler', 'Artist', 'Clockmaker', 'Librarian', 'Knight', 'Investigator'],
 hidden: ['Leviathan', 'Goblin', 'Drunk'],
 value: 
-`# Other: NQT50
-# TODO: URL
-
+`# NQT50: Art Imitates Life, Life Imitates Art
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1m6a7k1/weekly_puzzle_50_art_imitates_life_life_imitates/
+# Notes: Two games, each with an Artist asking about the other game
 Dan, Fraser, Tom, Sula, Josh, Olivia = range(6)
 puzzle_a = Puzzle(
     players=[
@@ -2385,7 +2382,6 @@ puzzle_b = Puzzle(
         Player('Steph', claim=Investigator, night_info={
             1: Investigator.Ping(Anna, Oscar, Goblin)
         }),
-        
     ],
     hidden_characters=[Leviathan, Goblin, Drunk],
     player_zero_is_you=False,
@@ -2576,7 +2572,7 @@ claims: ['Washerwoman', 'Empath', 'Undertaker', 'Slayer', 'Ravenkeeper', 'Invest
 hidden: ['Imp', 'ScarletWoman', 'Spy', 'Drunk'],
 value: 
 `# Other: nqt_sw_test
-# A discord user requested a puzzle requiring a SW to catch an Imp, 
+# A discord user requested a puzzle requiring a SW to catch an Imp,
 # NQT kindly obliged with this test case.
 You, Tom, Fraser, Aoife, Dan, Adam, Jasmine, Matthew = range(8)
 puzzle = Puzzle(
