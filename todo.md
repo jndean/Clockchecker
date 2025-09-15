@@ -12,14 +12,14 @@
 
 - GOOD: Make Player.character private (Player.\_character?) and any time something wants to access player's character it should call player.get_character(CharacterType) with the expected character type. (Maybe it can call with None explicitly to get the root character?). This can then recurse into wrapped characters and return the instance of the ability that is expected
 
- - To support lying outsiders (or SnakeCharmers) who eventually become the Demon, make very Outsider (and SC) inherit a run_setup that spawns a world where they are a liar and a world where they are not. On final day, assert no liars remain in the game (i.e., all have become demons).
-
+ - To support lying outsiders (or SnakeCharmers) who eventually become the Demon, make very Outsider (and SC) inherit a run_setup that spawns a world where they are a good_liar and a world where they are not. On final day, assert no good_liars remain in the game (i.e., all have become demons).
+ 
 - Recent rule change means there can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet. 
+
+ - An interesing test case: Pukka poisoned themselves, we have a few nights of no death, then they Boffin-Monk release themselves and start killing again.
 
 - Seperately track night number and a character's personal night number
   e.g. so that a Chef created on night 3 will register as waking up. Partially donethis, but need to go through each character to check they respect the correctnight number. I think in general "each night*" refers to true game night number,whereas "you start knowing" means your personal first night.
-
- - Could easily(?) filter out worlds where a player has a ping not in line with their wake_pattern
 
  - Several characters directly access attributes on a player's character (e.g., FortuneTeller.Ping accessed state.players[me].character.redherring) which doesn't play nicely when wrapped by other characters (such as Philo wrapping their chosen ability, or, in the extreme, a Hermit wrapping a Drunk wrapping a Philosopher wrapping a Drunklike wrapping their chosen ability :D). Possibly these need to go through a more serious API that can be passed through to wrapped abilities. I have implemented a one-off passthrough for some common attributes like `character.spent`, see Philo. 
 

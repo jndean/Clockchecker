@@ -46,7 +46,7 @@ const characterSamples = {
     "Outsiders": [
         { name: "Butler", value: "Player('Hannah', claim=Butler),\n"},
         { name: "Drunk", value: "Player('Dim', claim=Drunk),\n"},
-        { name: "Golem", value: "Player('Rocket', claim=Golem),\n# For Golem punch, put Dies(player=Josh, after_nominated_by=Rocket)\n"},
+        { name: "Golem", value: "Player('Rocket', claim=Golem),\n# For Golem punch, put Dies(player=Josh, after_nominated_by=Rocket) in day_events\n"},
         { name: "Hermit", value: "# Hermit.set_outsiders(Saint, Recluse, Butler)\nPlayer('Nicola', claim=Hermit),\n"},
         { name: "Klutz", value: "Player('Olivia', claim=Klutz, day_info={\n    2: Klutz.Choice(Adam),\n}),\n"},
         { name: "Lunatic", value: "Player('Tim', claim=Lunatic),\n"},

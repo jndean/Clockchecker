@@ -678,7 +678,7 @@ class Boffin(Character):
             demon.boffin_ability if self.inactive_ability is None
             else self.inactive_ability
         )
-        return f'Boffin (gives {ability.__name__} ability to {demon.name})'
+        return f'Boffin ({demon.name} += {ability.__name__})'
 
 @dataclass
 class Butler(Character):

@@ -160,13 +160,13 @@ class Player:
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
-        ret = ' '.join(
-            self.character_history 
-            + [self.character._world_str(state)]
-        )
+        items = self.character_history + [self.character._world_str(state)]
+        if hasattr(self, 'boffin_ability'):
+            boffin_repr = self.boffin_ability._world_str(state)
+            items.append(f'with Boffin[{boffin_repr}]')
         if self.is_dead:
-            ret += ' 💀'
-        return ret
+            items.append('💀')
+        return ' '.join(items)
 
     def __post_init__(self):
         self.character = self.claim()
