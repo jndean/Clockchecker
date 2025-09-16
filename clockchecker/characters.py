@@ -1216,7 +1216,7 @@ class FangGu(GenericDemon):
             wouldnt_jump = already_jumped or (is_outsider is not info.TRUE)
             fails_jump = (
                 fanggu.character.safe_from_attacker(state, me, me)  # Wouldn't catch Boffin Soldier...
-                or target_player.safe_from_attacker(state, target, me)
+                or target_player.character.safe_from_attacker(state, target, me)
             )
             # 3. The normal kill world. This includes the case where they can't
             # jump due to other player's abilities.
@@ -3604,11 +3604,7 @@ class Vigormortis(GenericDemon):
                     new_vig.maybe_activate_effects(ss2, me)
                     new_vig.killed_minions.append(target)
                     new_vig.poisoned_tf.append(poison_candidate)
-                    if state._is_world():
-                        print('POISONING?', poison_candidate)
-                    if self.effects_active:
-                        if state._is_world():
-                            print('POISONING', poison_candidate)
+                    if new_vig.effects_active:
                         ss2.players[poison_candidate].droison(ss2, me)
                     yield ss2
 
@@ -3616,9 +3612,6 @@ class Vigormortis(GenericDemon):
         # TODO: Possibly remove both these things. I think maybe a reactivated
         # vigormortis doesn't reanimate dead minions (or repoison their 
         # neighbours?) but I'm on a plane with no wifi right now so can't check.
-        if state._is_world():
-            print('ACTIVATING VIGORMORTIS')
-            print(self.poisoned_tf)
         for target in self.poisoned_tf:
             state.players[target].droison(state, me)
         for minion in self.killed_minions:

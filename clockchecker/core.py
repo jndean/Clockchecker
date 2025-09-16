@@ -30,7 +30,7 @@ from .info import PlayerID, Info
 _DEBUG = os.environ.get('DEBUG', False)
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
-    # (43519, 5, 8, 3, 11, 4, 8, 3, 3, 0, 3, 0, 4),
+    # (45, 0, 0, 3, 1, 3, 3),
 ]
 
 
@@ -882,7 +882,7 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
             )
         if not world.begin_game(puzzle.allow_good_double_claims):
             continue
-    
+
         # Chains together a big ol' stack of generators corresponding to each
         # possible action of each player, forming a pipeline through which
         # possible world states flow. Only valid worlds are able to reach the

@@ -2498,6 +2498,60 @@ puzzle = Puzzle(
     hidden_characters=[Imp, Baron, Poisoner, ScarletWoman, Spy, Drunk],
     hidden_self=[Drunk],
 )`
+}, {
+name: 'NQT53',
+claims: ['Artist', 'Klutz', 'SnakeCharmer', 'Juggler', 'Clockmaker', 'Dreamer', 'Oracle', 'Mathematician'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+value:
+`# NQT53: Let's Do the Time Warp Again
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1ndehkk/weekly_puzzle_53_lets_do_the_time_warp_again/
+You, Sarah, Josh, Olivia, Tim, Aoife, Fraser, Jasmine = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Artist, day_info={
+            2: Artist.Ping(~IsCategory(Sarah, DEMON))
+        }),
+        Player('Sarah', claim=Klutz),
+        Player('Josh', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Fraser),
+            2: SnakeCharmer.Choice(Sarah),
+        }),
+        Player('Olivia', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    Aoife: Dreamer,
+                    Tim: Mutant,
+                    Fraser: Mutant,
+                    Sarah: Vortox,
+                })
+            },
+            night_info={2: Juggler.Ping(2)}
+        ),
+        Player('Tim', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(4)
+        }),
+        Player('Aoife', claim=Dreamer, night_info={
+            1: Dreamer.Ping(Olivia, Mutant, Witch),
+        }),
+        Player('Fraser', claim=Oracle, night_info={
+            2: Oracle.Ping(0),
+            3: Oracle.Ping(1),
+        }),
+        Player('Jasmine', claim=Mathematician, night_info={
+            1: Mathematician.Ping(2),
+        }),
+    ],
+    day_events={
+        1: Execution(Aoife),
+        2: [
+            Dies(player=Josh, after_nominating=Tim),
+            Execution(Olivia),
+        ],
+    },
+    night_deaths={2: Jasmine, 3: You},
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    hidden_self=[],
+)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',

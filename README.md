@@ -263,7 +263,7 @@ I record most previously solved puzzles so that they can be run as unit tests du
 ```bash
 python -m unittest
 ```
-Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on rather than efficient to run. At time of writing the above unittest command solves 54 puzzles in 18.2 seconds.
+Clockchecker is written purely in Python (3.13), because it is supposed to be fun to work on rather than efficient to run. At time of writing the above unittest command solves 61 NQT puzzles in 19.7 seconds.
 
 ## Example Character Implementations
 The hope is for characters to be easy to write, easy to read, and easy to reason over. TPI is determined to make this goal unattainable. That said, at least _some_ characters fit quite well in the clockchecker framework; some example characters taken from the `characters.py` file are below.
