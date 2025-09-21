@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, TypeAlias
+from typing import Callable
 import unittest
 
 from clockchecker import *
@@ -35,7 +35,7 @@ def puzzle_NQT1():
                     DrunkBetweenTownsfolk()
                 ),
                 3: Savant.Ping(
-                    IsCategory(Tim, MINION) | IsCategory(Sula, MINION),
+                    IsCategory(Tim, Minion) | IsCategory(Sula, Minion),
                     ~IsInPlay(Noble)
                 ),
             }),
@@ -395,9 +395,9 @@ def puzzle_NQT7():
                         IsInPlay(VillageIdiot)
                     ]),
                     ExactlyN(N=2, args=[
-                        IsCategory(Oscar, TOWNSFOLK),
-                        IsCategory(Anna, TOWNSFOLK),
-                        IsCategory(Tim, TOWNSFOLK)
+                        IsCategory(Oscar, Townsfolk),
+                        IsCategory(Anna, Townsfolk),
+                        IsCategory(Tim, Townsfolk)
                     ]),
                 ),
             }),
@@ -498,8 +498,8 @@ def puzzle_NQT9():
                 3: Balloonist.Ping(You),
             }),
             Player('Oscar', claim=Gossip, day_info={
-                1: Gossip.Gossip(IsCategory(Fraser, DEMON)),
-                2: Gossip.Gossip(IsCategory(Anna, DEMON)),
+                1: Gossip.Gossip(IsCategory(Fraser, Demon)),
+                2: Gossip.Gossip(IsCategory(Anna, Demon)),
             }),
             Player('Josh', claim=Knight, night_info={
                 1: Knight.Ping(Fraser, Oscar)
@@ -1962,7 +1962,7 @@ def puzzle_NQT41():
             }),
             Player('Katharine', claim=PoppyGrower),
             Player('Chris', claim=Artist, day_info={
-                1: Artist.Ping(~IsCategory(Riley, TOWNSFOLK)),
+                1: Artist.Ping(~IsCategory(Riley, Townsfolk)),
             }),
         ],
         day_events={
@@ -2298,8 +2298,8 @@ def puzzle_NQT46():
                 2: Chambermaid.Ping(Matthew, Aoife, 2),
             }),
             Player('Aoife', claim=Gossip, day_info={
-                1: Gossip.Gossip(IsCategory(Adam, TOWNSFOLK)),
-                2: Gossip.Gossip(IsCategory(Matthew, DEMON)),
+                1: Gossip.Gossip(IsCategory(Adam, Townsfolk)),
+                2: Gossip.Gossip(IsCategory(Matthew, Demon)),
             }),
             Player('Jasmine', claim=Princess),
             Player('Josh', claim=Gambler, night_info={
@@ -2546,7 +2546,7 @@ def puzzle_NQT50():
         hidden_self=[],
     )
 
-    anna_ping = Artist.Ping(~IsCategory(Tom, TOWNSFOLK))
+    anna_ping = Artist.Ping(~IsCategory(Tom, Townsfolk))
     olivia_ping = Artist.Ping(
         IsCharacter(Sarah, Goblin)
         | IsCharacter(Anna, Goblin)
@@ -2673,7 +2673,7 @@ def puzzle_NQT53():
     puzzle = Puzzle(
         players=[
             Player('You', claim=Artist, day_info={
-                2: Artist.Ping(~IsCategory(Sarah, DEMON))
+                2: Artist.Ping(~IsCategory(Sarah, Demon))
             }),
             Player('Sarah', claim=Klutz),
             Player('Josh', claim=SnakeCharmer, night_info={
@@ -2708,7 +2708,7 @@ def puzzle_NQT53():
         day_events={
             1: Execution(Aoife),
             2: [
-                Dies(player=Josh, after_nominating=Tim),
+                Dies(player=Josh, after_nominating=True),
                 Execution(Olivia),
             ],
         },
@@ -2879,6 +2879,7 @@ def puzzle_ali_adversarial2():
 def puzzle_nqt_sw_test():
     # A discord user requested a puzzle requiring a SW to catch an Imp,
     # NQT kindly obliged with this test case.
+    # https://discord.com/channels/569683781800296501/854891541969109033/1395410749114941451
     You, Tom, Fraser, Aoife, Dan, Adam, Jasmine, Matthew = range(8)
     puzzle = Puzzle(
         players=[
@@ -2919,6 +2920,182 @@ def puzzle_nqt_sw_test():
     )
     return PuzzleDef(puzzle, solutions)
 
+def _puzzle_nqt_snv_test1():
+    # NQT posts 4 test SnV puzles in discord
+    # https://discord.com/channels/569683781800296501/854891541969109033/1414301215373791242
+
+    You, Josh, Tim, Olivia, Matthew, Oscar, Fraser, Aoife = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Tim, Artist, NoDashii),
+            }),
+            Player('Josh', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Fraser),
+                2: SnakeCharmer.Choice(Olivia),
+                3: SnakeCharmer.Choice(Matthew),
+            }),
+            Player('Tim', claim=Artist, day_info={
+                2: Artist.Ping(IsInPlay(FangGu))
+            }),
+            Player('Olivia', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        You: NoDashii,
+                        Tim: Witch,
+                        Matthew: Mutant,
+                        Oscar: Mathematician,
+                        Fraser: Witch
+                    })
+                },
+                night_info={2: Juggler.Ping(3)}
+            ),
+            Player('Matthew', claim=Klutz),
+            Player('Oscar', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+                2: Mathematician.Ping(2),
+                3: Mathematician.Ping(1),
+            }),
+            Player('Fraser', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+            }),
+            Player('Aoife', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(3)
+            }),
+        ],
+        day_events={
+            1: Execution(You),
+            2:[
+                Dies(player=Olivia, after_nominating=True),
+                Execution(Fraser),
+            ],
+        },
+        night_deaths={2: Aoife, 3: Tim},
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Dreamer, SnakeCharmer, Artist, Witch, Klutz, Mutant, Oracle, FangGu),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def _puzzle_nqt_snv_test2():
+    # NQT posts 4 test SnV puzles in discord
+    # https://discord.com/channels/569683781800296501/854891541969109033/1414301215373791242
+
+    You, Steph, Tom, Olivia, Fraser, Anna, Josh, Aoife = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(3)
+            }),
+            Player('Steph', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Tom: Witch,
+                        Fraser: Artist,
+                        Anna: Vortox,
+                        Josh: Oracle,
+                    })
+                },
+                night_info={2: Juggler.Ping(4)}
+            ),
+            Player('Tom', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Aoife),
+                2: SnakeCharmer.Choice(Fraser),
+            }),
+            Player('Olivia', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+            }),
+            Player('Fraser', claim=Artist, day_info={
+                3: Artist.Ping(IsInPlay(NoDashii))
+            }),
+            Player('Anna', claim=Klutz),
+            Player('Josh', claim=Oracle, night_info={
+                2: Oracle.Ping(0),
+            }),
+            Player('Aoife', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Steph, Juggler, FangGu),
+                2: Dreamer.Ping(You, Mutant, NoDashii),
+            }),
+        ],
+        day_events={
+            1: Execution(You),
+            2:[
+                Dies(player=Josh, after_nominating=True),
+                Execution(Tom),
+            ],
+        },
+        night_deaths={2: Olivia, 3: Aoife},
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Clockmaker, Mutant, SnakeCharmer, Mathematician, Artist, Vortox, Witch,
+            Dreamer),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def _puzzle_nqt_uncommon_vig_solution():
+    # NQT posts an example to Discord of an elusive puzzle where Vig is the solution.
+    # https://discord.com/channels/569683781800296501/854891541969109033/1416755128727371787
+
+    You, Olivia, Fraser, Matthew, Sarah, Tom, Adam, Dan = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Fraser, Tom, same=True),
+            }),
+            Player('Olivia', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(4)
+            }),
+            Player('Fraser', claim=Dreamer, night_info={
+                1: Dreamer.Ping(You, Seamstress, NoDashii),
+                2: Dreamer.Ping(Tom, Juggler, Witch),
+            }),
+            Player('Matthew', claim=Artist, day_info={
+                1: Artist.Ping(~IsCategory(Olivia, Townsfolk))
+            }),
+            Player('Sarah', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+            }),
+            Player('Tom', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        You: Seamstress,
+                        Olivia: Mutant,
+                        Fraser: Vigormortis,
+                        Sarah: Oracle,
+                        Dan: FangGu,
+                    })
+                },
+                night_info={2: Juggler.Ping(0)}
+            ),
+            Player('Adam', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+            }),
+            Player('Dan', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Adam),
+                2: SnakeCharmer.Choice(Fraser),
+                3: SnakeCharmer.Choice(Tom),
+            }),
+        ],
+        day_events={
+            1: Execution(Matthew),
+            2: [
+                Dies(player=Fraser, after_nominating=True),
+                Execution(Sarah),
+            ],
+        },
+        night_deaths={2: Adam, 3: You},
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Seamstress, Vigormortis, Dreamer, Artist, Oracle, Juggler, Witch,
+            SnakeCharmer),
+    )
+    return PuzzleDef(puzzle, solutions)
 
 def puzzle_emerald_snv():
     # Puzzle set during Aus Clocktower Con 2025
@@ -2971,7 +3148,7 @@ def puzzle_emerald_snv():
             ),
             Player('Theo', claim=Savant, day_info={
                 1: Savant.Ping(
-                    IsCategory(Karen, OUTSIDER) ^ IsCategory(Sam, OUTSIDER),
+                    IsCategory(Karen, Outsider) ^ IsCategory(Sam, Outsider),
                     IsInPlay(Lunatic),  # TODO: Don't support Cerenovus
                 ),
                 2: Savant.Ping(

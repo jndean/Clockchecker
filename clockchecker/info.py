@@ -8,7 +8,7 @@ import itertools
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .characters import Character
+    from .characters import Category, Character
     from .core import State
     from .events import Event
 
@@ -197,19 +197,19 @@ class IsCharacter(Info):
     character: type[Character]
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        if self.character.category in player.get_misreg_categories(state):
+        if issubclass(self.character, player.get_misreg_categories(state)):
             return MAYBE
         return STBool(type(player.character) is self.character)
 
 @dataclass
 class IsCategory(Info): 
     player: PlayerID
-    category: characters.Categories
+    category: Category
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
         if self.category in player.get_misreg_categories(state):
             return MAYBE
-        return STBool(player.character.category is self.category)
+        return STBool(isinstance(player.character, self.category))
 
 @dataclass
 class CharAttrEq(Info):
@@ -317,7 +317,7 @@ def tf_candidates_in_direction(
     candidates = []
     for step in range(1, N):
         player = (src + direction * step) % N
-        is_tf = IsCategory(player, characters.TOWNSFOLK)(state, src)
+        is_tf = IsCategory(player, characters.Townsfolk)(state, src)
         if is_tf is not FALSE:
             candidates.append(player)
         if is_tf is TRUE:
@@ -388,12 +388,10 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
             ret.append(f'{field.name}={str(value)}')
         elif type_ == 'PlayerID':
             ret.append(names[value])
-        elif type_ in 'info.Info':
+        elif type_ == 'info.Info':
             ret.append(pretty_print(value, names))
-        elif type_ == 'type[Character]':
+        elif type_ in ('type[Character]', 'Category'):
             ret.append(value.__name__)
-        elif type_ == 'characters.Categories':
-            ret.append(value.name)
         elif type_ == 'int':
             ret.append(str(value))
         elif type_.startswith('Sequence'):
@@ -422,8 +420,8 @@ class DrunkBetweenTownsfolk(Info):
             if found_drunk is FALSE:  # Allow MAYBE
                 continue
             tf_neighbours = (
-                IsCategory((player - 1) % N, characters.TOWNSFOLK)(state, src) &
-                IsCategory((player + 1) % N, characters.TOWNSFOLK)(state, src)
+                IsCategory((player - 1) % N, characters.Townsfolk)(state, src) &
+                IsCategory((player + 1) % N, characters.Townsfolk)(state, src)
             )
             result |= found_drunk & tf_neighbours
         return result
@@ -437,7 +435,7 @@ class LongestRowOfTownsfolk(Info):
     maximum: int = 999
     def __call__(self, state: State, src: PlayerID) -> STBool:
         townsfolk = [
-            IsCategory(player, characters.TOWNSFOLK)(state, src)
+            IsCategory(player, characters.Townsfolk)(state, src)
             for player in range(len(state.players))
         ]
         assert not any(x is MAYBE for x in townsfolk), (

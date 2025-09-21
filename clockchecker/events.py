@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .characters import Character
     from .core import State, StateGen
     from .info import PlayerID
 
@@ -74,6 +75,12 @@ class ExecutionByST(Execution):
         else:
             raise NotImplementedError("TODO: Madness breaks etc.")
 
+    def __post_init__(self):
+        # Common error to put a bool here.
+        assert isinstance(self.after_nominating, core.PlayerID), (
+            "ExecutionByST.after_nominating should be a PlayerID."
+        )
+
 
 @dataclass
 class UneventfulNomination(Event):
@@ -111,8 +118,8 @@ class Dies(Event):
     after_nominated_by: PlayerID | None = None
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        dying = state.players[self.player]
         if self.after_nominating:
+            dying = state.players[self.player]
             if (witch := getattr(dying, 'witch_cursed', None)) is not None:
                 dying.character.death_explanation = f"cursed by {witch}"
                 yield from dying.character.killed(state, self.player)
@@ -122,6 +129,12 @@ class Dies(Event):
                 yield from characters.Riot.day_three_nomination(state, self)
             elif (golem := nominator.get_ability(characters.Golem)) is not None:
                 yield from golem.nominates(state, self)
+
+    def __post_init__(self):
+        # Common error to put a PlayerID here.
+        assert isinstance(self.after_nominating, bool), (
+            "Dies.after_nominating should be a bool."
+        )
 
 class NightEvent:
     """

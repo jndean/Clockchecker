@@ -137,7 +137,7 @@ class Player:
     def get_misreg_categories(
         self,
         state: State,
-    ) -> tuple[characters.Categories]:
+    ) -> tuple[characters.Category]:
         """
         Get the Categories this Player can misregister as. Recurses into wrapped
         characters, and handles droisoning, including awkward droisoned
@@ -511,7 +511,7 @@ class State:
         """Called immediately after a player died."""
         dead_character = self.players[dead_player_id].character
         if (
-            dead_character.category is characters.DEMON
+            isinstance(dead_character, characters.Demon)
             and self.check_game_over()
         ):
             return
@@ -520,7 +520,7 @@ class State:
     def check_game_over(self) -> bool:
         # TODO: Check evil win condition? Doesn't come up much when solving...
         all_demons_dead = not any(
-            p.character.category is characters.DEMON and not p.is_dead
+            isinstance(p.character, characters.Demon) and not p.is_dead
             for p in self.players
         )
         no_evil_twin = not any(
@@ -611,9 +611,9 @@ class Puzzle:
             ]
         self.demons, self.minions, self.hidden_good = [], [], []
         for character in hidden_characters:
-            if character.category is characters.DEMON:
+            if issubclass(character, characters.Demon):
                 self.demons.append(character)
-            elif character.category is characters.MINION:
+            elif issubclass(character, characters.Minion):
                 self.minions.append(character)
             else:
                 self.hidden_good.append(character)
@@ -759,10 +759,10 @@ class Puzzle:
                     f"{character.__name__} can't be in hidden_good"
                 )
         for character in self.demons:
-            if character.category is not characters.DEMON:
+            if not issubclass(character, characters.Demon):
                 raise ValueError(f'{character.__name__} is not a Demon')
         for character in self.minions:
-            if character.category is not characters.MINION:
+            if not issubclass(character, characters.Minion):
                 raise ValueError(f'{character.__name__} is not a Minion')
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
@@ -826,9 +826,9 @@ def _check_valid_character_counts(
     bounds = ((T, T), (O, O), (M, M), (D, D))
     for character in setup:
         bounds = character.modify_category_counts(bounds)
-    actual_counts = Counter(character.category for character in setup)
+    actual_counts = Counter(character.get_category() for character in setup)
 
-    for (lo, hi), category in zip(bounds, characters.Categories):
+    for (lo, hi), category in zip(bounds, characters.ALL_CATEGORIES):
         if not lo <= actual_counts[category] <= hi:
             return False
     return True
@@ -877,8 +877,8 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         world = puzzle.state_template.fork(debug_idx)
         for liar, position in zip(liar_characters, liar_positions):
             world.players[position].character = liar()
-            world.players[position].is_evil = liar.category in (
-                characters.MINION, characters.DEMON
+            world.players[position].is_evil = issubclass(
+                liar, (characters.Minion, characters.Demon)
             )
         if not world.begin_game(puzzle.allow_good_double_claims):
             continue
