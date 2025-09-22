@@ -1974,13 +1974,38 @@ class Mutant(Outsider):
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_day(self, state: State, me: PlayerID) -> StateGen:
-        # Mutants never break madness in these puzzles
+        # This impl considers all information to be delivered on the final day,
+        # therefore it is only a problem for the Mutant to retroactively claim
+        # Outsider if it is still a sober and healthy Mutant on the final day.
+
         player = state.players[me]
-        if player.is_dead or not issubclass(player.claim, Outsider):
+        if player.is_dead or state.day != state.puzzle._max_day:
+            yield state
+        elif not issubclass(player.claim, Outsider):
             yield state
         elif self.is_droisoned(state, me):
             state.math_misregistration(me, info.MAYBE)  # Maybe ST is just nice
             yield state
+
+        # TODO: Currently we can only tick up Math on a poisoned mutant on final
+        # day, because we can't record what they were claiming in the past, only
+        # what they're claiming retroactively at endgame. Once we have a way of
+        # placing lying_good players, fork a lying good version of the Mutant
+        # who must still be alive at the end (rather than must be dead or
+        # changed) so then a non-lying Mutant claiming Outsider in the past can
+        # MAYBE uptick math when poisoned midgame.
+
+    def apply_death(
+        self,
+        state: State,
+        me: PlayerID,
+        src: PlayerID | None = None,
+    ) -> StateGen:
+        for substate in super().apply_death(state, me, src):
+            # Good dead Mutants claim Mutant
+            mutant = substate.players[me]
+            if mutant.claim is Mutant or info.behaves_evil(substate, me):
+                yield substate
 
 @dataclass
 class NightWatchman(Townsfolk):
@@ -3579,6 +3604,10 @@ class Vigormortis(GenericDemon):
             if hasattr(minion_char, 'vigormortised'):
                 del minion_char.vigormortised
                 # TODO: minion character change event should notify vigormortis.
+
+    def _world_str(self, state: State) -> str:
+        names = [state.players[target].name for target in self.poisoned_tf]
+        return f'Vigormortis (Poisoning {" & ".join(names)})'
 
 @dataclass
 class Virgin(Townsfolk):

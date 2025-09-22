@@ -2552,6 +2552,43 @@ puzzle = Puzzle(
     hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
+}, {
+name: 'NQT54',
+claims: ['Librarian', 'Recluse', 'Investigator', 'FortuneTeller', 'Empath', 'Chef', 'Ravenkeeper'],
+hidden: ['Imp', 'Poisoner', 'Spy', 'Baron', 'ScarletWoman', 'Drunk'],
+value:
+`# NQT54: Silence in the Library
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1nhoojc/weekly_puzzle_54_silence_in_the_library/
+You, Fraser, Oscar, Steph, Anna, Olivia, Matthew = range(7)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Librarian, night_info={
+            1: Librarian.Ping(None)
+        }),
+        Player('Fraser', claim=Recluse),
+        Player('Oscar', claim=Investigator, night_info={
+            1: Investigator.Ping(Fraser, Olivia, ScarletWoman)
+        }),
+        Player('Steph', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(Oscar, Anna, demon=False),
+            2: FortuneTeller.Ping(Steph, Olivia, demon=False),
+            3: FortuneTeller.Ping(Fraser, Steph, demon=False),
+        }),
+        Player('Anna', claim=Empath, night_info={
+            1: Empath.Ping(0),
+        }),
+        Player('Olivia', claim=Chef, night_info={
+            1: Chef.Ping(0)
+        }),
+        Player('Matthew', claim=Ravenkeeper, night_info={
+            3: Ravenkeeper.Ping(Oscar, Investigator)
+        }),
+    ],
+    day_events={1: Execution(Anna), 2: Execution(Olivia)},
+    night_deaths={2: You, 3: Matthew},
+    hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
+    hidden_self=[Drunk],
+)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',
@@ -2859,6 +2896,112 @@ puzzle = Puzzle(
         ],
     },
     night_deaths={2: Olivia, 3: Aoife},
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    hidden_self=[],
+)`
+}, {
+name: 'nqt_snv_test3',
+claims: ['Artist', 'Oracle', 'Klutz', 'SnakeCharmer', 'Clockmaker', 'Juggler', 'Mathematician', 'Dreamer'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+value:
+`# Other: nqt_snv_test3
+# NQT posts 4 test SnV puzles in discord
+# https://discord.com/channels/569683781800296501/854891541969109033/1414301215373791242
+
+You, Tim, Matthew, Dan, Aoife, Josh, Fraser, Hannah = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Artist, day_info={
+            2: Artist.Ping(~IsCategory(Josh, Demon))
+        }),
+        Player('Tim', claim=Oracle, night_info={
+            2: Oracle.Ping(1),
+        }),
+        Player('Matthew', claim=Klutz),
+        Player('Dan', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Tim),
+            2: SnakeCharmer.Choice(Josh),
+            3: SnakeCharmer.Choice(Matthew),
+        }),
+        Player('Aoife', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(4)
+        }),
+        Player('Josh', claim=Juggler,
+            day_info={1: Juggler.Juggle({Matthew: Mutant, Hannah: Dreamer})},
+            night_info={2: Juggler.Ping(1)},
+        ),
+        Player('Fraser', claim=Mathematician, night_info={
+            1: Mathematician.Ping(0),
+        }),
+        Player('Hannah', claim=Dreamer, night_info={
+            1: Dreamer.Ping(Dan, SnakeCharmer, NoDashii),
+            2: Dreamer.Ping(Tim, Oracle, Vigormortis),
+        }),
+    ],
+    day_events={
+        1: Execution(Fraser),
+        2:[
+            Dies(player=Hannah, after_nominating=True),
+            Execution(Tim),
+        ],
+    },
+    night_deaths={2: Aoife, 3: You},
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    hidden_self=[],
+)`
+}, {
+name: 'nqt_snv_test4',
+claims: ['SnakeCharmer', 'Dreamer', 'Klutz', 'Oracle', 'Clockmaker', 'Juggler', 'Artist', 'Mathematician'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+value:
+`# Other: nqt_snv_test4
+# NQT posts 4 test SnV puzles in discord
+# https://discord.com/channels/569683781800296501/854891541969109033/1414301215373791242
+
+You, Oscar, Jasmine, Fraser, Sarah, Matthew, Anna, Tim = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Jasmine),
+        }),
+        Player('Oscar', claim=Dreamer, night_info={
+            1: Dreamer.Ping(Sarah, Mutant, NoDashii),
+        }),
+        Player('Jasmine', claim=Klutz),
+        Player('Fraser', claim=Oracle, night_info={
+            2: Oracle.Ping(1),
+        }),
+        Player('Sarah', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(4)
+        }),
+        Player('Matthew', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    You: FangGu,
+                    Oscar: NoDashii,
+                    Jasmine: Klutz,
+                    Anna: FangGu,
+                    Tim: Mathematician,
+                })
+            },
+            night_info={2: Juggler.Ping(0)}
+        ),
+        Player('Anna', claim=Artist, day_info={
+            2: Artist.Ping(~IsCategory(Jasmine, Demon))
+        }),
+        Player('Tim', claim=Mathematician, night_info={
+            1: Mathematician.Ping(1),
+            2: Mathematician.Ping(1),
+        }),
+    ],
+    day_events={
+        1: Execution(You),
+        2:[
+            Dies(player=Anna, after_nominating=True),
+            Execution(Tim),
+        ],
+    },
+    night_deaths={2: Oscar, 3: Fraser},
     hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`

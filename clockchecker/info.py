@@ -406,6 +406,15 @@ def info_creator(info: Info) -> type[Character]:
     return getattr(characters, type(info).__qualname__.split('.')[0])
 
 
+def retracted(info: Info) -> Info:
+    """
+    A `retracted(Empath.Ping(0))` is one claimed at the time but retracted by
+    the final game state displayed in the Puzzle.
+    """
+    info.is_retracted = True
+    return info
+
+
 # ------------------ Custom Info For Specific Puzzles -------------------- #
 
 
