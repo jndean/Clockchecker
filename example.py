@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
 
     # This game was played on a TPI stream. We write the puzzle from Amy's
-    # perspective (i.e., player 1 (You) is actually Amy)
+    # perspective (i.e., player 0 (You) is actually Amy)
     You, Ethan, Barrow, Lyra, JC, Emerald, Sincerity, Eevee = range(8)
     puzzle = Puzzle(
         players=[
@@ -23,7 +23,7 @@ if __name__ == '__main__':
                 1: SnakeCharmer.Choice(Barrow),
             }),
             Player('Barrow', claim=Artist, day_info={
-                # Barrow didn't reall claim to have asked a question
+                # Barrow didn't really claim to have asked a question
             }),
             Player('Lyra', claim=Sage, night_info={
                 3: Sage.Ping(You, Eevee),

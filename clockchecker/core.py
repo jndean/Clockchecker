@@ -43,7 +43,7 @@ class Phase(enum.Enum):
     NIGHT = enum.auto()
     DAY = enum.auto()
     SETUP = enum.auto()
-   
+
 GLOBAL_PHASE_ORDERS = {
     Phase.NIGHT: characters.GLOBAL_NIGHT_ORDER,
     Phase.DAY: characters.GLOBAL_DAY_ORDER,
@@ -54,7 +54,7 @@ GLOBAL_PHASE_ORDERS = {
 @dataclass
 class Player:
     """
-    An instance of a player. 
+    An instance of a player.
     Character-specific info is stored in the character attribute, because
     characters can change, but players are forever.
     """
@@ -77,14 +77,14 @@ class Player:
         )
 
     def undroison(self, state: State, src: PlayerID) -> None:
-        self.droison_count -= 1 
+        self.droison_count -= 1
         self.character.maybe_activate_effects(
             state, self.id, characters.Reason.DROISON
         )
 
     def woke(self) -> None:
         self.woke_tonight = True
-    
+
     def get_ability(
         self,
         character_t: type[Character] | None,
@@ -166,6 +166,8 @@ class Player:
             items.append(f'with Boffin[{boffin_repr}]')
         if self.is_dead:
             items.append('💀')
+        if hasattr(self, 'speculative_liar'):
+            items.append('(behaves evil)')
         return ' '.join(items)
 
     def __post_init__(self):
@@ -193,7 +195,7 @@ class Player:
                     self.external_night_info[(night, character)].append(item)
 
         self.external_night_info = dict(self.external_night_info)
-    
+
     def _extract_info(self):
         # TODO: These should be created in Puzzle, not State, obviously.
         night_info, day_info = self.night_info, self.day_info
@@ -234,7 +236,7 @@ class State:
                 if player.claim in good_claims:
                     return False
                 good_claims.add(player.claim)
-        
+
         return True
 
     def fork(self, fork_id: int | None = None) -> State:
@@ -260,7 +262,7 @@ class State:
         if puzzle.user_interrupt is not None and puzzle.user_interrupt():
             raise InterruptedError('User requested solve stops')
         return ret
-    
+
     def get_night_info(
         self,
         character: type[Character],
@@ -268,7 +270,7 @@ class State:
         night: int,
     ):
         return self.puzzle._night_info[player].get((night, character), None)
-    
+
     def get_day_info(self, player: PlayerID):
         return self.puzzle._day_info[player].get(self.day, None)
 
@@ -363,7 +365,7 @@ class State:
             # corresponding to how many players have the active ability, and
             # handle players changing character mid-turn.
             yield from state.run_all_players_with_currently_acting_character()
-    
+
     @staticmethod
     def run_external_night_info(
         states: StateGen,
@@ -412,7 +414,7 @@ class State:
 
         # Check the right people have Died / Resurrected in the night
         currently_alive = [
-            info.IsAlive(player)(self, None) is info.TRUE
+            info.IsAlive(player)(self, None).is_true()
             for player in range(len(self.players))
         ]
         currently_alive_gt = copy(self.previously_alive)
@@ -431,9 +433,9 @@ class State:
         # Check good players are what they claim to be
         for player in self.players:
             if not (
-                player.character.is_liar 
-                or player.is_evil
-                or isinstance(player.character, player.claim)
+                isinstance(player.character, player.claim)
+                or player.character.is_liar
+                or info.behaves_evil(self, player.id)
             ):
                 return
 
@@ -451,7 +453,7 @@ class State:
             if not player.character.end_day(self, player.id):
                 return
         self.previously_alive = [
-            info.IsAlive(player)(self, None) is info.TRUE
+            info.IsAlive(player)(self, None).is_true()
             for player in range(len(self.players))
         ]
         self.current_phase = Phase.NIGHT
@@ -489,13 +491,13 @@ class State:
         for player_id, player in enumerate(self.players):
             if hasattr(player.character, "pre_death_in_town"):
                 self.pre_death_in_town_callback_players.append(player_id)
-    
+
     def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
         assert self.current_phase is Phase.NIGHT
         char = type(self.players[player].character)
         remaining_chars = self.puzzle.night_order[self.phase_order_index + 1:]
         return player in self.players_still_to_act or char in remaining_chars
-    
+
     def pre_death_in_town(self, dying_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
         if not self.pre_death_in_town_callback_players:
@@ -534,7 +536,7 @@ class State:
         # TODO: Mastermind day.
         game_over = all_demons_dead and no_evil_twin
         return game_over
-    
+
     def math_misregistration(
         self,
         player: PlayerID,
@@ -546,12 +548,15 @@ class State:
         an STBool being FALSE (e.g. a Ping from a character ability), that can
         be provided in `result`.
         """
-        if result is info.TRUE or player in self._math_misregisterers:
+        if result is info.STBool.TRUE or player in self._math_misregisterers:
             return
         self._math_misregistration_bounds[1] += 1
         self._math_misregisterers.add(player)
-        if result is None or result is info.FALSE:
+        if result is None or not result.is_maybe():
             self._math_misregistration_bounds[0] += 1
+
+    def exclude_player_from_math_tonight(self, player: PlayerID):
+        self._math_misregisterers.add(player)
 
     def __str__(self) -> str:
         ret = [f'World{self.debug_key if _DEBUG else ""}(']
@@ -567,7 +572,22 @@ class State:
             )
         ret.append(')')
         return '\n'.join(ret)
-    
+
+    def round_robin(self) -> StateGen:
+        """
+        Called once simulating of days and nights have finished, i.e., the
+        players do their final round robin. At this point any speculative liars
+        must have become 'concrete' liars, otherwise the speculation was
+        incorrect.
+        """
+        for player in self.players:
+            if not hasattr(player, 'speculative_liar'):
+                continue
+            del player.speculative_liar
+            if not info.behaves_evil(self, player.id):
+                return
+        yield self
+
     def _change_str(self) -> str:
         match self.current_phase:
             case Phase.DAY:
@@ -609,14 +629,17 @@ class Puzzle:
             self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
                 len(self.players)
             ]
-        self.demons, self.minions, self.hidden_good = [], [], []
+        self.demons, self.minions, self.hidden_good, self.speculative_liars = (
+            [], [], [], []
+        )
         for character in hidden_characters:
-            if issubclass(character, characters.Demon):
-                self.demons.append(character)
-            elif issubclass(character, characters.Minion):
-                self.minions.append(character)
-            else:
-                self.hidden_good.append(character)
+            collection = (
+                self.demons if issubclass(character, characters.Demon) else
+                self.minions if issubclass(character, characters.Minion) else
+                self.hidden_good if character.is_liar else
+                self.speculative_liars
+            )
+            collection.append(character)
         self._validate_inputs()
 
         self._max_day = max(
@@ -739,10 +762,11 @@ class Puzzle:
             [type(p.character) for p in self.players]
             + self.demons + self.minions
             + self.hidden_good + self.hidden_self
+            + self.speculative_liars
         )
         registered_characters = (
             characters.GLOBAL_NIGHT_ORDER
-            + characters.GLOBAL_DAY_ORDER 
+            + characters.GLOBAL_DAY_ORDER
             + characters.INACTIVE_CHARACTERS
         )
         for character in used_characters:
@@ -751,22 +775,9 @@ class Puzzle:
                     f'Character {character.__name__} has not been placed in the'
                     ' night order. Did you forget?'
                 )
-        
-        # Check valid choices of hidden good characters
-        for character in self.hidden_good:
-            if not character.is_liar:
-                raise ValueError(
-                    f"{character.__name__} can't be in hidden_good"
-                )
-        for character in self.demons:
-            if not issubclass(character, characters.Demon):
-                raise ValueError(f'{character.__name__} is not a Demon')
-        for character in self.minions:
-            if not issubclass(character, characters.Minion):
-                raise ValueError(f'{character.__name__} is not a Minion')
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
-    
+
     def __str__(self) -> str:
         ret = ['Puzzle(\n  \033[0;4mPlayers\033[0m']
         names = [player.name for player in self.players]
@@ -782,8 +793,9 @@ class Puzzle:
         ret.extend([
             '\n  \033[0;4mPossible Hidden Characters\033[0m',
             '    Other Players: [{}]'.format(", ".join(
-                character.__name__ for character in 
-                self.demons + self.minions + self.hidden_good
+                character.__name__ for character in
+                self.demons + self.minions +
+                self.hidden_good + self.speculative_liars
             )),
             f'    You: [{", ".join(c.__name__ for c in self.hidden_self)}]',
         ])
@@ -810,8 +822,9 @@ class Puzzle:
 
 def _check_valid_character_counts(
     puzzle: Puzzle,
-    liar_characters: Iterable[type[Character]],
-    liar_positions: Iterable[int],
+    liar_characters: Sequence[type[Character]],
+    liar_positions: Sequence[int],
+    speculative_liar_positions: Sequence[int],
 ) -> bool:
     """Check that the starting player category counts are legal."""
     setup = [p.claim for p in puzzle.players]
@@ -822,6 +835,13 @@ def _check_valid_character_counts(
             and liar not in puzzle.hidden_self
         ):
             return False
+    # TODO: Clean up speculative liar generation, it is rubbish.
+    if puzzle.player_zero_is_you and 0 in speculative_liar_positions:
+        return False
+    max_speculation = _setup_max_speculative_liars(setup, puzzle)
+    if len(speculative_liar_positions) > max_speculation:
+        return False
+
     T, O, M, D = puzzle.category_counts
     bounds = ((T, T), (O, O), (M, M), (D, D))
     for character in setup:
@@ -833,9 +853,36 @@ def _check_valid_character_counts(
             return False
     return True
 
+def _script_max_speculative_liars(script: Sequence[type[Character]]) -> int:
+    """
+    Compute the maximum number of players who might need to be
+    'speculative liars', i.e., they lie from the begining of the game because
+    they end up as evil.
+    """
+    total = 0
+    total += characters.FangGu in script  # FangGu jumps to a good player
+    # TODO: PitHag, Cerenovus go here.
+    return total
+
+def _setup_max_speculative_liars(
+    in_play: Sequence[type[Character]],
+    puzzle: Puzzle,
+) -> int:
+    """Max speculative liars for a given world setup."""
+    total = 0
+    # Since there's no PitHag Yet, require a FangGu and speculative Outsider
+    if characters.FangGu in in_play and any(
+        issubclass(x, characters.Outsider)
+        for x in puzzle.speculative_liars
+    ):
+        total += 1
+    # TODO: PitHag, Cerenovus stuff
+    return total
+
 
 def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
     """Generate all possible initial placements of the hidden roles."""
+    max_speculative_liars = _script_max_speculative_liars(puzzle.script)
     n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
     liar_combinations = it.product(
         it.combinations(puzzle.demons, n_demons),
@@ -846,15 +893,29 @@ def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
         it.chain(*[
             it.combinations(puzzle.hidden_good, i)
             for i in range(len(puzzle.hidden_good) + 1)
+        ]),
+        it.chain(*[
+            it.combinations(puzzle.speculative_liars, i)
+            for i in range(
+                min(max_speculative_liars, len(puzzle.speculative_liars)) + 1
+            )
         ])
     )
     player_ids = list(range(len(puzzle.players)))
     dbg_idx = 0
-    for demons, minions, hidden_good in liar_combinations:
-        liars = demons + minions + hidden_good
+    for demons, minions, hidden_good, speculations in liar_combinations:
+        liars = demons + minions + hidden_good + speculations
         for liar_positions in it.permutations(player_ids, len(liars)):
-            yield (liars, liar_positions, dbg_idx)
-            dbg_idx += 1
+            existing_spec_pos = liar_positions[len(liars)-len(speculations):]
+            for other_spec_pos in it.chain(*[
+                it.permutations(player_ids, i)
+                for i in range(max_speculative_liars + 1 - len(speculations))
+            ]):
+                if any(i in existing_spec_pos for i in other_spec_pos):
+                    continue
+                spec_pos = existing_spec_pos + other_spec_pos
+                yield (liars, liar_positions, spec_pos, dbg_idx)
+                dbg_idx += 1
 
 
 def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
@@ -867,10 +928,15 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         day: len(events) for day, events in puzzle.day_events.items()
     })
 
-    for liar_characters, liar_positions, debug_idx in liars_generator:
+    for (
+        liar_characters,
+        liar_positions,
+        speculation_positions,
+        debug_idx,
+    ) in liars_generator:
         # Sanity check character counts before creating a new world
         if not _check_valid_character_counts(
-            puzzle, liar_characters, liar_positions,
+            puzzle, liar_characters, liar_positions, speculation_positions,
         ):
             continue
         # Create the world and place the hidden characters
@@ -880,6 +946,8 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
             world.players[position].is_evil = issubclass(
                 liar, (characters.Minion, characters.Demon)
             )
+        for position in speculation_positions:
+            world.players[position].speculative_liar = True
         if not world.begin_game(puzzle.allow_good_double_claims):
             continue
 
@@ -902,6 +970,7 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
                     worlds = apply_all(worlds, 'run_event', (round_, event))
                 if round_ < puzzle._max_day or puzzle.finish_final_day:
                     worlds = apply_all(worlds, 'end_day')
+        worlds = apply_all(worlds, 'round_robin')
         yield from worlds
 
 
@@ -1011,6 +1080,6 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
 
     solutions = _solution_collecting_worker(solutions_queue, num_processes)
     yield from _filter_solutions(puzzle, solutions)
-        
+
     for worker in all_workers:
         worker.join()

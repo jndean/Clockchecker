@@ -22,14 +22,14 @@ from . import info
 """
 Implementing a Character Checklist:
  - Copy some other similar-ish character.
- - For basic info characters, just create a Ping class inheriting from 
+ - For basic info characters, just create a Ping class inheriting from
    Info and implement the __call__ method.
  - For more complex characters or characters who have to make choices that are
    not evidenced by a Ping, override the relevant character methods such as
    [modify_category_counts, run_night/day/setup, killed, executed, etc.].
  - For characetrs that do things publicly in the day, consider implementing an
    Event instead of a Ping.
- - When overriding the default methods for complex characters, remember to 
+ - When overriding the default methods for complex characters, remember to
    consider the desired behaviour of the new character if they are:
     - dead
     - droisoned
@@ -39,7 +39,7 @@ Implementing a Character Checklist:
     - vortoxed
     - vigormortised, exorcised
  - Remember to set or call the following as appropriately
-    - set `character.spent` 
+    - set `character.spent`
     - call `player.woke()` for Chambermaid if character uses using WakePattern.MANUAL
     - call `state.math_misregistration` for Mathematician counts
     - TODO: call `state.choose(target)` for Goon
@@ -70,7 +70,7 @@ DEFAULT_CATEGORY_COUNTS = {
 }
 
 # Rules for when a player can ping and what the Chambermaid should see.
-# Characters using MANUAL are responsible for rejecting worlds where pings are 
+# Characters using MANUAL are responsible for rejecting worlds where pings are
 # not on legal nights.
 class WakePattern(enum.Enum):
     NEVER = enum.auto()
@@ -104,20 +104,20 @@ class Character:
     @staticmethod
     def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
         """
-        Modify bounds of acceptable character counts. E.g. the Baron should 
+        Modify bounds of acceptable character counts. E.g. the Baron should
         override this method to increase the Outsider Min & Max and decrease
-        the Townsfolk Min & Max. Meanwhile the Balloonist should increment only 
+        the Townsfolk Min & Max. Meanwhile the Balloonist should increment only
         the Outsider Max and decrement only the Townsfolk Min.
         """
         return bounds
 
     def run_setup(self, state: State, player: PlayerID) -> StateGen:
         """
-        Create plausible worlds from the character's setup. E.g. the 
-        Fortune Teller creates one world per choice of red herring. The 
-        Marionette should just return (yield no candidate worlds) if it is not 
+        Create plausible worlds from the character's setup. E.g. the
+        Fortune Teller creates one world per choice of red herring. The
+        Marionette should just return (yield no candidate worlds) if it is not
         sat next to the demon.
-        This method is also called to set up a new instance of the character 
+        This method is also called to set up a new instance of the character
         if it is created mid game, so implementations should condition behaviour
         on the current game phase.
         """
@@ -125,7 +125,7 @@ class Character:
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """
-        Take the character's night action. Most basic info roles can just 
+        Take the character's night action. Most basic info roles can just
         inherit this default implementation and implement their own Pings to go
         in night_info.
         """
@@ -139,7 +139,7 @@ class Character:
     def end_day(self, state: State, me: PlayerID) -> bool:
         """
         Take dusk actions (e.g. poisoner stops poisoning).
-        Can return False to invalidate the world, e.g., Vortox uses this to 
+        Can return False to invalidate the world, e.g., Vortox uses this to
         reject worlds with no executions.
         """
         return True
@@ -155,7 +155,7 @@ class Character:
         return True
 
     def default_info_check(
-        self: Character, 
+        self: Character,
         state: State,
         me: PlayerID,
         even_if_dead: bool = False,
@@ -179,15 +179,20 @@ class Character:
             self.spent = True
 
         result = ping(state, me)
+
+        if result.st_lying():
+            state.math_misregistration(me)
+
         if state.vortox and isinstance(self, Townsfolk):
             state.math_misregistration(me)
-            return result is not info.TRUE
+            return not result.truth()
 
         if self.is_droisoned(state, me):
             if not getattr(self, 'self_droison', False):
                 state.math_misregistration(me, result)
             return True
-        return result is not info.FALSE
+
+        return result.not_false()
 
     def maybe_activate_effects(
         self,
@@ -196,10 +201,10 @@ class Character:
         reason: Reason | None = None,
     ) -> None:
         """
-        Effects that this character is having on other players. Needs to be 
+        Effects that this character is having on other players. Needs to be
         triggerable under one method so that e.g. a Poisoner dying at night can
         reactivate that Poisoner's current victim.
-        If a character doesn't want this wrapper logic, it can override this 
+        If a character doesn't want this wrapper logic, it can override this
         method rather than the _impl method.
         """
         player = state.players[me]
@@ -256,7 +261,7 @@ class Character:
         """
         Called when attacked at night, decides whether this causes death or not.
         This does not always imply 'me' was chosen by a player, e.g. see Gossip.
-        Characters who die to their own ability will be 'attacked' by 
+        Characters who die to their own ability will be 'attacked' by
         themselves, i.e., me == src.
         Remember to re-read the attacker properties on the yielded state in the
         calling method, because e.g. the Goon will create a state where the
@@ -328,6 +333,8 @@ class Character:
         they should use this method to handle cases of indirection where the
         ability is given to the current player by another player (i.e. Boffin).
         """
+        # TODO: If the boffin-granted ability wraps another ability, that sub-
+        # ability will not have the `ability_src` attribute.
         pid = me if (src := getattr(self, 'ability_src', None)) is None else src
         return state.players[pid].droison_count > 0
 
@@ -425,7 +432,7 @@ class Character:
 
     def _world_str(self, state: State) -> str:
         """
-        For printing nice output representations of worlds. E.g 
+        For printing nice output representations of worlds. E.g
         E.g. see Posoiner or Fortune Teller.
         """
         ret = type(self).__name__
@@ -470,9 +477,9 @@ class Acrobat(Townsfolk):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Die on droisoned player choice"""
-        acrobat = state.players[me]
-        if acrobat.is_evil:
+        if info.behaves_evil(state, me):
             raise NotImplementedError("Evil Acrobat")
+        acrobat = state.players[me]
         if (choice := state.get_night_info(Acrobat, me, state.night)) is None:
             yield state
         elif acrobat.is_dead:
@@ -562,8 +569,8 @@ class Balloonist(Townsfolk):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """
-        Override Reason: even though we don't need to assert the balloonist 
-        gets correct info when poisoned, we still need to take the action to 
+        Override Reason: even though we don't need to assert the balloonist
+        gets correct info when poisoned, we still need to take the action to
         record that the following day the balloonist may see anything.
 
         NOTE: this implementation has only 1 day of memory. I think it's ok?
@@ -572,8 +579,8 @@ class Balloonist(Townsfolk):
         ping = state.get_night_info(Balloonist, me, state.night)
         if (
             balloonist.is_dead
-            or balloonist.is_evil
             or ping is None
+            or info.behaves_evil(state, me)
         ):
             self.prev_category = None
             yield state; return
@@ -646,13 +653,13 @@ class Boffin(Minion):
 
         demon_ids = [
             player.id for player in state.players
-            if info.IsCategory(player.id, Demon)(state, me) is not info.FALSE
+            if info.IsCategory(player.id, Demon)(state, me).not_false()
             # and player.is_alive  # Not relevant during SETUP...
         ]
         abilities = [
             character for character in state.puzzle.script
             if issubclass(character, (Townsfolk, Outsider))
-            and info.IsInPlay(character)(state, me) is not info.TRUE
+            and info.IsInPlay(character)(state, me).not_true()
         ]
         assert len(abilities) and len(demon_ids)
         for demon_id, ability_t in itertools.product(demon_ids, abilities):
@@ -716,9 +723,9 @@ class Chambermaid(Townsfolk):
         count: int
         def __call__(self, state: State, src: PlayerID) -> STBool:
             valid_choices = (
-                self.player1 != src and self.player2 != src 
-                and info.IsAlive(self.player1)(state, src) is not info.FALSE
-                and info.IsAlive(self.player2)(state, src) is not info.FALSE
+                self.player1 != src and self.player2 != src
+                and info.IsAlive(self.player1)(state, src).not_false()
+                and info.IsAlive(self.player2)(state, src).not_false()
             )
             wake_count = sum(
                 player.woke_tonight
@@ -765,23 +772,29 @@ class Clockmaker(Townsfolk):
         steps: int
         def __call__(self, state: State, src: PlayerID) -> STBool:
             """
-            This implementation checks against the min distance over all 
-            minion-demon pairs, giving info.MAYBEs as appropriate. The phrase 
-            "The Demon" must give living demons priority over dead demons, so if 
+            This implementation checks against the min distance over all
+            minion-demon pairs, giving MAYBEs as appropriate. The phrase
+            "The Demon" must give living demons priority over dead demons, so if
             there are any living demons, all dead demons are ignored.
             """
             players = state.players
             N = len(players)
             minions, demons = (
                 list(filter(
-                    lambda x: x[1] is not info.FALSE,
+                    lambda x: x[1].not_false(),
                     [(i, info.IsCategory(i, cat)(state, src)) for i in range(N)]
                 ))
                 for cat in (Minion, Demon)
             )
-            ignore_dead_demons = any(not players[i].is_dead for i, _ in demons)
+            ignore_dead_demons = any(
+                info.IsAlive(pid)(state, src).is_true()
+                for pid, _ in demons
+            )
+            # TODO: This is not correct because ignore_dead_demons should depend
+            # on whether a misregistration has happened. E.g., consider the case
+            # where there is a living Recluse and dead-looking Zombuul.
 
-            correct_distance, too_close = info.FALSE, info.FALSE
+            correct_distance, too_close = info.STBool.FALSE, info.STBool.FALSE
             for demon_pos, is_demon in demons:
                 if players[demon_pos].is_dead and ignore_dead_demons:
                     continue
@@ -813,10 +826,11 @@ class Courtier(Townsfolk):
         character: type[Character]
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        courtier = state.players[me]
-        if courtier.is_evil:
+        if info.behaves_evil(state, me):
             # Yield all choices like a poisoner, plus the non-choice
             raise NotImplementedError("Todo: Evil Courtier")
+
+        courtier = state.players[me]
 
         choice = state.get_night_info(Courtier, me, state.night)
         if choice is None:
@@ -828,14 +842,13 @@ class Courtier(Townsfolk):
 
         valid_targets = [
             target for target in range(len(state.players))
-            if info.IsCharacter(target, choice.character)(state, me) 
-            is not info.FALSE
+            if info.IsCharacter(target, choice.character)(state, me).not_false()
         ]
         if self.is_droisoned(state, me):
             if valid_targets:
                 state.math_misregistration(me)
             yield state; return  # Shame!
-        
+
         for target in valid_targets:
             self.target = target
             new_state = state.fork()
@@ -864,7 +877,7 @@ class Courtier(Townsfolk):
 @dataclass
 class Dreamer(Townsfolk):
     """
-    Each night, choose a player (not yourself or Travellers): 
+    Each night, choose a player (not yourself or Travellers):
     you learn 1 good & 1 evil character, 1 of which is correct.
     """
     is_liar: ClassVar[bool] = False
@@ -969,7 +982,7 @@ class Drunklike(Character):
 @dataclass
 class Drunk(Drunklike, Outsider):
     """
-    You do not know you are the Drunk. 
+    You do not know you are the Drunk.
     You think you are a Townsfolk character, but you are not.
     """
     self_droison: bool = True
@@ -996,7 +1009,7 @@ class Empath(Townsfolk):
         def __call__(self, state: State, src: PlayerID) -> STBool:
             left, right = (info.get_next_player_who_is(
                 state,
-                lambda s, p: info.IsAlive(p)(s, src) is info.TRUE,
+                lambda s, p: info.IsAlive(p)(s, src).is_true(),
                 src,
                 clockwise,
             ) for clockwise in (True, False))
@@ -1021,9 +1034,10 @@ class Exorcist(Townsfolk):
         player: PlayerID
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        exorcist = state.players[me]
-        if exorcist.is_evil:
+        if info.behaves_evil(state, me):
             raise NotImplementedError('Evil Exorcist!')
+
+        exorcist = state.players[me]
         if exorcist.is_dead:
             yield state; return
 
@@ -1033,17 +1047,15 @@ class Exorcist(Townsfolk):
 
         self.maybe_deactivate_effects(state, me)
         self.target = choice.player
-        # This direct access of player.character is OK because... demons are
-        # never wrapped?
         target_character = state.players[choice.player].character
         # Check if would_wake before activating exorcist effects
         would_wake = target_character.wakes_tonight(state, choice.player)
         self.maybe_activate_effects(state, me)
 
         is_demon = info.IsCategory(choice.player, Demon)(state, me)
-        if is_demon is info.FALSE:
+        if is_demon.is_false():
             yield state; return
-        if is_demon is info.MAYBE:
+        if is_demon.is_maybe():
             yield state.fork()
 
         if self.is_droisoned(state, me):
@@ -1089,20 +1101,19 @@ class EvilTwin(Minion):
         eviltwin = state.players[me].get_ability(EvilTwin)
         if eviltwin.is_droisoned(state, me):
             raise NotImplementedError('Poisoned EvilTwin')
-        
+
         night_idx = (
-            state.night if state.current_phase is core.Phase.NIGHT 
+            state.night if state.current_phase is core.Phase.NIGHT
             else state.day + 1 if state.current_phase is core.Phase.DAY
             else 1
         )
-        twin_alignment = ~info.IsEvil(me)(state, me)
-
+        i_am_evil = info.IsEvil(me)(state, me)
         all_good_twin_claims = state.puzzle.external_info_registry.get(
             (EvilTwin, night_idx), []
         )
         for player_id in range(len(state.players)):
             # Only players of opposing alignment can be twins
-            if not (info.IsEvil(player_id)(state, me) is twin_alignment):
+            if (info.IsEvil(player_id)(state, me) == i_am_evil).is_true():
                 continue
             claims_good_twin = any(
                 (_pid == player_id and claim.eviltwin == me)
@@ -1125,7 +1136,7 @@ class EvilTwin(Minion):
         if (
             (eviltwin.is_dead and not eviltwin.vigormortised)
             or (death != self.twin and death != me)  # `me` could be good
-            or info.IsEvil(death)(state, me) is not info.FALSE
+            or info.IsEvil(death)(state, me).not_false()
         ):
             yield state
         elif self.is_droisoned(state, me):
@@ -1178,7 +1189,7 @@ class FangGu(GenericDemon):
         (min_tf, max_tf), (min_out, max_out), mn, dm = bounds
         bounds = (min_tf - 1, max_tf - 1), (min_out + 1, max_out + 1), mn, dm
         return bounds
-    
+
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         fanggu = state.players[me]
         if (
@@ -1210,7 +1221,7 @@ class FangGu(GenericDemon):
             is_outsider = info.IsCategory(target, Outsider)(state, me)
 
             already_jumped = getattr(state, 'fanggu_already_jumped', False)
-            wouldnt_jump = already_jumped or (is_outsider is not info.TRUE)
+            wouldnt_jump = already_jumped or (is_outsider.not_true())
             fails_jump = (
                 fanggu.character.safe_from_attacker(state, me, me)  # Wouldn't catch Boffin Soldier...
                 or target_player.character.safe_from_attacker(state, target, me)
@@ -1222,7 +1233,7 @@ class FangGu(GenericDemon):
                 if (
                     (fails_jump and not wouldnt_jump)
                     or (
-                        is_outsider is info.MAYBE
+                        is_outsider.is_maybe()
                         and isinstance(target_player.character, Outsider)
                     )
                 ):
@@ -1230,14 +1241,14 @@ class FangGu(GenericDemon):
                 kill_target = kill_state.players[target].character
                 yield from kill_target.attacked_at_night(kill_state, target, me)
                 # Let MAYBE through to also create a jump world
-                if already_jumped or fails_jump or is_outsider is info.FALSE:
+                if already_jumped or fails_jump or is_outsider.is_false():
                     continue
 
             # 4. The world where the Fang Gu jumps.
             jump_state = state.fork()
             jump_state.fanggu_already_jumped = True
             if (
-                is_outsider is info.MAYBE
+                is_outsider.is_maybe()
                 and not isinstance(target_player.character, Outsider)
             ):
                 jump_state.math_misregistration(me)
@@ -1265,7 +1276,7 @@ class Flowergirl(Townsfolk):
         def __call__(self, state: State) -> StateGen:
             # Evaluate Demon-ness as an Event at the time of the votes, since it
             # might change before the Flowergirl received their Ping
-            demon_voted = info.FALSE
+            demon_voted = info.STBool.FALSE
             for voter in self.voters:
                 demon_voted |= info.IsCategory(voter, Demon)(state, self.player)
             flowergirl = state.players[self.player]
@@ -1286,7 +1297,7 @@ class Flowergirl(Townsfolk):
 @dataclass
 class FortuneTeller(Townsfolk):
     """
-    Each night, choose 2 players: you learn if either is a Demon. 
+    Each night, choose 2 players: you learn if either is a Demon.
     There is a good player that registers as a Demon to you.
     """
     is_liar: ClassVar[bool] = False
@@ -1301,18 +1312,21 @@ class FortuneTeller(Townsfolk):
         demon: bool
         def __call__(self, state: State, me: PlayerID) -> STBool:
             fortuneteller = state.players[me].get_ability(FortuneTeller)
-            red_herring = fortuneteller.red_herring
             real_result = (
                 info.IsCategory(self.player1, Demon)(state, me)
                 | info.IsCategory(self.player2, Demon)(state, me)
-                | info.STBool(red_herring in (self.player1, self.player2))
             )
-            return real_result == info.STBool(self.demon)
+            if fortuneteller.red_herring in (self.player1, self.player2):
+                real_result |= info.STBool.TRUE_LYING
+                if real_result is info.STBool.TRUE_LYING:
+                    state.exclude_player_from_math_tonight(me)
+            claimed_result = info.STBool(self.demon)
+            return real_result == claimed_result
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # Any good player could be chosen as the red herring
         for player in range(len(state.players)):
-            if info.IsEvil(player)(state, me) is not info.TRUE:
+            if info.IsEvil(player)(state, me).not_true():
                 new_state = state.fork()
                 new_ft = new_state.players[me].get_ability(FortuneTeller)
                 new_ft.red_herring = player
@@ -1340,25 +1354,26 @@ class Gambler(Townsfolk):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Die on error, fork on MAYBE, ignore vortox."""
-        gambler = state.players[me]
-        if gambler.is_evil:
+        if info.behaves_evil(state, me):
             raise NotImplementedError("Evil Gambler")
-        
+
+        gambler = state.players[me]
+
         ping = state.get_night_info(Gambler, me, state.night)
         if gambler.is_dead or ping is None:
             yield state
             return
 
         result = info.IsCharacter(ping.player, ping.character)(state, me)
-        if result is info.TRUE:
+        if result.is_true():
             yield state
-        elif result is info.FALSE:
+        elif result.is_false():
             # Gambler attacks themselves with their own ability
             if self.is_droisoned(state, me):
                 state.math_misregistration(me)
                 yield state; return
             yield from self.attacked_at_night(state, me, me)
-        elif result is info.MAYBE:
+        elif result.is_maybe():
             # Yield a world for both live and die case
             yield state.fork()
             die_state = state.fork()
@@ -1373,7 +1388,7 @@ class Goblin(Minion):
     """TODO: Ability not yet implemented"""
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
-    
+
 @dataclass
 class Golem(Outsider):
     """
@@ -1403,19 +1418,19 @@ class Golem(Outsider):
         is_demon = info.IsCategory(nominee.id, Demon)(state, golem.id)
 
         if isinstance(nomination, events.UneventfulNomination):
-            if is_demon is info.FALSE and self.is_droisoned(state, golem.id):
+            if is_demon.is_false() and self.is_droisoned(state, golem.id):
                 state.math_misregistration(golem.id)
                 yield state
-            elif is_demon is info.MAYBE:
+            elif is_demon.is_maybe():
                 if isinstance(nominee.character, Demon):
                     state.math_misregistration(golem.id)
                 yield state
-            elif is_demon is info.TRUE:
+            elif is_demon.is_true():
                 yield state
             return
 
         # isinstance(nomination, events.Dies)
-        if not self.is_droisoned(state, golem.id) and is_demon is not info.TRUE:
+        if not self.is_droisoned(state, golem.id) and is_demon.not_true():
             if isinstance(nominee.character, Demon):
                 state.math_misregistration(golem.id)  # ...Boffin-Alchemist-Spy?
             yield from nominee.character.killed(state, nominee.id, golem.id)
@@ -1453,13 +1468,13 @@ class Gossip(Townsfolk):
         if (
             gossip.is_dead
             or result is None
-            or result is info.FALSE
+            or result.is_false()
             or gossip_day != state.night - 1
         ):
             yield state; return
-        
+
         dud_kill_done = False
-        if result is info.MAYBE:
+        if result.is_maybe():
             yield state.fork()
             dud_kill_done = True
 
@@ -1469,12 +1484,11 @@ class Gossip(Townsfolk):
 
         for target in range(len(state.players)):
             if state.players[target].is_dead:
-                # Dedupe worlds where nobody dies. I _think_ this is OK...
+                # Dedupe worlds where nobody dies. I think this is OK...
                 if dud_kill_done:
                     continue
                 dud_kill_done = True
             new_state = state.fork()
-
             target_char = new_state.players[target].character
             yield from target_char.attacked_at_night(new_state, target, me)
 
@@ -1493,7 +1507,7 @@ class Hermit(Outsider):
         """
         Each puzzle should use call this method to globally set what abilities
         the Hermit has. This is necessary to allow the core puzzle engine to
-        treat all character classes equally, with zero-argument constructors. I 
+        treat all character classes equally, with zero-argument constructors. I
         really wanted this method to be a class factory that built a
         puzzle-specific class, but this didn't play nicely with multiprocessing
         since the user-built classes weren't serialisable by pickle.
@@ -1608,7 +1622,7 @@ class Hermit(Outsider):
 @dataclass
 class Imp(GenericDemon):
     """
-    Each night*, choose a player: they die. 
+    Each night*, choose a player: they die.
     If you kill yourself this way, a Minion becomes the Imp.
     """
 
@@ -1621,7 +1635,7 @@ class Imp(GenericDemon):
             or getattr(imp, 'exorcised_count', 0)
         ):
             yield state; return
-        
+
         # Kill other player
         sunk_a_kill = False
         for target in range(len(state.players)):
@@ -1639,11 +1653,11 @@ class Imp(GenericDemon):
                 continue
             target_char = new_state.players[target].character
             yield from target_char.attacked_at_night(new_state, target, me)
-        
+
         # Star pass
         if (
             self.is_droisoned(state, me)
-            or self.cant_die(state, me) 
+            or self.cant_die(state, me)
             or getattr(imp, 'safe_from_demon_count', 0)
         ):
             failed_starpass_state = state.fork()
@@ -1657,9 +1671,9 @@ class Imp(GenericDemon):
         for player in state.players:
             character = player.character
             sw_catch, sw_misreg = ScarletWoman.catches_death(state, imp, player)
-            if sw_misreg is not info.FALSE:
+            if sw_misreg.not_false():
                 raise NotImplementedError('SW inc Math or not inc Math')
-            if sw_catch is info.TRUE:
+            if sw_catch.is_true():
                 scarletwomen.append(player.id)
             elif isinstance(character, Minion) and not player.is_dead:
                 other_minions.append(player.id)
@@ -1704,7 +1718,7 @@ class Investigator(Townsfolk):
 @dataclass
 class Juggler(Townsfolk):
     """
-    On your 1st day, publicly guess up to 5 players' characters. 
+    On your 1st day, publicly guess up to 5 players' characters.
     That night, you learn how many you got correct.
     """
     is_liar: ClassVar[bool] = False
@@ -1783,12 +1797,12 @@ class Klutz(Outsider):
                 return
             # Game is not over, so Klutz is claiming chosen player is good.
             is_good = ~info.IsEvil(self.choice)(state, self.player)
-            if is_good is info.TRUE:
+            if is_good.is_true():
                 yield state
             elif klutz_ability.is_droisoned(state, self.player):
                 state.math_misregistration(self.player, is_good)
                 yield state
-        
+
 @dataclass
 class Knight(Townsfolk):
     """
@@ -1829,7 +1843,7 @@ class Leviathan(Demon):
 @dataclass
 class Librarian(Townsfolk):
     """
-    You start knowing that 1 of 2 players is a particular Outsider. 
+    You start knowing that 1 of 2 players is a particular Outsider.
     (Or that zero are in play.)
     """
     is_liar: ClassVar[bool] = False
@@ -1854,7 +1868,7 @@ class Librarian(Townsfolk):
                 ])(state, src)
 
             else:
-                assert (self.player2 is not None 
+                assert (self.player2 is not None
                     and self.character is not None), usage
                 return (
                     info.IsCharacter(self.player1, self.character)(state, src) |
@@ -1864,7 +1878,7 @@ class Librarian(Townsfolk):
 @dataclass
 class LordOfTyphon(GenericDemon):
     """
-    Each night*, choose a player: they die. [Evil characters are in a line. 
+    Each night*, choose a player: they die. [Evil characters are in a line.
     You are in the middle. +1 Minion. -? to +? Outsiders]
     """
     @staticmethod
@@ -1876,7 +1890,7 @@ class LordOfTyphon(GenericDemon):
         """Override Reason: Check evil in a row, Typhon in middle."""
         if state.current_phase is not core.Phase.SETUP:
             yield state; return
-        evil = [player.is_evil for player in state.players]
+        evil = [player.is_evil for player in state.players]  # Misreg can't affect setup
         N = len(state.players)
         if not evil[(me - 1) % N] or not evil[(me + 1) % N]:
             return
@@ -1914,7 +1928,7 @@ class Lunatic(Drunklike, Outsider):
 @dataclass
 class Marionette(Drunklike, Minion):
     """
-    You think you are a good character, but you are not. 
+    You think you are a good character, but you are not.
     The Demon knows who you are. [You neighbor the Demon]
     """
     is_liar: ClassVar[bool] = True
@@ -1929,13 +1943,13 @@ class Marionette(Drunklike, Minion):
         if state.current_phase is core.Phase.SETUP:
             N = len(state.players)
             demon_neighbour = (
-                info.IsCategory((me - 1) % N, Demon)(state, me) 
+                info.IsCategory((me - 1) % N, Demon)(state, me)
                 | info.IsCategory((me + 1) % N, Demon)(state, me)
             )
-            if demon_neighbour is info.FALSE:
+            if demon_neighbour.is_false():
                 return
-            if demon_neighbour is info.MAYBE:
-                state.math_misregistration(me)  # e.g. Recluse-Mario triggers Math
+            if demon_neighbour.is_maybe():
+                state.math_misregistration(me)  # e.g. Recluse-Mario ticks Math
 
         self.simulated_character = state.players[me].claim()
         yield from super().run_setup(state, me)
@@ -1959,7 +1973,7 @@ class Mathematician(Townsfolk):
 @dataclass
 class Mayor(Townsfolk):
     """
-    If only 3 player live & no execution occurs, your team wins. 
+    If only 3 player live & no execution occurs, your team wins.
     If you die at night, another player might die instead.
     """
     is_liar: ClassVar[bool] = False
@@ -1984,13 +1998,13 @@ class Mutant(Outsider):
         elif not issubclass(player.claim, Outsider):
             yield state
         elif self.is_droisoned(state, me):
-            state.math_misregistration(me, info.MAYBE)  # Maybe ST is just nice
+            state.math_misregistration(me, info.FALSE_MAYBE)  # Maybe ST is just nice?
             yield state
 
         # TODO: Currently we can only tick up Math on a poisoned mutant on final
         # day, because we can't record what they were claiming in the past, only
         # what they're claiming retroactively at endgame. Once we have a way of
-        # placing lying_good players, fork a lying good version of the Mutant
+        # placing speculative_liars, fork a lying good version of the Mutant
         # who must still be alive at the end (rather than must be dead or
         # changed) so then a non-lying Mutant claiming Outsider in the past can
         # MAYBE uptick math when poisoned midgame.
@@ -2015,7 +2029,7 @@ class NightWatchman(Townsfolk):
     """
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
-    
+
     spent: bool = False
 
     @dataclass
@@ -2037,7 +2051,7 @@ class NightWatchman(Townsfolk):
                 or ability.is_droisoned(state, nwm.id)
                 or (choice is None and nwm_truthful)
             )
-        
+
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         nightwatchman = state.players[me]
         if state.vortox:
@@ -2136,7 +2150,7 @@ class Noble(Townsfolk):
 @dataclass
 class NoDashii(GenericDemon):
     """
-    Each night*, choose a player: they die. 
+    Each night*, choose a player: they die.
     Your 2 Townsfolk neighbors are poisoned.
     """
     tf_neighbour1: PlayerID | None = None
@@ -2146,7 +2160,11 @@ class NoDashii(GenericDemon):
         # TODO: This implementation allows the No Dashii to poison
         # misregistering characters (e.g. Spy), so there may be multiple
         # possible combinations of neighbour pairs depending on ST choices.
-        # However this is unecessary (and wrong) and should be simplified.
+        # However this is wrong and should be simplified.
+        # In order to do it truly properly, we need to be able to check if the
+        # neighbour misreg is from that player's ability, i.e., we need to know
+        # if a neighbouring demon is holding the Boffin[Alchemist[Spy]] ability
+        # and could misregister as a Townsfolk to catch the poison.
         N = len(state.players)
         fwd_candidates, bkwd_candidates = [], []
         for candidates, direction in (
@@ -2156,9 +2174,9 @@ class NoDashii(GenericDemon):
             for step in range(1, N):
                 player = (me + direction * step) % N
                 is_tf = info.IsCategory(player, Townsfolk)(state, me)
-                if is_tf is not info.FALSE:
+                if is_tf.not_false():
                     candidates.append(player)
-                if is_tf is info.TRUE:
+                if is_tf.is_true():
                     break
         # Create a world or each combination of left and right poisoned player
         for fwd in fwd_candidates:
@@ -2197,7 +2215,7 @@ class Oracle(Townsfolk):
         count: int
         def __call__(self, state: State, src: PlayerID) -> STBool:
             return info.ExactlyN(
-                N=self.count, 
+                N=self.count,
                 args=[
                     info.IsEvil(player) & ~info.IsAlive(player)
                     for player in range(len(state.players))
@@ -2223,9 +2241,10 @@ class Philosopher(Townsfolk):
         character: type[Character]
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        philo = state.players[me]
-        if philo.is_evil:
+        if info.behaves_evil(state, me):
             raise NotImplementedError('Evil Philosopher')
+
+        philo = state.players[me]
 
         if self.active_ability is not None:
             if self.droisoned_philo_choice:
@@ -2262,8 +2281,9 @@ class Philosopher(Townsfolk):
         for substate in self.active_ability.run_setup(state, me):
             drunk_targets = [
                 player for player in range(len(state.players))
-                if info.IsCharacter(player, choice.character)(substate, me)
-                is not info.FALSE
+                if info.IsCharacter(
+                    player, choice.character
+                )(substate, me).not_false()
             ]
             if not drunk_targets:
                 drunk_targets.append(None)
@@ -2369,7 +2389,7 @@ class Po(GenericDemon):
         if state.night == 1 or po.is_dead or getattr(po, 'exorcised_count', 0):
             yield state
             return
-        
+
         if not self.charged:
             # Charge World
             new_state = state.fork()
@@ -2400,7 +2420,7 @@ class Po(GenericDemon):
                 state.math_misregistration(me)
                 yield state
                 return
-            
+
             def kill_gen(states: StateGen, kill: PlayerID) -> StateGen:
                 for state_ in states:
                     target = state_.players[kill].character
@@ -2432,7 +2452,7 @@ class Poisoner(Minion):
         for target in range(len(state.players)):
             new_state = state.fork()
             new_poisoner = new_state.players[src].get_ability(Poisoner)
-            # Even droisoned poisoners make a choice, because they might be 
+            # Even droisoned poisoners make a choice, because they might be
             # undroisoned before dusk.
             new_poisoner.target = target
             new_poisoner.target_history.append(target)
@@ -2636,7 +2656,7 @@ class Pukka(Demon):
         state.players[self.target].droison(state, me)
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
-        # Break a self-poisoning infinite recursion, whilst still leaving the 
+        # Break a self-poisoning infinite recursion, whilst still leaving the
         # Pukka marked as droisoned.
         if self.target != me:
             state.players[self.target].undroison(state, me)
@@ -2697,7 +2717,7 @@ class Puzzlemaster(Outsider):
     ) -> None:
         """Override Reason: Even when dead."""
         if (
-            self.effects_active 
+            self.effects_active
             and reason is not Reason.DEATH
             and self.puzzle_drunk != me  # Break recursion
         ):
@@ -2731,7 +2751,7 @@ class Ravenkeeper(Townsfolk):
             ravenkeeper = state.players[src].get_ability(Ravenkeeper)
             death_night = ravenkeeper.death_night
             if death_night is None or death_night != state.night:
-                return info.FALSE
+                return info.STBool.FALSE
             return info.IsCharacter(self.player, self.character)(state, src)
 
     def apply_death(
@@ -2770,9 +2790,9 @@ class Riot(Demon):
     On day 3, Minions become Riot & nominees die but nominate an alive player
     immediately. This must happen.
     """
-    # This Riot implementation doesn't (m)any of the NUMEROUS Riot jinxes,
-    # since they tend to completely change the way characters work. We can add
-    # them if they become relevant I guess.
+    # This doesn't Riot implement (m)any of the NUMEROUS Riot jinxes, since they
+    # tend to completely change the way characters work. We can add them if they
+    # become relevant I guess.
 
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
@@ -2869,7 +2889,7 @@ class Sage(Townsfolk):
             sage = state.players[src].get_ability(Sage)
             death_night = sage.death_night
             if death_night is None or death_night != state.night:
-                return info.FALSE
+                return info.STBool.FALSE
             return (
                 info.IsCategory(self.player1, Demon)(state, src)
                 | info.IsCategory(self.player2, Demon)(state, src)
@@ -2883,7 +2903,7 @@ class Sage(Townsfolk):
     ) -> StateGen:
         """Override Reason: Record when death happened."""
         killed_by_demon = info.IsCategory(src, Demon)(state, me)
-        if state.night is not None and killed_by_demon is not info.FALSE:
+        if state.night is not None and killed_by_demon.not_false():
             self.death_night = state.night
             state.players[me].woke()
         yield from super().apply_death(state, me, src)
@@ -2900,7 +2920,7 @@ class Sage(Townsfolk):
 @dataclass
 class Savant(Townsfolk):
     """
-    Each day, you may visit the Storyteller to learn 2 things in private: 
+    Each day, you may visit the Storyteller to learn 2 things in private:
     one is true & one is false.
     """
     is_liar: ClassVar[bool] = False
@@ -2913,7 +2933,7 @@ class Savant(Townsfolk):
         def __call__(self, state: State, src: PlayerID):
             a, b = self.a(state, src), self.b(state, src)
             if state.vortox:
-                return ~(a | b)
+                return a | b  # This is post-processed in Savant.run_day()
             return a ^ b
 
     def run_day(self, state: State, me: PlayerID) -> StateGen:
@@ -2922,16 +2942,21 @@ class Savant(Townsfolk):
         ping = state.get_day_info(me)
         if (
             savant.is_dead
-            or savant.is_evil
             or ping is None
+            or info.behaves_evil(state, me)
         ):
             yield state
             return
         result = ping(state, me)
+        if state.vortox:
+            if not result.truth():
+                state.math_misregistration(me)
+                yield state
+            return
         if self.is_droisoned(state, me):
             state.math_misregistration(me, result)
             yield state
-        elif result is not info.FALSE:
+        elif result.not_false():
             yield state
 
 @dataclass
@@ -2954,10 +2979,10 @@ class ScarletWoman(Minion):
         dying_player = state.players[about_to_die]
         catches, droison = self.catches_death(state, dying_player, scarletwoman)
 
-        if catches is not info.FALSE:
+        if catches.not_false():
 
             # On MAYBE, spawn an extra world where no catch happened
-            if catches is info.MAYBE:
+            if catches.is_maybe():
                 substate = state.fork()
                 if dying_player.has_ability(ScarletWoman):  # TODO: What is this line doing?!?! Pls test me.
                     substate.math_misregistration(me, ~droison)
@@ -2989,14 +3014,14 @@ class ScarletWoman(Minion):
     ) -> tuple[STBool, STBool]:
         """
         Trigger condition is also checked by Imp, so has its own method.
-        Returns: 
+        Returns:
             - STBool specifying if SW will catch
             - STBool specifying if a fumble would be due to poison. This is so
               the caller can increment Math number appropriately.
         """
         sw_ability = scarletwoman.get_ability(ScarletWoman)
         if sw_ability is None:
-            return info.FALSE, info.FALSE
+            return info.STBool.FALSE, info.STBool.FALSE
 
         living_player_count = sum(
             not p.is_dead and not isinstance(p.character, Traveller)
@@ -3004,15 +3029,15 @@ class ScarletWoman(Minion):
         )
         ability_active = info.STBool(
             living_player_count >= 5
-            and (not scarletwoman.is_dead or scarletwoman.vigormortised) # :O
+            and (not scarletwoman.is_dead or scarletwoman.vigormortised)  # ?
         )
         demon_dying = info.IsCategory(dying.id, Demon)(state, scarletwoman.id)
 
         would_catch = demon_dying & ability_active
         sw_droisoned = sw_ability.is_droisoned(state, scarletwoman.id)
-        if would_catch is not info.FALSE and sw_droisoned:
-            return info.FALSE, ~would_catch
-        return would_catch, info.FALSE
+        if would_catch.not_false() and sw_droisoned:
+            return info.STBool.FALSE, ~would_catch
+        return would_catch, info.STBool.FALSE
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         return False  # Not triggered by night order, so can't comput this here.
@@ -3045,7 +3070,7 @@ class Seamstress(Townsfolk):
 @dataclass
 class Shugenja(Townsfolk):
     """
-    You start knowing if your closest evil player is clockwise or 
+    You start knowing if your closest evil player is clockwise or
     anti-clockwise. If equidistant, this info is arbitrary.
     """
     is_liar: ClassVar[bool] = False
@@ -3061,22 +3086,30 @@ class Shugenja(Townsfolk):
                 info.IsEvil((src + direction * step) % N)(state, src)
                 for step in range(1, N)
             ]
-            fwd_maybe, bwd_maybe, fwd_true, bwd_true = N, N, N, N
+            fwd_true, fwd_maybe, fwd_says = N, N, N
+            bkwd_true, bkwd_maybe, bkwd_says = N, N, N
             for step in range(N // 2, 0, -1):
-                if evils[step] is info.TRUE:
+                if evils[step].truth():
                     fwd_true, fwd_maybe = step, step
-                elif evils[step] is info.MAYBE:
+                elif evils[step].is_maybe():
                     fwd_maybe = step
-                if evils[-step] is info.TRUE:
-                    bwd_true, bwd_maybe = step, step
-                elif evils[-step] is info.MAYBE:
-                    bwd_maybe = step
+                if evils[step].st_says():
+                    fwd_says = step
+                if evils[-step].truth():
+                    bkwd_true, bkwd_maybe = step, step
+                elif evils[-step].is_maybe():
+                    bkwd_maybe = step
+                if evils[-step].st_says():
+                    bkwd_says = step
 
-            if bwd_true < fwd_maybe:
-                return info.FALSE
-            if fwd_true < bwd_maybe:
-                return info.TRUE
-            return info.MAYBE
+            truth = fwd_true <= bkwd_true
+            is_maybe = (
+                bkwd_maybe <= fwd_true
+                if truth else
+                fwd_maybe <= bkwd_true
+            )
+            st_says = fwd_says <= bkwd_says
+            return info.STBool((truth, is_maybe, st_says))
 
 @dataclass
 class SnakeCharmer(Townsfolk):
@@ -3094,10 +3127,10 @@ class SnakeCharmer(Townsfolk):
         player: PlayerID
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        """Override Reason: Charming!"""
-        snakecharmer = state.players[me]
-        if snakecharmer.is_evil:
+        if info.behaves_evil(state, me):
             raise NotImplementedError('Evil Snakecharmer!')
+
+        snakecharmer = state.players[me]
         choice = state.get_night_info(SnakeCharmer, me, state.night)
         if choice is None:
             yield state; return
@@ -3105,9 +3138,9 @@ class SnakeCharmer(Townsfolk):
             return
 
         is_demon = info.IsCategory(choice.player, Demon)(state, me)
-        if is_demon is info.FALSE:
+        if is_demon.is_false():
             yield state; return
-        if is_demon is info.MAYBE:
+        if is_demon.is_maybe():
             # Yield world where the jump happens plus one were it doesn't
             yield state.fork()
             jump_state = state.fork()
@@ -3141,7 +3174,6 @@ class SnakeCharmer(Townsfolk):
         if self.self_droison:
             state.players[me].undroison(state, me)
 
- 
 @dataclass
 class Soldier(Townsfolk):
     """
@@ -3204,7 +3236,7 @@ class Saint(Outsider):
 @dataclass
 class Slayer(Townsfolk):
     """
-    Once per game, during the day, publicly choose a player: 
+    Once per game, during the day, publicly choose a player:
     if they are the Demon, they die.
     """
     is_liar: ClassVar[bool] = False
@@ -3231,30 +3263,30 @@ class Slayer(Townsfolk):
                 or target.is_dead
                 or ability.spent
             ):
-                should_die = info.FALSE
+                should_die = info.STBool.FALSE
             else:
                 should_die = info.IsCategory(self.target, Demon)(
                     state, self.player
                 )
             if ability.is_droisoned(state, shooter.id):
-                if should_die is not info.FALSE and not self.died:
+                if should_die.not_false() and not self.died:
                     state.math_misregistration(self.player, ~should_die)
-                should_die = info.FALSE
+                should_die = info.STBool.FALSE
 
             ability.spent = True
 
-            if self.died and should_die is not info.FALSE:
+            if self.died and should_die.not_false():
                 state.math_misregistration(self.player, should_die)
                 yield from target.character.killed(
                     state, self.target, src=shooter.id
                 )
-            elif not self.died and should_die is not info.TRUE:
+            elif not self.died and should_die.not_true():
                 yield state
 
 @dataclass
 class Spy(Minion):
     """
-    Each night, you see the Grimoire. You might register as good & as a 
+    Each night, you see the Grimoire. You might register as good & as a
     Townsfolk or Outsider, even if dead.
     """
     is_liar: ClassVar[bool] = True
@@ -3285,7 +3317,7 @@ class Undertaker(Townsfolk):
             if self.player is None:
                 return STBool(
                     not any(
-                        isinstance(e, events.Execution) and e.died 
+                        isinstance(e, events.Execution) and e.died
                         for e in yesterdays_events
                     )
                 )
@@ -3296,12 +3328,12 @@ class Undertaker(Townsfolk):
                 for event in yesterdays_events
             ):
                 return info.IsCharacter(self.player, self.character)(state, src)
-            return info.FALSE
+            return info.STBool.FALSE
 
 @dataclass
 class VillageIdiot(Townsfolk):
     """
-    Each night, choose a player: you learn their alignment. 
+    Each night, choose a player: you learn their alignment.
     [+0 to +2 Village Idiots. 1 of the extras is drunk]
     """
     is_liar: ClassVar[bool] = False
@@ -3473,7 +3505,7 @@ class Witch(Minion):
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
-    target: PlayerID | None = None    
+    target: PlayerID | None = None
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         self.maybe_deactivate_effects(state, me)
@@ -3486,11 +3518,11 @@ class Witch(Minion):
             or sum(not p.is_dead for p in state.players) <= 3
         ):
             yield state; return
-       
+
         if self.is_droisoned(state, me):
             state.math_misregistration(me) # TODO: I think this is wrong, see todo.md
             yield state; return
-        
+
         for target in range(len(state.players)):
             if state.players[target].is_dead:
                 # There are enough ways for curse not to trigger, don't need
@@ -3502,7 +3534,7 @@ class Witch(Minion):
             new_witch.target = target
             new_witch.maybe_activate_effects(new_state, me)
             yield new_state
-            
+
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
             state.players[self.target].witch_cursed = state.players[me].name
@@ -3529,7 +3561,11 @@ class Vigormortis(GenericDemon):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         vig = state.players[me]
-        if state.night == 1 or vig.is_dead:
+        if (
+            state.night == 1
+            or vig.is_dead
+            or getattr(vig, 'exorcised_count', 0)
+        ):
             yield state
             return
 
@@ -3556,11 +3592,11 @@ class Vigormortis(GenericDemon):
             is_minion = info.IsCategory(target, Minion)(state, me)
 
             # 3. The normal kill world
-            if is_minion is not info.TRUE:
+            if is_minion.not_true():
                 kill_state = state.fork()
                 kill_target = kill_state.players[target].character
                 yield from kill_target.attacked_at_night(kill_state, target, me)
-                if is_minion is info.FALSE:
+                if is_minion.is_false():
                     continue
 
             # 4. The killed minion world
@@ -3588,7 +3624,7 @@ class Vigormortis(GenericDemon):
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         # TODO: Possibly remove both these things. I think maybe a reactivated
-        # vigormortis doesn't reanimate dead minions (or repoison their 
+        # vigormortis doesn't reanimate dead minions (or repoison their
         # neighbours?) but I'm on a plane with no wifi right now so can't check.
         for target in self.poisoned_tf:
             state.players[target].droison(state, me)
@@ -3612,7 +3648,7 @@ class Vigormortis(GenericDemon):
 @dataclass
 class Virgin(Townsfolk):
     """
-    The 1st time you are nominated, if the nominator is a Townsfolk, 
+    The 1st time you are nominated, if the nominator is a Townsfolk,
     they are executed immediately.
     """
     is_liar: ClassVar[bool] = False
@@ -3632,9 +3668,11 @@ class Virgin(Townsfolk):
         if (
             virgin.is_dead
             or self.spent
-            or nominator_is_tf is not info.TRUE
+            or nominator_is_tf.not_true()
         ):
             self.spent = True
+            if not nominator_is_tf.truth():
+                state.math_misregistration(virgin.id)
             yield state
         elif self.is_droisoned(state, virgin.id):
             state.math_misregistration(virgin.id)
@@ -3654,10 +3692,12 @@ class Virgin(Townsfolk):
             nominee.is_dead
             or virgin_ability.is_droisoned(state, nominee.id)
             or virgin_ability.spent
-            or tf_nom is info.FALSE
+            or tf_nom.is_false()
         ):
             return
         virgin_ability.spent = True
+        if not tf_nom.truth():
+            state.math_misregistration(nominee.id)
 
         executee = state.players[execution.player].character
         for ss in executee.executed(state, execution.player, execution.died):
@@ -3669,7 +3709,7 @@ class Virgin(Townsfolk):
 @dataclass
 class Vortox(GenericDemon):
     """
-    Each night*, choose a player: they die. 
+    Each night*, choose a player: they die.
     Townsfolk abilities yield false info.
     Each day, if no-one was executed, evil wins.
     """
@@ -3709,19 +3749,13 @@ class Xaan(Minion):
             raise NotImplementedError(
                 "Xaan created mid-game, X wasn't calculated at setup"
             )
-        # Despite the recent ruling, I still allow misregistration during setup,
-        # and so create a world for each possible value of X. Can remove this
-        # later if the ruling survives the test of time.
-        outsiders = [
-            info.IsCategory(player, Outsider)(state, me)
-            for player in range(len(state.players))
-        ]
-        X_lo = sum(outsider is info.TRUE for outsider in outsiders)
-        X_hi = sum(outsider is not info.FALSE for outsider in outsiders)
-        for X in range(X_lo, X_hi + 1):
-            new_state = state.fork()
-            new_state.players[me].get_ability(Xaan).X = X
-            yield new_state
+        # The current ruling is that misregistration doesn't affect setup, so
+        # the Xaan counts the real number of outsiders
+        self.X = sum(
+            isinstance(player.character, Outsider)
+            for player in state.players
+        )
+        yield state
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """
@@ -3738,8 +3772,8 @@ class Xaan(Minion):
             info.IsCategory(player, Townsfolk)(state, me)
             for player in range(len(state.players))
         ]
-        maybes = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.MAYBE]
-        trues = [i for i, is_tf in enumerate(townsfolk) if is_tf is info.TRUE]
+        maybes = [i for i, is_tf in enumerate(townsfolk) if is_tf.is_maybe()]
+        trues = [i for i, is_tf in enumerate(townsfolk) if is_tf.is_true()]
         if self.is_droisoned(state, me) and trues:
             # This is a best-effort at maintining Mathematician count, but
             # technically should only really trigger if one of the targets
@@ -3787,6 +3821,9 @@ class Zombuul(Demon):
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     registering_dead: bool = False
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        raise NotImplementedError("TODO: Zombuul")
 
 
 # https://script.bloodontheclocktower.com/data/nightsheet.json

@@ -2,6 +2,10 @@
 Reddit user u/Not_Quite_Vertical posts [weekly Blood on the Clocktower puzzles](https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html). Clockchecker is a naïve solver of specifically these puzzles, which generates and checks all possible worlds. A driving motivation behind the design of clockchecker is for implementing new characters to be as easy as possible, because hobbies are supposed to be fun.
 
 ### Try it now interactively [in your browser](https://josefdean.co.uk/clockchecker/).
+
+---
+
+<img src="README_imgs/nightorder.png">
  
 ## Puzzle Solving Examples
 <p align="center">
@@ -47,7 +51,7 @@ puzzle = Puzzle(
     hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
     hidden_self=[Drunk],
 )
-for world in Solver().generate_worlds(puzzle):
+for world in solve(puzzle):
     print(world)
  ```
 </td></tr>
@@ -104,7 +108,7 @@ puzzle = Puzzle(
     hidden_self=[],
 )
 
-for world in Solver().generate_worlds(puzzle):
+for world in solve(puzzle):
     print(world)
  ```
 </td></tr>
@@ -180,7 +184,7 @@ puzzle = Puzzle(
     hidden_self=[],
 )
 
-for world in Solver().generate_worlds(puzzle):
+for world in solve(puzzle):
     print(world)
  ```
 </td></tr>
@@ -238,7 +242,7 @@ puzzle = Puzzle(
     hidden_self=[Lunatic],
 )
 
-for world in Solver().generate_worlds(puzzle):
+for world in solve(puzzle):
     print(world)
  ```
 </td></tr>
@@ -275,11 +279,10 @@ Reasoning over the output of character information is done using `STBool`s (Stor
  
 ```python
 @dataclass
-class Investigator(Character):
+class Investigator(Townsfolk):
     """
     You start knowing that 1 of 2 players is a particular Minion.
     """
-    category: ClassVar[Categories] = TOWNSFOLK
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
@@ -301,12 +304,11 @@ class Investigator(Character):
 
 ```python
 @dataclass
-class FortuneTeller(Character):
+class FortuneTeller(Townsfolk):
     """
     Each night, choose 2 players: you learn if either is a Demon. 
     There is a good player that registers as a Demon to you.
     """
-    category: ClassVar[Categories] = TOWNSFOLK
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
@@ -338,11 +340,10 @@ class FortuneTeller(Character):
  
 ```python
 @dataclass
-class Baron(Character):
+class Baron(Minion):
     """
     There are extra Outsiders in play. [+2 Outsiders]
     """
-    category: ClassVar[Categories] = MINION
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
@@ -358,7 +359,7 @@ class Baron(Character):
  
 ```python
 @dataclass
-class Drunk(Character):
+class Drunk(Outsider):
     """
     You do not know you are the Drunk. 
     You think you are a Townsfolk character, but you are not.
@@ -369,7 +370,7 @@ class Drunk(Character):
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
         # Drunk can only 'lie' about being Townsfolk
-        if drunk.claim.category is not TOWNSFOLK:
+        if drunk.claim.category is not Townsfolk:
             return
         self.wake_pattern = drunk.claim.wake_pattern
         yield state
@@ -380,12 +381,11 @@ class Drunk(Character):
  
 ```python
 @dataclass
-class ScarletWoman(Character):
+class ScarletWoman(Minion):
     """
     If there are 5 or more players alive & the Demon dies, you become the Demon.
     (Travellers don't count).
     """
-    category: ClassVar[Categories] = MINION
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
@@ -394,7 +394,7 @@ class ScarletWoman(Character):
         scarletwoman = state.players[me]
         dead_player = state.players[death]
         living_players = sum(
-            not p.is_dead and p.character.category is not TRAVELLER
+            not p.is_dead and p.character.category is not Traveller
             for p in state.players
         )
         if (
@@ -413,11 +413,10 @@ class ScarletWoman(Character):
 
  ```python
 @dataclass
-class GenericDemon(Character):
+class GenericDemon(Demon):
     """
     Many demons just kill once each night*, so implment that once here.
     """
-    category: ClassVar[Categories] = DEMON
     is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
@@ -435,55 +434,29 @@ class GenericDemon(Character):
 </details>
 
 <details>
-<summary><b>No Dashii</b></summary>
+<summary><b>Lord Of Typhon</b></summary>
 
 ```python
 @dataclass
-class NoDashii(GenericDemon):
+class LordOfTyphon(GenericDemon):
     """
-    Each night*, choose a player: they die. 
-    Your 2 Townsfolk neighbors are poisoned.
+    Each night*, choose a player: they die. [Evil characters are in a line.
+    You are in the middle. +1 Minion. -? to +? Outsiders]
     """
-    tf_neighbour1: PlayerID | None = None
-    tf_neighbour2: PlayerID | None = None
+    @staticmethod
+    def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+        tf, out, (min_lo, min_hi), dm = bounds
+        return ((-99, 99), (-99, 99), (min_lo + 1, min_hi + 1), dm)
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        # I allow the No Dashii to poison misregistering characters (e.g. Spy),
-        # so there may be multiple possible combinations of neighbour pairs
-        # depending on ST choices. Find them all and create a world for each.
+        """Override Reason: Check evil in a row, Typhon in middle."""
+        if state.current_phase is not core.Phase.SETUP:
+            yield state; return
+        evil = [player.is_evil for player in state.players]
         N = len(state.players)
-        clockwise_candidates, anticlockwise_candidates = [], []
-        for candidates, direction in (
-            (clockwise_candidates, 1),
-            (anticlockwise_candidates, -1),
-        ):
-            for step in range(1, N):
-                player = (me + direction * step) % N
-                is_tf = info.IsCategory(player, TOWNSFOLK)(state, me)
-                if is_tf is not info.FALSE:
-                    candidates.append(player)
-                if is_tf is info.TRUE:
-                    break
-        # Create a world or each combination of cw and acw poisoned player
-        for clockwise_neighbour in clockwise_candidates:
-            for anticlockwise_neighbour in anticlockwise_candidates:
-                new_state = state.fork()
-                new_nodashii = new_state.players[me].character
-                new_nodashii.tf_neighbour1 = clockwise_neighbour
-                new_nodashii.tf_neighbour2 = anticlockwise_neighbour
-                new_nodashii.maybe_activate_effects(new_state, me)
-                yield new_state
-
-    def _activate_effects_impl(self, state: State, me: PlayerID):
-        state.players[self.tf_neighbour1].droison(state, me)
-        state.players[self.tf_neighbour2].droison(state, me)
-
-    def _deactivate_effects_impl(self, state: State, me: PlayerID):
-        state.players[self.tf_neighbour1].undroison(state, me)
-        state.players[self.tf_neighbour2].undroison(state, me)
+        if not evil[(me - 1) % N] or not evil[(me + 1) % N]:
+            return
+        if 'e' * sum(evil) in ''.join('e' if e else 'g' for e in evil) * 2:
+            yield state
 ```
 </details>
-
----
-
-<img src="README_imgs/nightorder.png">

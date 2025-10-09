@@ -2409,7 +2409,7 @@ def solve_override():
             ) & (
                 anna_ping(A, None) | ~IsCharacter(Anna, Artist)(B, None)
             ))
-            if cross_artist_info is not FALSE:
+            if cross_artist_info.not_false():
                 yield A
                 yield B
 

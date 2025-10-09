@@ -41,7 +41,7 @@ def apply_button_handler(event):
             "puzzle, "
             #"puzzle if 'puzzle' in locals().keys() else None,"
             "solve_override if 'solve_override' in locals().keys() else None,"
-            ")\n"
+            ")\n" 
         ), global_env.copy())
     except Exception as e:
         msg = traceback.format_exc()

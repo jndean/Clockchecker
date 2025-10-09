@@ -85,7 +85,7 @@ class ExecutionByST(Execution):
 @dataclass
 class UneventfulNomination(Event):
     """
-    A player is nominated, and nothing extraordinary happens. 
+    A player is nominated, and nothing extraordinary happens.
     I.e., no execution triggered by the Virgin, no death to a Witch curse etc.
     A nomination that does trigger some ability should instead be represented by
     an ExecutionByST or Dies event as appropriate.
@@ -138,7 +138,7 @@ class Dies(Event):
 
 class NightEvent:
     """
-    Doesn't extend the Event interface, because deaths are not publically 
+    Doesn't extend the Event interface, because deaths are not publically
     visible events. We only learn who is dead or alive come dawn.
     """
     pass
@@ -164,7 +164,7 @@ class Doomsayer:
         def __call__(self, state: State) -> StateGen:
             a = info.IsEvil(self.player)(state, self.player)
             b = info.IsEvil(self.died)(state, self.player)
-            if a ^ b is not info.TRUE:
+            if not (a ^ b).is_true():
                 yield from state.players[self.died].character.killed(
                     state, self.died
                 )

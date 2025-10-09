@@ -5,12 +5,18 @@ from clockchecker import *
 import puzzles
 
 
+# Suppress test stack frames in assertion errors. We never care which line
+# line raised teh error
+__unittest = True
+
+
 def assert_solutions(
     testcase: unittest.TestCase,
     puzzle: Puzzle,
     solutions: tuple[tuple[Character, ...]],
+    solution_endchars: tuple[tuple[type[Character], ...]] = None,
     condition: Callable[[State], bool] | None = None,
-    info_conditions: Info | None = None,
+    info_condition: Info | None = None,
 ):
     predictions = list(solve(puzzle))
     prediction_chars = tuple(
@@ -21,13 +27,44 @@ def assert_solutions(
         tuple(x.__name__ for x in solution)
         for solution in solutions
     )
-    testcase.assertEqual(sorted(prediction_chars), sorted(solutions_chars))
+    testcase.assertTrue(
+        sorted(prediction_chars) == sorted(solutions_chars),
+        msg=(
+            'Solver did not find the correct solutions.\n'
+                f'\033[31;1mTARGET:\033[0m\n{'\n'.join(str(x) for x in solutions_chars)}\n'
+                f'\033[31;1mPREDICTIONS:\033[0m\n{'\n'.join(str(x) for x in prediction_chars)}'
+        )
+    )
+    if solution_endchars is not None:
+        predicted_endchars = tuple(
+            tuple(type(p.character).__name__ for p in world.players)
+            for world in predictions
+        )
+        solution_endchars = tuple(
+            tuple(x.__name__ for x in solution)
+            for solution in solution_endchars
+        )
+        testcase.assertTrue(
+            sorted(predicted_endchars) == sorted(solution_endchars),
+            msg=(
+                'Solver did not find the correct \033[31;1mENDGAME\033[0m characters.\n'
+                f'\033[31;1mTARGET END_CHARS:\033[0m\n{'\n'.join(str(x) for x in solution_endchars)}\n'
+                f'\033[31;1mPREDICTIONS END_CHARS:\033[0m\n{'\n'.join(str(x) for x in predicted_endchars)}'
+            )
+        )
+
     if condition is not None:
         for prediction in predictions:
-            testcase.assertTrue(condition(prediction))
-    if info_conditions is not None:
+            testcase.assertTrue(
+                condition(prediction),
+                msg='\n\033[31;1mFailed extra `condition`\033[0m'
+            )
+    if info_condition is not None:
         for prediction in predictions:
-            testcase.assertIsNot(info_conditions(prediction, 0), FALSE)
+            testcase.assertTrue(
+                info_condition(prediction, 0).not_false(),
+                msg=f'\n\033[31;1mFailed info_condition:\033[0m {info_condition}'
+            )
 
 
 class NQTPuzzles(unittest.TestCase):
@@ -66,7 +103,7 @@ class NQTPuzzles(unittest.TestCase):
                 if test_def.solution_condition is not None:
                     for world in worlds:
                         self.assertTrue(test_def.solution_condition(world))
-                
+
                 print('\033[32;1m\b✓', end='')
         print('\033[0m')
 
@@ -185,7 +222,7 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Investigator, Imp, Widow),),
-            info_conditions=CharAttrEq(D, 'target', B),
+            info_condition=CharAttrEq(D, 'target', B),
         )
 
     def test_widow_self_poisones_with_no_ping(self):
@@ -216,7 +253,7 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Investigator, Imp, Widow),),
-            info_conditions=CharAttrEq(D, 'target', D),
+            info_condition=CharAttrEq(D, 'target', D),
         )
 
     def test_widow_good_pings_not_allowed_if_widow_not_in_play(self):
@@ -310,7 +347,7 @@ class TestWidow(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Poisoner, Widow, Leviathan),),
-            info_conditions=~CharAttrEq(C, 'target', C),
+            info_condition=~CharAttrEq(C, 'target', C),
         )
 
 
@@ -428,7 +465,7 @@ class TestVirgin(unittest.TestCase):
             self,
             puzzle,
             solutions=((Artist, Virgin, Poisoner, Imp),),
-            info_conditions=CharAttrEq(C, 'target', B),
+            info_condition=CharAttrEq(C, 'target', B),
         )
         You, B, C, D = range(4)
         puzzle = Puzzle(
@@ -605,7 +642,7 @@ class TestSlayer(unittest.TestCase):
             self,
             puzzle,
             solutions=((Slayer, Soldier, Pukka),),
-            info_conditions=CharAttrEq(C, 'target', You),
+            info_condition=CharAttrEq(C, 'target', You),
         )
 
     def test_slayer_spent(self):
@@ -1136,3 +1173,301 @@ class TestNightWatchman(unittest.TestCase):
                 w.players[B].boffin_ability, NightWatchman
             ),
         )
+
+class TestFangGu(unittest.TestCase):
+
+    def test_kills_tf(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Saint)
+                        & IsCharacter(D, Seamstress)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Saint),
+                Player('D', claim=Seamstress, night_info={
+                    1: Seamstress.Ping(You, C, same=True),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: D},
+            hidden_characters=[FangGu],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Saint, Seamstress),),
+            solution_endchars=((Artist, FangGu, Saint, Seamstress),),
+        )
+
+    def test_jumps_to_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Goblin)
+                        & IsCharacter(D, Seamstress)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Recluse),
+                Player('D', claim=Seamstress, night_info={
+                    1: Seamstress.Ping(You, C, same=True),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: B},
+            hidden_characters=[FangGu],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Recluse, Seamstress),),
+            solution_endchars=((Artist, FangGu, FangGu, Seamstress),),
+        )
+
+    def test_kills_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Goblin)
+                        & IsCharacter(D, Seamstress)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Recluse),
+                Player('D', claim=Seamstress, night_info={
+                    1: Seamstress.Ping(You, C, same=True),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: C},
+            hidden_characters=[FangGu],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Recluse, Seamstress),),
+            solution_endchars=((Artist, FangGu, Recluse, Seamstress),),
+        )
+
+    def test_jumps_to_speculative_klutz(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Klutz)
+                        & IsCharacter(D, Seamstress)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Saint),
+                Player('D', claim=Seamstress, night_info={
+                    1: Seamstress.Ping(You, C, same=True),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: B},
+            hidden_characters=[FangGu, Klutz],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Klutz, Seamstress),),
+            solution_endchars=((Artist, FangGu, FangGu, Seamstress),),
+        )
+
+
+class TestFortuneTeller(unittest.TestCase):
+
+    def test_finds_demon(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(B, C, demon=True),
+                    2: FortuneTeller.Ping(C, D, demon=False),
+                }),
+                Player('D', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, FortuneTeller, Recluse),),
+            info_condition=CharAttrEq(C, "red_herring", You),
+        )
+
+    def test_finds_red_herring(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(You, C, demon=True),
+                    2: FortuneTeller.Ping(You, D, demon=True),
+                }),
+                Player('B', claim=Leviathan),
+                Player('C', claim=Artist),
+                Player('D', claim=Saint),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((FortuneTeller, Leviathan, Artist, Saint),),
+            info_condition=CharAttrEq(You, "red_herring", You),
+        )
+
+    def test_finds_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(C, D, demon=False),
+                    2: FortuneTeller.Ping(C, D, demon=True),
+                }),
+                Player('B', claim=Leviathan),
+                Player('C', claim=Artist),
+                Player('D', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((FortuneTeller, Leviathan, Artist, Recluse),),
+            info_condition=CharAttrEq(You, "red_herring", You),
+        )
+
+    def test_finds_no_red_herring_in_vortox(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(You, E, demon=True),
+                    2: FortuneTeller.Ping(C, D, demon=True),
+                    3: FortuneTeller.Ping(You, B, demon=False),
+                }),
+                Player('B', claim=Vortox),
+                Player('C', claim=Artist),
+                Player('D', claim=Recluse),
+                Player('E', claim=Seamstress),
+            ],
+            day_events={1: Execution(E), 2: Execution(C)},
+            night_deaths={},
+            hidden_characters=[Vortox],
+            hidden_self=[],
+            category_counts=(3, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (FortuneTeller, Vortox, Artist, Recluse, Seamstress),
+        ))
+
+    def test_cant_ping_recluse_in_vortox(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(You, C, demon=False),
+                }),
+                Player('B', claim=Vortox),
+                Player('C', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Vortox],
+            hidden_self=[],
+            category_counts=(1, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_red_herring_doesnt_inc_math(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(You, C, demon=True),
+                }),
+                Player('B', claim=Leviathan),
+                Player('C', claim=Mathematician, night_info={
+                    1: Mathematician.Ping(0)
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            category_counts=(2, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (FortuneTeller, Leviathan, Mathematician),
+        ))
+
+    def test_philo_fortuneteller_detects_redherring(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Philosopher, night_info={
+                    2: [
+                        Philosopher.Choice(FortuneTeller),
+                        FortuneTeller.Ping(You, C, demon=True),
+                    ],
+                }),
+                Player('B', claim=Leviathan),
+                Player('C', claim=Saint),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            also_on_script=[FortuneTeller],
+            hidden_self=[],
+            category_counts=(1, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Philosopher, Leviathan, Saint),
+        ))
