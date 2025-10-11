@@ -144,6 +144,13 @@ class Character:
         """
         return True
 
+    def end_night(self, state: State, me: PlayerID) -> bool:
+        """
+        Take dawn actions (e.g. monk stops protecting).
+        Can return False to invalidate the world.
+        """
+        return True
+
     @staticmethod
     def global_end_night(state: State) -> bool:
         """
@@ -1978,6 +1985,62 @@ class Mayor(Townsfolk):
     """
     is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+@dataclass
+class Monk(Townsfolk):
+    """
+    Each night*, choose a player (not yourself):
+    they are safe from the Demon tonight.
+    """
+    is_liar: ClassVar[bool] = False
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    target: PlayerID = None
+    target_history: list[PlayerID] = field(default_factory=list)
+
+    @dataclass
+    class Choice(info.NotInfo):
+        player: PlayerID
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        if info.behaves_evil(state, me):
+            raise NotImplementedError("Todo: Evil Monk")
+
+        monk = state.players[me]
+        choice = state.get_night_info(Monk, me, state.night)
+        if choice is None:
+            yield state; return
+        if monk.is_dead:
+            return
+
+        self.maybe_deactivate_effects(state, me)
+        self.target = choice.player
+        self.target_history.append(choice.player)
+        self.maybe_activate_effects(state, me)
+        yield state
+
+    def end_night(self, state: State, me: PlayerID) -> bool:
+        self.maybe_deactivate_effects(state, me)
+        self.target = None
+        return True
+
+    def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+        if self.target is not None:
+            p = state.players[self.target]
+            p.safe_from_demon_count = getattr(p, 'safe_from_demon_count', 0) + 1
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+        if self.target is not None:
+            p = state.players[self.target]
+            p.safe_from_demon_count -= 1
+            if not p.safe_from_demon_count:
+                del p.safe_from_demon_count
+
+    def _world_str(self, state: State) -> str:
+        return (
+            f'{type(self).__name__} (Protected '
+            f'{", ".join(state.players[p].name for p in self.target_history)})'
+        )
 
 @dataclass
 class Mutant(Outsider):
@@ -3856,6 +3919,7 @@ GLOBAL_NIGHT_ORDER = [
     Gambler,
     Acrobat,
     SnakeCharmer,
+    Monk,
     EvilTwin,  # Nasty hack - see todo.md
     Witch,
     ScarletWoman,

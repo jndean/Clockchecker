@@ -406,6 +406,9 @@ class State:
         yield self
 
     def end_night(self) -> StateGen:
+        for player in self.players:
+            if not player.character.end_night(self, player.id):
+                return
         for char_t in self.puzzle.script:
             if not char_t.global_end_night(self):
                 return

@@ -31,6 +31,10 @@
 
  - The EvilTwin ExternalInfo system is _awful_, it was supposed to account for night order but it really doesn't, because if an EvilTwin is claimed to be created mid game the claimed Ping just won't be checked at the moment the twin is created. Feels like ExternalInfo should be scrapped since that's all it does now, and all logic could be put into the EvilTwin... or perhaps ExternalInfo needs to be a stateful thing, state tracks what claims have been made and EvilTwin ticks off the ones it has fulfilled at the moment it does it...
 
+  - Currently the 'safe_from_demon_count' attribute actually only saves from death, not from poisoning (or Vortox). Making the Vortox work will be only a few lines, but making safe from poisoning work will be much more involved. Suppose a NoDashii poisons a neighbour from N1, then the neighbour is Monk protected N3. The Monk should be able to deactivate one of the NoDashii's poisonings, and the NoDashii code should probably not need to know about it. Similarly at the end of the night the Monk ability needs to trigger the re-poisoning of the TF.
+  THIS MAY BE THE TIME to introduce status effect 'reminder' tokens, in this case one that lives on the poisoned player, so that the Monk ability can check for statuses on the target and de/reactivate them individually, and the placed token should know how to de/reactivate itself. E.g. the NoDashii can define a reminder token called `PoisonedNeighbour` (which probably inheits from the token `Poisoned`) which knows how to unpoison just one NoDashii neighbour, then the `NoDashii._deactvate_efects_impl()` just calls deactivate on each of the poisoned neighbour reminder tokens it has in play.
+  The base ReminderToken class probably has a `src` attribute :)
+
  - Implement the events system! (Some of the below could be callbcaks, not events...)
  - Characters that would like to listen for character_changed events:
    - NoDashii to update poisoned neighbours

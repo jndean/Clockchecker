@@ -23,6 +23,7 @@ const characterSamples = {
         { name: "Librarian", value: "Player('Oscar', claim=Librarian, night_info={\n    1: Librarian.Ping(None)\n}),\n"},
         { name: "Mathematician", value: "Player('Karen', claim=Mathematician, night_info={\n    1: Mathematician.Ping(0),\n    2: Mathematician.Ping(1),\n}),\n"},
         { name: "Mayor", value: "Player('Jasmine', claim=Mayor),\n"},
+        { name: "Monk", value: "Player('Mallory', claim=Monk, night_info={\n    2: Monk.Choice(Jamie),\n    3: Monk.Choice(Jonny),\n}),\n"},
         { name: "NightWatchman", value: "Player('Fraser', claim=NightWatchman, night_info={\n    1: NightWatchman.Choice(Tim)\n}),\n# Give someone else a `NightWatchman.Ping(Fraser)` the same night\n"},
         { name: "Noble", value: "Player('Matt', claim=Noble, night_info={\n    1: Noble.Ping(Tim, Sula, Oscar)\n}),\n"},
         { name: "Oracle", value: "Player('Alanna', claim=Oracle, night_info={\n    2: Oracle.Ping(0),\n    3: Oracle.Ping(1),\n}),\n"},

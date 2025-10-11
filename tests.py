@@ -1304,7 +1304,6 @@ class TestFangGu(unittest.TestCase):
             solution_endchars=((Artist, FangGu, FangGu, Seamstress),),
         )
 
-
 class TestFortuneTeller(unittest.TestCase):
 
     def test_finds_demon(self):
