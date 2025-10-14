@@ -30,7 +30,7 @@ class STBool(enum.Enum):
     # Format: (truth, is_maybe, st_says), where
     #  - `truth` is the true value of the statement
     #  - `is_maybe` indicates the ST is free to give an arbitrary response
-    #  - `st_says` is usually the same as `truth`, apart form in cases where
+    #  - `st_says` is usually the same as `truth`, apart from in cases where
     #     the ST MUST LIE, e.g. checking if zombuul is dead or legion is minion
 
     FALSE = (False, False, False)
@@ -216,12 +216,12 @@ class IsAlive(Info):
     player: PlayerID
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        if (
-            (z := player.get_ability(characters.Zombuul)) is not None
-            and z.registering_dead
-        ):
+        if player.is_dead:  # Short-circuit the most common case
+            return STBool.FALSE
+        zombuul = player.get_ability(characters.Zombuul)
+        if zombuul is not None and zombuul.registering_dead:
             return STBool.FALSE_LYING
-        return STBool(not player.is_dead)
+        return STBool.TRUE
 
 @dataclass
 class IsCharacter(Info):
@@ -370,16 +370,14 @@ def tf_candidates_in_direction(
 
 def behaves_evil(state: State, player_id: PlayerID) -> bool:
     """
-    Characters have the is_liar ClassVar which determines if they lie about
-    their own role and info. However, some good characters also lie about other
-    character's info. E.g. the lunatic is good but may lie about receiving a
-    Nightwatchman ping, whilst the drunk lies about their character and info but
-    would truthfully report a Nightwatchman ping.
-    This puzzle state is defined from the perspective of Player 0, so Player 0
-    never lies to themselves.
+    Characters have the lies_about_self ClassVar which determines if they lie
+    about their own role and info. However, some good characters also lie about
+    other character's info. E.g. the lunatic is good but may lie about receiving
+    a Nightwatchman ping, whilst the drunk lies about their character and info
+    but would truthfully report a Nightwatchman ping.
     """
     if player_id == 0 and state.puzzle.player_zero_is_you:
-        return False
+        return False  # You can't lie to yourself, Josef
     player = state.players[player_id]
     if player.is_evil or hasattr(player, 'speculative_liar'):
         return True

@@ -1470,3 +1470,123 @@ class TestFortuneTeller(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=(
             (Philosopher, Leviathan, Saint),
         ))
+
+
+class TestPitHag(unittest.TestCase):
+
+    def test_changes_demon(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Dreamer)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Leviathan, Empath),
+                    2: Dreamer.Ping(B, Imp, Empath),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, PitHag, Baron, Imp],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, PitHag, Dreamer),),
+            solution_endchars=((Artist, Imp, PitHag, Dreamer),),
+        )
+
+    def test_new_character_runs_setup(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Dreamer)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(C, PitHag, Empath),
+                    2: Dreamer.Ping(C, Leviathan, Dreamer),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, PitHag, Puzzlemaster],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, PitHag, Dreamer),),
+            solution_endchars=((Artist, Leviathan, Puzzlemaster, Dreamer),),
+            info_condition=CharAttrEq(C, 'puzzle_drunk', D)
+        )
+    
+    
+    def test_creates_outsider_fanggu_jump(self):    
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Dreamer)
+                        & IsCharacter(E, Empath)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(C, PitHag, Empath),
+                    2: Dreamer.Ping(B, FangGu, Empath),
+                    3: Dreamer.Ping(E, FangGu, Klutz),
+                }),
+                Player('E', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                    2: Empath.Ping(0),
+                    3: Empath.Ping(0),
+                }),
+            ],
+            day_events={},
+            night_deaths={3: B},
+            hidden_characters=[Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[FangGu, Klutz],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, PitHag, Dreamer, Empath),),
+            solution_endchars=((Artist, FangGu, PitHag, Dreamer, FangGu),),
+        )

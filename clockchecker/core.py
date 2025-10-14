@@ -8,7 +8,7 @@ import enum
 import itertools as it
 import os
 import traceback
-from typing import Any, Callable, TypeAlias
+from typing import Any, Callable, Sequence, TypeAlias
 
 try:
     from multiprocessing import Queue, Process
@@ -358,13 +358,13 @@ class State:
             case Phase.SETUP:
                 states = ability.run_setup(self, pid)
 
-        for state in states:
-            if hasattr(state, 'debug_cull'):
-                continue
-            # Recursive tail-calls can set up a variable-depth generator stack
-            # corresponding to how many players have the active ability, and
-            # handle players changing character mid-turn.
-            yield from state.run_all_players_with_currently_acting_character()
+        # Recursive tail-calls can set up a variable-depth generator stack
+        # corresponding to how many players have the active ability, and
+        # handle players changing character mid-turn.
+        yield from apply_all(
+            states,
+            lambda s: s.run_all_players_with_currently_acting_character()
+        )
 
     @staticmethod
     def run_external_night_info(
@@ -437,7 +437,7 @@ class State:
         for player in self.players:
             if not (
                 isinstance(player.character, player.claim)
-                or player.character.is_liar
+                or player.character.lies_about_self
                 or info.behaves_evil(self, player.id)
             ):
                 return
@@ -503,14 +503,14 @@ class State:
 
     def pre_death_in_town(self, dying_player_id: PlayerID) -> StateGen:
         """Trigger things that require global checks, e.g. Minstrel or SW."""
-        if not self.pre_death_in_town_callback_players:
-            yield self; return
-        def do_death_callback(states: StateGen, caller: PlayerID) -> StateGen:
-            for state in states:
-                callback = state.players[caller].character.pre_death_in_town
-                yield from callback(state, dying_player_id, caller)
+        states = [self]
         for caller in self.pre_death_in_town_callback_players:
-            yield from do_death_callback([self], caller)
+            states = apply_all(states, lambda state, caller=caller: (
+                state.players[caller].character.pre_death_in_town(
+                    state, dying_player_id, caller
+                )
+            ))
+        yield from states
 
     def post_death_in_town(self, dead_player_id: PlayerID) -> StateGen:
         """Called immediately after a player died."""
@@ -568,7 +568,7 @@ class State:
             char = type(player.character)
             rhs = player._world_str(self)
             colour = 0
-            if char.is_liar or player.is_evil:
+            if char.lies_about_self or info.behaves_evil(self, player.id):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
@@ -639,7 +639,7 @@ class Puzzle:
             collection = (
                 self.demons if issubclass(character, characters.Demon) else
                 self.minions if issubclass(character, characters.Minion) else
-                self.hidden_good if character.is_liar else
+                self.hidden_good if character.lies_about_self else
                 self.speculative_liars
             )
             collection.append(character)
@@ -868,18 +868,26 @@ def _script_max_speculative_liars(script: Sequence[type[Character]]) -> int:
     return total
 
 def _setup_max_speculative_liars(
-    in_play: Sequence[type[Character]],
+    play: Sequence[type[Character]],
     puzzle: Puzzle,
 ) -> int:
     """Max speculative liars for a given world setup."""
     total = 0
-    # Since there's no PitHag Yet, require a FangGu and speculative Outsider
-    if characters.FangGu in in_play and any(
-        issubclass(x, characters.Outsider)
-        for x in puzzle.speculative_liars
-    ):
-        total += 1
-    # TODO: PitHag, Cerenovus stuff
+
+    pithag_possible = characters.PitHag in play  # No alchemist yet
+    fanggu_possible = (
+        characters.FangGu in play
+        or (pithag_possible and characters.FangGu in puzzle.script)
+    )
+    outsiders_possible = (
+        any(issubclass(c, characters.Outsider) for c in play)
+        or (
+            pithag_possible 
+            and any(issubclass(c, characters.Outsider) for c in puzzle.script)
+        )
+    )
+    total += fanggu_possible and outsiders_possible
+    # TODO: Cerenovus, Mezepheles, mid-game BountyHunter etc.
     return total
 
 
@@ -920,12 +928,17 @@ def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
                 yield (liars, liar_positions, spec_pos, dbg_idx)
                 dbg_idx += 1
 
+def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
+    """
+    Utility for calling a state-generating function on all states in a StateGen.
+    """
+    for state in states:
+        if hasattr(state, 'debug_cull'):
+            continue
+        yield from fn(state)
 
 def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
     """Accepts starting configurations and finds all possible solutions."""
-
-    def apply_all(substates: StateGen, method: str, args: tuple[Any] = ()):
-        return (s for S in substates for s in getattr(S, method)(*args))
 
     event_counts = defaultdict(int, {
         day: len(events) for day, events in puzzle.day_events.items()
@@ -960,20 +973,23 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
         # end of the pipe.
         worlds = [world]
         for _ in range(len(puzzle.setup_order)):
-            worlds = apply_all(worlds, 'run_next_character')
-        worlds = apply_all(worlds, 'end_setup')
+            worlds = apply_all(worlds, lambda w: w.run_next_character())
+        worlds = apply_all(worlds, lambda w: w.end_setup())
         for round_ in range(1, puzzle._max_night + 1):
             for _ in range(len(puzzle.night_order)):
-                worlds = apply_all(worlds, 'run_next_character')
-            worlds = apply_all(worlds, 'end_night')
+                worlds = apply_all(worlds, lambda w: w.run_next_character())
+            worlds = apply_all(worlds, lambda w: w.end_night())
             if round_ <= puzzle._max_day:
                 for _ in range(len(puzzle.day_order)):
-                    worlds = apply_all(worlds, 'run_next_character')
+                    worlds = apply_all(worlds, lambda w: w.run_next_character())
                 for event in range(event_counts[round_]):
-                    worlds = apply_all(worlds, 'run_event', (round_, event))
+                    worlds = apply_all(
+                        worlds,
+                        lambda w, r=round_, e=event: w.run_event(r, e)
+                    )
                 if round_ < puzzle._max_day or puzzle.finish_final_day:
-                    worlds = apply_all(worlds, 'end_day')
-        worlds = apply_all(worlds, 'round_robin')
+                    worlds = apply_all(worlds, lambda w: w.end_day())
+        worlds = apply_all(worlds, lambda w: w.round_robin())
         yield from worlds
 
 

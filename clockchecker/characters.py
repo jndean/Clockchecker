@@ -96,6 +96,9 @@ class Character:
     # Characters like Recluse and Spy override here
     misregister_categories: ClassVar[tuple['Category', ...]] = ()
 
+    # Good characters who lie about themselves and their info (e.g., Drunk)
+    lies_about_self: ClassVar[bool] = False
+
     effects_active: bool = False
 
     # Night the character was created, usually 1
@@ -173,7 +176,7 @@ class Character:
         elif state.current_phase is core.Phase.DAY:
             ping = state.get_day_info(me)
 
-        if ping is None or info.behaves_evil(state, me) or self.is_liar:
+        if ping is None or info.behaves_evil(state, me) or self.lies_about_self:
             return True
 
         player = state.players[me]
@@ -331,7 +334,7 @@ class Character:
         TODO: Innkeeper should be checked here. Sailor or Lleech should extend
         this method. Things like Soldier and Monk live in `safe_from_attacker`.
         """
-        return False
+        return getattr(state, 'arbitrary_death_night', -1) == state.night
 
     def is_droisoned(self, state: State, me: PlayerID) -> bool:
         """
@@ -475,7 +478,6 @@ class Acrobat(Townsfolk):
     Each night*, choose a player:
     if they are or become drunk or poisoned tonight, you die.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     @dataclass
@@ -509,7 +511,6 @@ class Acrobat(Townsfolk):
 @dataclass
 class Alsaahir(Townsfolk):
     """Not yet implemented"""
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 
@@ -519,7 +520,6 @@ class Artist(Townsfolk):
     Once per game, during the day, privately ask the Storyteller any yes/no
     question.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     spent: bool = False
@@ -536,7 +536,6 @@ class Atheist(Townsfolk):
     The Storyteller can break the game rules, and if executed, good wins,
     even if you are dead. [No evil characters].
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -556,7 +555,6 @@ class Balloonist(Townsfolk):
     Each night, you learn a player of a different character type than last night
     [+0 or +1 Outsider]
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     # Records the last ping's true category.
@@ -630,7 +628,6 @@ class Baron(Minion):
     """
     There are extra Outsiders in play. [+2 Outsiders]
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @staticmethod
@@ -645,7 +642,6 @@ class Boffin(Minion):
     The Demon (even if drunk or poisoned) has a not-in-play good character's
     ability. You both know which.
     """
-    is_liar: ClassVar[bool] = True
     # TODO: Wake pattern is actually whenever the ability changes.
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
@@ -709,7 +705,6 @@ class Butler(Outsider):
     Each night, choose a player (not yourself):
     tomorrow, you may only vote if they are voting too.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     # Will need to implement the Butler's choices if the Goon is added.
@@ -720,7 +715,6 @@ class Chambermaid(Townsfolk):
     Each night, choose 2 alive players (not yourself):
     you learn how many woke tonight due to their ability.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     @dataclass
@@ -754,7 +748,6 @@ class Chef(Townsfolk):
     """
     You start knowing how many pairs of evil players there are.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -771,7 +764,6 @@ class Clockmaker(Townsfolk):
     """
     You start knowing how many steps from the Demon to its nearest Minion.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -821,7 +813,6 @@ class Courtier(Townsfolk):
     Once per game, at night, choose a character:
     they are drunk for 3 nights & 3 days.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
 
     target: PlayerID | None = None
@@ -887,7 +878,6 @@ class Dreamer(Townsfolk):
     Each night, choose a player (not yourself or Travellers):
     you learn 1 good & 1 evil character, 1 of which is correct.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     @dataclass
@@ -912,7 +902,7 @@ class Drunklike(Character):
     real world state or requiring other character implementations to implement
     Drunk-specific behaviour.
     """
-    is_liar: ClassVar[bool] = True
+    lies_about_self: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     simulated_character: Character | None = None
@@ -1007,7 +997,6 @@ class Empath(Townsfolk):
     """
     Each night, you learn how many of your 2 alive neighbors are evil.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     @dataclass
@@ -1031,7 +1020,6 @@ class Exorcist(Townsfolk):
     Each night*, choose a player (different to last night):
     the Demon, if chosen, learns who you are then doesn't wake tonight.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     target: PlayerID | None = None
@@ -1091,7 +1079,6 @@ class EvilTwin(Minion):
     You & an opposing player know each other.
     If the good player is executed, evil wins. Good can't win if you both live.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     twin: PlayerID | None = None
@@ -1155,7 +1142,6 @@ class GenericDemon(Demon):
     """
     Many demons just kill once each night*, so implment that once here.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
@@ -1271,7 +1257,6 @@ class Flowergirl(Townsfolk):
     """
     Each night*, you learn if a Demon voted today.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     demon_voted_on_day: tuple[STBool, int] = (None, None)
@@ -1307,7 +1292,6 @@ class FortuneTeller(Townsfolk):
     Each night, choose 2 players: you learn if either is a Demon.
     There is a good player that registers as a Demon to you.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     red_herring: PlayerID | None = None
@@ -1351,7 +1335,6 @@ class Gambler(Townsfolk):
     Each night*, choose a player & guess their character:
     if you guess wrong, you die.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     @dataclass
@@ -1393,7 +1376,6 @@ class Gambler(Townsfolk):
 @dataclass
 class Goblin(Minion):
     """TODO: Ability not yet implemented"""
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
@@ -1402,7 +1384,6 @@ class Golem(Outsider):
     You may only nominate once per game.
     When you do, if the nominee is not the Demon, they die.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     spent: bool = False
@@ -1455,7 +1436,6 @@ class Gossip(Townsfolk):
     Each day, you may make a public statement.
     Tonight, if it was true, a player dies.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @dataclass
@@ -1538,7 +1518,7 @@ class Hermit(Outsider):
                     override_registry[fname] = i
         misreg_categories.discard(Outsider)
 
-        cls.is_liar = any(x.is_liar for x in outsiders)
+        cls.lies_about_self = any(x.lies_about_self for x in outsiders)
         cls.misregister_categories = tuple(misreg_categories)
         cls.override_registry = override_registry
         cls.outsiders = tuple(outsiders)
@@ -1558,14 +1538,12 @@ class Hermit(Outsider):
         funcname: str,
         *args,
     ) -> StateGen:
-        def _apply(stategen: StateGen, ability_idx: int):
-            for state in stategen:
-                hermit = state.players[me].get_ability(Hermit)
-                func = getattr(hermit.active_abilities[ability_idx], funcname)
-                yield from func(state, *args)
         states = [state]
         for ability in range(len(self.active_abilities)):
-            states = _apply(states, ability)
+            states = core.apply_all(states, lambda s, ability=ability: getattr(
+                s.players[me].get_ability(Hermit).active_abilities[ability],
+                funcname,
+            ))
         yield from states
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -1707,7 +1685,6 @@ class Investigator(Townsfolk):
     """
     You start knowing that 1 of 2 players is a particular Minion.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -1728,7 +1705,6 @@ class Juggler(Townsfolk):
     On your 1st day, publicly guess up to 5 players' characters.
     That night, you learn how many you got correct.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     @dataclass
@@ -1787,7 +1763,6 @@ class Klutz(Outsider):
     When you learn that you died, publicly choose 1 alive player:
     if they are evil, your team loses.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @dataclass
@@ -1815,7 +1790,6 @@ class Knight(Townsfolk):
     """
     You start knowing 2 players that are not the Demon.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -1835,7 +1809,6 @@ class Leviathan(Demon):
     If more than 1 good player is executed, evil wins.
     All players know you are in play. After day 5, evil wins.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
@@ -1853,7 +1826,6 @@ class Librarian(Townsfolk):
     You start knowing that 1 of 2 players is a particular Outsider.
     (Or that zero are in play.)
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -1910,7 +1882,6 @@ class Lunatic(Drunklike, Outsider):
     You think you are the Demon, but you are not.
     The demon knows who you are & who you chose at night.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -1938,7 +1909,6 @@ class Marionette(Drunklike, Minion):
     You think you are a good character, but you are not.
     The Demon knows who you are. [You neighbor the Demon]
     """
-    is_liar: ClassVar[bool] = True
 
     @staticmethod
     def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
@@ -1967,7 +1937,6 @@ class Mathematician(Townsfolk):
     Each night, you learn how many players' abilities worked abnormally
     (since dawn) due to another character's ability.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     @dataclass
@@ -1983,7 +1952,6 @@ class Mayor(Townsfolk):
     If only 3 player live & no execution occurs, your team wins.
     If you die at night, another player might die instead.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
@@ -1992,7 +1960,6 @@ class Monk(Townsfolk):
     Each night*, choose a player (not yourself):
     they are safe from the Demon tonight.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     target: PlayerID = None
@@ -2047,7 +2014,7 @@ class Mutant(Outsider):
     """
     If you are "mad" about being an Outsider, you might be executed.
     """
-    is_liar: ClassVar[bool] = True
+    lies_about_self: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_day(self, state: State, me: PlayerID) -> StateGen:
@@ -2090,7 +2057,6 @@ class NightWatchman(Townsfolk):
     Once per game, at night, choose a player:
     they learn you are the Nightwatchman.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
 
     spent: bool = False
@@ -2185,7 +2151,7 @@ class NightWatchman(Townsfolk):
             state.get_night_info(NightWatchman, pid, state.night) is not None
             and not player.has_ability(NightWatchman)
             and not info.behaves_evil(state, pid)
-            and not player.character.is_liar
+            and not player.character.lies_about_self
             for pid, player in enumerate(state.players)
         )
 
@@ -2194,7 +2160,6 @@ class Noble(Townsfolk):
     """
     You start knowing 3 players, 1 and only 1 of which is evil.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -2270,7 +2235,6 @@ class Oracle(Townsfolk):
     """
     Each night*, you learn how many dead players are evil.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     @dataclass
@@ -2291,7 +2255,6 @@ class Philosopher(Townsfolk):
     Once per game, at night, choose a good character: gain that ability.
     If this character is in play, they are drunk.
     """
-    is_liar: ClassVar[bool] = False
     # Wake pattern is replaced upon Character choice
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
@@ -2339,7 +2302,7 @@ class Philosopher(Townsfolk):
             yield state; return
 
         self.active_ability = new_character
-        self.is_liar = choice.character.is_liar  # Philo-Mutant...?
+        self.lies_about_self = choice.character.lies_about_self  # Philo-Mutant...?
 
         for substate in self.active_ability.run_setup(state, me):
             drunk_targets = [
@@ -2438,6 +2401,90 @@ class Philosopher(Townsfolk):
             else self.active_ability.misregister_categories
         )
 
+
+@dataclass
+class PitHag(Minion):
+    """
+    Each night*, choose a player & a character they become (if not in play).
+    If a Demon is made, deaths tonight are arbitrary.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    target_history: list[tuple[PlayerID, type[Character]]] = field(
+        default_factory=list
+    )
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        pithag = state.players[me]
+        if state.night == 1 or pithag.is_dead and not pithag.vigormortised:
+            yield state; return
+        if self.is_droisoned(state, me):
+            # Cover both cases where would have failed or not
+            state.math_misregistration(me, info.STBool.FALSE_MAYBE)
+            yield state; return
+
+        characters = [
+            character for character in state.puzzle.script
+            if info.IsInPlay(character)(state, me).not_true()
+        ]
+        for target in range(len(state.players)):
+            for char_t in characters:
+                new_state = state.fork()
+                new_pithag = new_state.players[me].get_ability(PitHag)
+                new_pithag.target_history.append((target, char_t))
+                for substate in new_state.character_change(target, char_t):
+                    if not issubclass(char_t, Demon):
+                        yield substate
+                    else:
+                        yield from PitHag._arbitrary_deaths(substate, me)
+        # No change world
+        self.target_history.append((None, None))
+        yield state
+    
+    @staticmethod
+    def _arbitrary_deaths(state: State, me: PlayerID) -> StateGen:
+        # The PitHag causes deaths at arbitrary times in the night order, but
+        # generating a world for all possible deaths at all possible points in
+        # the night order, every night, along with all combinations of allowing
+        # real kills to succeed or fail is pretty infeasible.
+        # Instead I generate two worlds:
+        # (1) The PitHag allows the rest of the night to play out, then kills
+        #     the remaining unexplained deaths this night.
+        # (2) The PitHag causes ALL deaths that happen this night right now, and 
+        #    prevents any other character from killing tonight.
+        # This will cover the vast majority of cases, but may miss some very
+        # timing-sensitive cases. E.g., the PitHag kills the Philo-Sage right
+        # now, next the demon kills the real (now-sober) Sage. But that's very 
+        # whacky. Better coverage of cases can be added later if needed...
+
+        # World 1: Let the night continue, come back later to do remaining kills
+        yield state.fork()
+
+        # World 2: kill all right now, prevents further deaths.
+        deaths = [
+            death.player
+            for death in state.puzzle.night_deaths.get(state.night, ())
+            if info.IsAlive(death.player)(state, me).is_true()
+            and isinstance(death, events.NightDeath)
+        ]
+        states = [state]
+        for pid in deaths:
+            states = core.apply_all(states, lambda s, pid=pid: (
+                s.players[pid].character.attacked_at_night(s, pid, me)
+            ))
+        for substate in states:
+            substate.arbitrary_death_night = state.night
+            yield substate
+
+    def _world_str(self, state: State) -> str:
+        return (
+            f'{type(self).__name__} (Changed {", ".join(
+                f'{state.players[p].name} into {c.__name__}' 
+                if p is not None else 'None'
+                for p, c in self.target_history
+            )})'
+        )
+
 @dataclass
 class Po(GenericDemon):
     """
@@ -2484,14 +2531,16 @@ class Po(GenericDemon):
                 yield state
                 return
 
-            def kill_gen(states: StateGen, kill: PlayerID) -> StateGen:
-                for state_ in states:
-                    target = state_.players[kill].character
-                    yield from target.attacked_at_night(state_, target, me)
             for kills in itertools.combinations(range(len(state.players)), r=3):
                 new_states = [state.fork()]
                 for kill in kills:
-                    new_states = kill_gen(new_states, kill)
+                    new_states = core.apply_all(
+                        new_states, 
+                        lambda substate, kill=kill: 
+                        substate.players[kill].character.attacked_at_night(
+                            substate, kill, me
+                        )
+                    )
                 yield from new_states
 
 @dataclass
@@ -2499,7 +2548,6 @@ class Poisoner(Minion):
     """
     Each night, choose a player: they are poisoned tonight and tomorrow day.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     target: PlayerID = None
@@ -2551,7 +2599,6 @@ class PoppyGrower(Townsfolk):
     Each night, choose a player (not yourself):
     tomorrow, you may only vote if they are voting too.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
@@ -2560,7 +2607,6 @@ class Princess(Townsfolk):
     On your 1st day, if you nominated & executed a player,
     the Demon doesn’t kill tonight.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     activated: bool = False
@@ -2606,7 +2652,6 @@ class Progidy(Townsfolk):
     You draw the Prodigy token. Each night, choose a player:
     you learn a player of the same(solar)/opposite(lunar) alignment.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     is_solar: bool | None = None
@@ -2664,7 +2709,6 @@ class Pukka(Demon):
     Each night, choose a player: they are poisoned.
     The previously poisoned player dies then becomes healthy.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     target: PlayerID | None = None
@@ -2730,7 +2774,6 @@ class Puzzlemaster(Outsider):
     1 player is drunk, even if you die. If you guess (once) who it is, learn the
     Demon player, but guess wrong & get false info.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     puzzle_drunk: PlayerID | None = None
@@ -2799,7 +2842,6 @@ class Ravenkeeper(Townsfolk):
     If you die at night, you are woken to choose a player:
     you learn their character.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     death_night: int | None = None
@@ -2843,7 +2885,6 @@ class Recluse(Outsider):
     """
     You might register as evil & as a Minion or Demon, even if dead.
     """
-    is_liar: ClassVar[bool] = False
     misregister_categories: ClassVar[tuple[Category, ...]] = (Minion, Demon)
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
@@ -2857,7 +2898,6 @@ class Riot(Demon):
     # tend to completely change the way characters work. We can add them if they
     # become relevant I guess.
 
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     currently_causing_riot: bool = False
@@ -2937,7 +2977,6 @@ class Sage(Townsfolk):
     """
     If the Demon kills you, you learn that it is 1 of 2 players.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     death_night: int | None = None
@@ -2986,7 +3025,6 @@ class Savant(Townsfolk):
     Each day, you may visit the Storyteller to learn 2 things in private:
     one is true & one is false.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @dataclass
@@ -3028,7 +3066,6 @@ class ScarletWoman(Minion):
     If there are 5 or more players alive & the Demon dies, you become the Demon.
     (Travellers don't count).
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     def pre_death_in_town(
@@ -3112,7 +3149,6 @@ class Seamstress(Townsfolk):
     Once per game, at night, choose 2 players (not yourself):
     you learn if they are the same alignment.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_UNTIL_SPENT
 
     spent: bool = False
@@ -3136,7 +3172,6 @@ class Shugenja(Townsfolk):
     You start knowing if your closest evil player is clockwise or
     anti-clockwise. If equidistant, this info is arbitrary.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -3180,7 +3215,6 @@ class SnakeCharmer(Townsfolk):
     Each night, choose an alive player:
     a chosen Demon swaps characters & alignments with you & is then poisoned.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     self_droison: bool = False
@@ -3242,7 +3276,6 @@ class Soldier(Townsfolk):
     """
     You are safe from the Demon.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -3267,7 +3300,6 @@ class Steward(Townsfolk):
     """
     You start knowing 1 good player.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -3281,7 +3313,6 @@ class Saint(Outsider):
     """
     If you die by execution, your team loses.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
@@ -3302,7 +3333,6 @@ class Slayer(Townsfolk):
     Once per game, during the day, publicly choose a player:
     if they are the Demon, they die.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     spent: bool = False
@@ -3352,7 +3382,6 @@ class Spy(Minion):
     Each night, you see the Grimoire. You might register as good & as a
     Townsfolk or Outsider, even if dead.
     """
-    is_liar: ClassVar[bool] = True
     misregister_categories: ClassVar[tuple[Category, ...]] = (
         Townsfolk, Outsider
     )
@@ -3363,7 +3392,6 @@ class Undertaker(Townsfolk):
     """
     Each night*, you learn which character died by execution today.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     @dataclass
@@ -3399,7 +3427,6 @@ class VillageIdiot(Townsfolk):
     Each night, choose a player: you learn their alignment.
     [+0 to +2 Village Idiots. 1 of the extras is drunk]
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     self_droison: bool = False
@@ -3439,7 +3466,6 @@ class Washerwoman(Townsfolk):
     """
     You start knowing that 1 of 2 players is a particular Townsfolk.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -3459,7 +3485,6 @@ class Widow(Minion):
     On your 1st night, look at the Grimoire & choose a player:
     they are poisoned. 1 good player knows a Widow is in play.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     target: PlayerID | None = None
@@ -3565,7 +3590,6 @@ class Witch(Minion):
     Each night, choose a player: if they nominate tomorrow, they die.
     If just 3 players live, you lose this ability.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     target: PlayerID | None = None
@@ -3714,7 +3738,6 @@ class Virgin(Townsfolk):
     The 1st time you are nominated, if the nominator is a Townsfolk,
     they are executed immediately.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     spent: bool = False
@@ -3796,7 +3819,6 @@ class Xaan(Minion):
     """
     On night X, all Townsfolk are poisoned until dusk. [X Outsiders]
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     X: int = 0
@@ -3880,7 +3902,6 @@ class Xaan(Minion):
 @dataclass
 class Zombuul(Demon):
     """TODO: Not implemented properly yet"""
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     registering_dead: bool = False
@@ -3922,6 +3943,7 @@ GLOBAL_NIGHT_ORDER = [
     Monk,
     EvilTwin,  # Nasty hack - see todo.md
     Witch,
+    PitHag,
     ScarletWoman,
     Exorcist,
     Imp,
