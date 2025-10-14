@@ -331,7 +331,7 @@ class Character:
         TODO: Innkeeper should be checked here. Sailor or Lleech should extend
         this method. Things like Soldier and Monk live in `safe_from_attacker`.
         """
-        return False
+        return getattr(state, 'arbitrary_death_night', -1) == state.night
 
     def is_droisoned(self, state: State, me: PlayerID) -> bool:
         """
@@ -1558,14 +1558,12 @@ class Hermit(Outsider):
         funcname: str,
         *args,
     ) -> StateGen:
-        def _apply(stategen: StateGen, ability_idx: int):
-            for state in stategen:
-                hermit = state.players[me].get_ability(Hermit)
-                func = getattr(hermit.active_abilities[ability_idx], funcname)
-                yield from func(state, *args)
         states = [state]
         for ability in range(len(self.active_abilities)):
-            states = _apply(states, ability)
+            states = core.apply_all(states, lambda s, ability=ability: getattr(
+                s.players[me].get_ability(Hermit).active_abilities[ability],
+                funcname,
+            ))
         yield from states
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -2438,6 +2436,87 @@ class Philosopher(Townsfolk):
             else self.active_ability.misregister_categories
         )
 
+
+@dataclass
+class PitHag(Minion):
+    """
+    Each night*, choose a player & a character they become (if not in play).
+    If a Demon is made, deaths tonight are arbitrary.
+    """
+    is_liar: ClassVar[bool] = True
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    target_history: list[tuple[PlayerID, type[Character]]] = field(
+        default_factory=list
+    )
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        pithag = state.players[me]
+        if pithag.is_dead and not pithag.vigormortised:
+            yield state; return
+        if self.is_droisoned(state, me):
+            # Cover both cases where would have failed or not
+            state.math_misregistration(me, info.STBool.FALSE_MAYBE)
+            yield state; return
+        
+        characters = [
+            character for character in state.puzzle.script
+            if info.IsInPlay(character)(state, me).not_true()
+        ]
+        for target in range(len(state.players)):
+            for char_t in characters:
+                new_state = state.fork()
+                new_pithag = new_state.players[me].get_ability(PitHag)
+                new_pithag.target_history.append((target, char_t))
+                for substate in new_state.character_change(target, char_t):
+                    if not issubclass(char_t, Demon):
+                        yield substate
+                    else:
+                        yield from PitHag._arbitrary_deaths(substate, me)
+        # No change world
+        yield state
+    
+    @staticmethod
+    def _arbitrary_deaths(state: State, me: PlayerID) -> StateGen:
+        # The PitHag causes deaths at arbitrary times in the night order, but
+        # generating a world for all possible deaths at all possible points in
+        # the night order, every night, along with all combinations of allowing
+        # real kills to succeed or fail is pretty infeasible.
+        # Instead I generate two worlds:
+        # (1) The PitHag allows the rest of the night to play out, then kills
+        #     the remaining unexplained deaths this night.
+        # (2) The PitHag causes ALL deaths that happen this night right now, and 
+        #    prevents any other character from killing tonight.
+        # This will cover the vast majority of cases, but may miss some very
+        # timing-sensitive cases. E.g., the PitHag kills the Philo-Sage right
+        # now, next the demon kills the real (now-sober) Sage. But that's very 
+        # whacky. Better coverage of cases can be added later if needed...
+
+        # World 1: Let the night continue, come back later to do remaining kills
+        yield state.fork()
+
+        # World 2: kill all right now, prevents further deaths.
+        deaths = [
+            pid for pid in state.puzzle.night_deaths.get(state.night, ())
+            if info.IsAlive(pid)(state, me)
+        ]
+        states = [state]
+        for pid in deaths:
+            states = core.apply_all(states, lambda s, pid=pid: (
+                s.players[pid].character.attacked_at_night(s, pid, me)
+            ))
+        for substate in states:
+            substate.arbitrary_death_night = state.night
+            yield substate
+
+    def _world_str(self, state: State) -> str:
+        return (
+            f'{type(self).__name__} (Changed {", ".join(
+                f'{state.players[p].name}: {c.__name__}' 
+                for p, c in self.target_history
+            )})'
+        )
+
 @dataclass
 class Po(GenericDemon):
     """
@@ -2484,14 +2563,16 @@ class Po(GenericDemon):
                 yield state
                 return
 
-            def kill_gen(states: StateGen, kill: PlayerID) -> StateGen:
-                for state_ in states:
-                    target = state_.players[kill].character
-                    yield from target.attacked_at_night(state_, target, me)
             for kills in itertools.combinations(range(len(state.players)), r=3):
                 new_states = [state.fork()]
                 for kill in kills:
-                    new_states = kill_gen(new_states, kill)
+                    new_states = core.apply_all(
+                        new_states, 
+                        lambda substate, kill=kill: 
+                        substate.players[kill].character.attacked_at_night(
+                            substate, kill, me
+                        )
+                    )
                 yield from new_states
 
 @dataclass
@@ -3922,6 +4003,7 @@ GLOBAL_NIGHT_ORDER = [
     Monk,
     EvilTwin,  # Nasty hack - see todo.md
     Witch,
+    PitHag,
     ScarletWoman,
     Exorcist,
     Imp,

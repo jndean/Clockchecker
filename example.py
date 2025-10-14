@@ -52,6 +52,35 @@ if __name__ == '__main__':
         hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
+    
+    You, B, C, D = range(4)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Artist, day_info={
+                1: Artist.Ping(
+                    IsCharacter(B, Leviathan)
+                    & IsCharacter(C, PitHag)
+                    & IsCharacter(D, Dreamer)
+                )
+            }),
+            Player('B', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('C', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(B, C, demon=True),
+                2: FortuneTeller.Ping(C, D, demon=False),
+            }),
+            Player('D', claim=Dreamer, night_info={
+                1: Dreamer.Ping(C, PitHag, Artist),
+                # 2: Dreamer.Ping(B, Baron, Artist),
+            }),
+        ],
+        day_events={},
+        night_deaths={},
+        hidden_characters=[Leviathan, PitHag, Baron],
+        hidden_self=[],
+        category_counts=(2, 0, 1, 1),
+    )
 
     print(puzzle, '\n\nSolving...\n')
     count = 0

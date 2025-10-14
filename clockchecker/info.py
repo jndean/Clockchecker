@@ -30,7 +30,7 @@ class STBool(enum.Enum):
     # Format: (truth, is_maybe, st_says), where
     #  - `truth` is the true value of the statement
     #  - `is_maybe` indicates the ST is free to give an arbitrary response
-    #  - `st_says` is usually the same as `truth`, apart form in cases where
+    #  - `st_says` is usually the same as `truth`, apart from in cases where
     #     the ST MUST LIE, e.g. checking if zombuul is dead or legion is minion
 
     FALSE = (False, False, False)
@@ -216,12 +216,12 @@ class IsAlive(Info):
     player: PlayerID
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        if (
-            (z := player.get_ability(characters.Zombuul)) is not None
-            and z.registering_dead
-        ):
+        if player.is_dead:  # Short-circuit the most common case
+            return STBool.FALSE
+        zombuul = player.get_ability(characters.Zombuul)
+        if zombuul is not None and zombuul.registering_dead:
             return STBool.FALSE_LYING
-        return STBool(not player.is_dead)
+        return STBool.TRUE
 
 @dataclass
 class IsCharacter(Info):
