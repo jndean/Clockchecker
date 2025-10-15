@@ -568,7 +568,7 @@ class State:
             char = type(player.character)
             rhs = player._world_str(self)
             colour = 0
-            if char.is_liar or player.is_evil:
+            if char.is_liar or info.behaves_evil(self, player.id):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'

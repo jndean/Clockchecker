@@ -630,7 +630,7 @@ class Baron(Minion):
     """
     There are extra Outsiders in play. [+2 Outsiders]
     """
-    is_liar: ClassVar[bool] = True
+    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @staticmethod
@@ -1155,7 +1155,7 @@ class GenericDemon(Demon):
     """
     Many demons just kill once each night*, so implment that once here.
     """
-    is_liar: ClassVar[bool] = True
+    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
@@ -1833,7 +1833,7 @@ class Leviathan(Demon):
     If more than 1 good player is executed, evil wins.
     All players know you are in play. After day 5, evil wins.
     """
-    is_liar: ClassVar[bool] = True
+    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
@@ -2452,13 +2452,13 @@ class PitHag(Minion):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         pithag = state.players[me]
-        if pithag.is_dead and not pithag.vigormortised:
+        if state.night == 1 or pithag.is_dead and not pithag.vigormortised:
             yield state; return
         if self.is_droisoned(state, me):
             # Cover both cases where would have failed or not
             state.math_misregistration(me, info.STBool.FALSE_MAYBE)
             yield state; return
-        
+
         characters = [
             character for character in state.puzzle.script
             if info.IsInPlay(character)(state, me).not_true()
@@ -2474,6 +2474,7 @@ class PitHag(Minion):
                     else:
                         yield from PitHag._arbitrary_deaths(substate, me)
         # No change world
+        self.target_history.append((None, None))
         yield state
     
     @staticmethod
@@ -2513,6 +2514,7 @@ class PitHag(Minion):
         return (
             f'{type(self).__name__} (Changed {", ".join(
                 f'{state.players[p].name}: {c.__name__}' 
+                if p is not None else 'None'
                 for p, c in self.target_history
             )})'
         )
