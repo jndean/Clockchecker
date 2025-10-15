@@ -375,13 +375,12 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
     character's info. E.g. the lunatic is good but may lie about receiving a
     Nightwatchman ping, whilst the drunk lies about their character and info but
     would truthfully report a Nightwatchman ping.
-    This puzzle state is defined from the perspective of Player 0, so Player 0
-    never lies to themselves.
     """
     if player_id == 0 and state.puzzle.player_zero_is_you:
+        # You can't lie to yourself...
         return False
     player = state.players[player_id]
-    if player.is_evil or hasattr(player, 'speculative_liar'):
+    if player.is_evil or hasattr(player, 'speculative_liar') or hasattr(player, 'ceremad'):
         return True
     return type(player.character) in (
         characters.Lunatic,

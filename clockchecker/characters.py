@@ -708,6 +708,56 @@ class Butler(Outsider):
     # Will need to implement the Butler's choices if the Goon is added.
 
 @dataclass
+class Cerenovus(Minion):
+    """
+    Each night, choose a player & a good character:
+    they are "mad" they are this character tomorrow, or might be executed.
+    """
+    is_liar: ClassVar[bool] = True
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    target: PlayerID = None
+    target_history: list[PlayerID] = field(default_factory=list)
+
+    class Mad(info.NotInfo):
+        pass
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        cerenovus = state.players[src]
+        if cerenovus.is_dead and not cerenovus.vigormortised:
+            yield state; return
+        for target in range(len(state.players)):
+            new_state = state.fork()
+            new_cerenovus = new_state.players[me].get_ability(Cerenovus)
+            new_cerenovus.target = target
+            new_cerenovus.target_history.append(target)
+            new_cerenovus.maybe_activate_effects(new_state, me)
+            yield new_state
+
+    def end_day(self, state: State, me: PlayerID) -> bool:
+        self.maybe_deactivate_effects(state, me)
+        self.target = None
+        return True
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            player = state.players[self.target]
+            player.ceremad = getattr(player, 'ceremad', 0) + 1
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            player = state.players[self.target]
+            player.ceremad -= 1
+            if not player.ceremad:
+                del player.ceremad
+
+    def _world_str(self, state: State) -> str:
+        return (
+            f'{type(self).__name__} (Chose '
+            f'{", ".join(state.players[p].name for p in self.target_history)})'
+        )
+
+@dataclass
 class Chambermaid(Townsfolk):
     """
     Each night, choose 2 alive players (not yourself):
@@ -2444,19 +2494,19 @@ class Poisoner(Minion):
     # Keep history just for pretty printing the history of a game.
     target_history: list[PlayerID] = field(default_factory=list)
 
-    def run_night(self, state: State, src: PlayerID) -> StateGen:
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Create a world for every poisoning choice."""
-        poisoner = state.players[src]
+        poisoner = state.players[me]
         if poisoner.is_dead and not poisoner.vigormortised:
             yield state; return
         for target in range(len(state.players)):
             new_state = state.fork()
-            new_poisoner = new_state.players[src].get_ability(Poisoner)
+            new_poisoner = new_state.players[me].get_ability(Poisoner)
             # Even droisoned poisoners make a choice, because they might be
             # undroisoned before dusk.
             new_poisoner.target = target
             new_poisoner.target_history.append(target)
-            new_poisoner.maybe_activate_effects(new_state, src)
+            new_poisoner.maybe_activate_effects(new_state, me)
             yield new_state
 
     def end_day(self, state: State, me: PlayerID) -> bool:
