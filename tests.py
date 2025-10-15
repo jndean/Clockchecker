@@ -1488,24 +1488,23 @@ class TestPitHag(unittest.TestCase):
                 Player('B', claim=Empath, night_info={
                     1: Empath.Ping(0),
                 }),
-                Player('C', claim=FortuneTeller, night_info={
-                    1: FortuneTeller.Ping(B, C, demon=True),
-                    2: FortuneTeller.Ping(C, D, demon=False),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
                 }),
                 Player('D', claim=Dreamer, night_info={
-                    1: Dreamer.Ping(C, PitHag, Artist),
-                    2: Dreamer.Ping(B, Baron, Artist),
+                    1: Dreamer.Ping(B, Leviathan, Empath),
+                    2: Dreamer.Ping(B, Imp, Empath),
                 }),
             ],
             day_events={},
             night_deaths={},
-            hidden_characters=[Leviathan, PitHag, Baron],
+            hidden_characters=[Leviathan, PitHag, Baron, Imp],
             hidden_self=[],
-            category_counts=(2, 1, 0, 1),
+            category_counts=(2, 0, 1, 1),
         )
         assert_solutions(
             self,
             puzzle,
             solutions=((Artist, Leviathan, PitHag, Dreamer),),
-            solution_endchars=((Artist, Leviathan, Baron, Dreamer),),
+            solution_endchars=((Artist, Imp, PitHag, Dreamer),),
         )

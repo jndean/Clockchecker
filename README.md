@@ -283,7 +283,6 @@ class Investigator(Townsfolk):
     """
     You start knowing that 1 of 2 players is a particular Minion.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.FIRST_NIGHT
 
     @dataclass
@@ -309,7 +308,6 @@ class FortuneTeller(Townsfolk):
     Each night, choose 2 players: you learn if either is a Demon. 
     There is a good player that registers as a Demon to you.
     """
-    is_liar: ClassVar[bool] = False
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
     @dataclass
@@ -344,7 +342,6 @@ class Baron(Minion):
     """
     There are extra Outsiders in play. [+2 Outsiders]
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
     @staticmethod
@@ -364,8 +361,7 @@ class Drunk(Outsider):
     You do not know you are the Drunk. 
     You think you are a Townsfolk character, but you are not.
     """
-    category: ClassVar[Categories] = OUTSIDER
-    is_liar: ClassVar[bool] = True
+    lies_about_self: ClassVar[bool] = True
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         drunk = state.players[me]
@@ -386,7 +382,6 @@ class ScarletWoman(Minion):
     If there are 5 or more players alive & the Demon dies, you become the Demon.
     (Travellers don't count).
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
     def death_in_town(self, state: State, death: PlayerID, me: PlayerID) -> None:
@@ -417,7 +412,6 @@ class GenericDemon(Demon):
     """
     Many demons just kill once each night*, so implment that once here.
     """
-    is_liar: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     def run_night(self, state: State, night: int, me: PlayerID) -> StateGen:

@@ -437,7 +437,7 @@ class State:
         for player in self.players:
             if not (
                 isinstance(player.character, player.claim)
-                or player.character.is_liar
+                or player.character.lies_about_self
                 or info.behaves_evil(self, player.id)
             ):
                 return
@@ -568,7 +568,7 @@ class State:
             char = type(player.character)
             rhs = player._world_str(self)
             colour = 0
-            if char.is_liar or info.behaves_evil(self, player.id):
+            if char.lies_about_self or info.behaves_evil(self, player.id):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
@@ -639,7 +639,7 @@ class Puzzle:
             collection = (
                 self.demons if issubclass(character, characters.Demon) else
                 self.minions if issubclass(character, characters.Minion) else
-                self.hidden_good if character.is_liar else
+                self.hidden_good if character.lies_about_self else
                 self.speculative_liars
             )
             collection.append(character)
