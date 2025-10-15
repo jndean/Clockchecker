@@ -2462,8 +2462,10 @@ class PitHag(Minion):
 
         # World 2: kill all right now, prevents further deaths.
         deaths = [
-            pid for pid in state.puzzle.night_deaths.get(state.night, ())
-            if info.IsAlive(pid)(state, me)
+            death.player
+            for death in state.puzzle.night_deaths.get(state.night, ())
+            if info.IsAlive(death.player)(state, me).is_true()
+            and isinstance(death, events.NightDeath)
         ]
         states = [state]
         for pid in deaths:
@@ -2477,7 +2479,7 @@ class PitHag(Minion):
     def _world_str(self, state: State) -> str:
         return (
             f'{type(self).__name__} (Changed {", ".join(
-                f'{state.players[p].name}: {c.__name__}' 
+                f'{state.players[p].name} into {c.__name__}' 
                 if p is not None else 'None'
                 for p, c in self.target_history
             )})'

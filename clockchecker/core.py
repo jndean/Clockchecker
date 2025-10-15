@@ -868,18 +868,26 @@ def _script_max_speculative_liars(script: Sequence[type[Character]]) -> int:
     return total
 
 def _setup_max_speculative_liars(
-    in_play: Sequence[type[Character]],
+    play: Sequence[type[Character]],
     puzzle: Puzzle,
 ) -> int:
     """Max speculative liars for a given world setup."""
     total = 0
-    # Since there's no PitHag Yet, require a FangGu and speculative Outsider
-    if characters.FangGu in in_play and any(
-        issubclass(x, characters.Outsider)
-        for x in puzzle.speculative_liars
-    ):
-        total += 1
-    # TODO: PitHag, Cerenovus stuff
+
+    pithag_possible = characters.PitHag in play  # No alchemist yet
+    fanggu_possible = (
+        characters.FangGu in play
+        or (pithag_possible and characters.FangGu in puzzle.script)
+    )
+    outsiders_possible = (
+        any(issubclass(c, characters.Outsider) for c in play)
+        or (
+            pithag_possible 
+            and any(issubclass(c, characters.Outsider) for c in puzzle.script)
+        )
+    )
+    total += fanggu_possible and outsiders_possible
+    # TODO: Cerenovus, Mezepheles, mid-game BountyHunter etc.
     return total
 
 
@@ -958,6 +966,8 @@ def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
             world.players[position].speculative_liar = True
         if not world.begin_game(puzzle.allow_good_double_claims):
             continue
+    
+        # if isinstance(world.players[1], characters.L) not done here
 
         # Chains together a big ol' stack of generators corresponding to each
         # possible action of each player, forming a pipeline through which
