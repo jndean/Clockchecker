@@ -1,4 +1,5 @@
 from copy import deepcopy
+import time
 import unittest
 
 from clockchecker import *
@@ -77,17 +78,22 @@ class NQTPuzzles(unittest.TestCase):
             if puzzle_name.startswith('puzzle_')
         }
         print(f'Testing all {len(all_puzzles)} puzzles')
+        verbose = True
 
         for puzzle_name in all_puzzles:
             with self.subTest(msg=puzzle_name):
                 print(f'\033[31;1m.', end='', flush=True)
+                if verbose:
+                    print(f'\n{puzzle_name}', end='')
 
                 test_def = all_puzzles[puzzle_name]()
+                start = time.perf_counter()
                 worlds = list(
                     test_def.solve_override
                     if test_def.solve_override is not None
                     else solve(test_def.puzzle)
                 )
+                duration = time.perf_counter() - start
 
                 prediction_str = sorted(tuple(
                     ', '.join(x.__name__ for x in world.initial_characters)
@@ -103,6 +109,8 @@ class NQTPuzzles(unittest.TestCase):
                     for world in worlds:
                         self.assertTrue(test_def.solution_condition(world))
 
+                if verbose:
+                    print(f' {duration:0.2f}s  ', end='')
                 print('\033[32;1m\b✓', end='')
         print('\033[0m')
 
@@ -556,6 +564,7 @@ class TestSlayer(unittest.TestCase):
             hidden_characters=[Imp, Imp],
             hidden_self=[],
             category_counts=(2, 0, 0, 2),
+            allow_duplicate_tokens_in_bag=True,
         )
         assert_solutions(self, puzzle, solutions=(
             (Slayer, Soldier, Imp, Imp),
@@ -663,6 +672,7 @@ class TestSlayer(unittest.TestCase):
             hidden_characters=[Imp, Imp],
             hidden_self=[],
             category_counts=(2, 0, 0, 2),
+            allow_duplicate_tokens_in_bag=True,
         )
         assert_solutions(self, puzzle, solutions=(
             (Slayer, Soldier, Imp, Imp),
@@ -713,6 +723,7 @@ class TestSlayer(unittest.TestCase):
             hidden_characters=[Imp, Imp],
             hidden_self=[],
             category_counts=(2, 0, 0, 2),
+            allow_duplicate_tokens_in_bag=True,
         )
         assert_solutions(self, puzzle, solutions=(
             (Philosopher, Imp, Imp, Soldier),
@@ -1543,8 +1554,7 @@ class TestPitHag(unittest.TestCase):
             solution_endchars=((Artist, Leviathan, Puzzlemaster, Dreamer),),
             info_condition=CharAttrEq(C, 'puzzle_drunk', D)
         )
-    
-    
+
     def test_creates_outsider_fanggu_jump(self):
         You, B, C, D, E = range(5)
         puzzle = Puzzle(

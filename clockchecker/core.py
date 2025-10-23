@@ -221,7 +221,7 @@ class State:
     def player_ids(self):
         return range(len(self.players))
 
-    def begin_game(self, allow_good_double_claims: bool) -> bool:
+    def begin_game(self, allow_duplicate_tokens_in_bag: bool) -> bool:
         """Called after player positions and characters have been chosen"""
         self.current_phase = Phase.SETUP
         self.phase_order_index = 0
@@ -234,10 +234,15 @@ class State:
         self._math_misregisterers = set()
         self.vortox = False  # The vortox will set this during setup
 
-        if not allow_good_double_claims:
+        if not allow_duplicate_tokens_in_bag:
+            # Reject good double claims
             good_claims = set()
             for player in self.players:
-                if info.behaves_evil(self, player.id):
+                char = player.character
+                if (
+                    info.behaves_evil(self, player.id)
+                    or (char.lies_about_self and not char.draws_wrong_token())
+                ):
                     continue
                 if player.claim in good_claims:
                     return False
@@ -652,7 +657,7 @@ class Puzzle:
     # Generally puzzles are posed towards the end of the day, before executions
     finish_final_day: bool = False
     # Enable for e.g. oops all seamstresses
-    allow_good_double_claims: bool = False
+    allow_duplicate_tokens_in_bag: bool = False
     # You cannot lie to yourself, so player 0 gets special treatment
     player_zero_is_you: bool = True
     # Some BMR-style puzzles set this False # TODO: NotImplementedYet?
@@ -895,6 +900,13 @@ def _check_valid_character_counts(
     for (lo, hi), category in zip(bounds, characters.ALL_CATEGORIES):
         if not lo <= actual_counts[category] <= hi:
             return False
+
+    if (
+        not puzzle.allow_duplicate_tokens_in_bag
+        and len(set(setup)) != len(setup)
+    ):
+        return False
+
     return True
 
 def _script_max_speculative_liars(script: Sequence[type[Character]]) -> int:
@@ -1027,7 +1039,7 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
         world.players[position].speculative_evil = True
     for position in config.speculative_good_positions:
         world.players[position].speculative_good = True
-    if not world.begin_game(puzzle.allow_good_double_claims):
+    if not world.begin_game(puzzle.allow_duplicate_tokens_in_bag):
         return
 
     # Chains together a big ol' stack of generators corresponding to each

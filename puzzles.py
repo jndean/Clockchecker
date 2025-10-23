@@ -434,7 +434,7 @@ def puzzle_NQT7():
         ],
         hidden_characters=[Leviathan, Goblin, Mutant],
         hidden_self=[],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Savant, VillageIdiot, FortuneTeller, Goblin, Leviathan, Shugenja,
@@ -473,7 +473,7 @@ def puzzle_NQT8():
         ],
         hidden_characters=[Imp, Poisoner],
         hidden_self=[],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Seamstress, Imp, Poisoner) + (Seamstress,) * 4,
@@ -1030,7 +1030,7 @@ def puzzle_NQT20():
         night_deaths={2: Gabriel},
         hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[Drunk],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Investigator, VillageIdiot, Saint, VillageIdiot, Baron, Imp, Drunk),
@@ -1079,7 +1079,7 @@ def puzzle_NQT21():
         ],
         hidden_characters=[Leviathan, Goblin, Drunk],
         hidden_self=[Drunk],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Juggler, Juggler, Drunk, Juggler, Goblin, Juggler, Juggler, Leviathan),
@@ -1342,7 +1342,7 @@ def puzzle_NQT29():
         night_deaths={2: You},
         hidden_characters=[Imp, Poisoner, Drunk],
         hidden_self=[Drunk],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Dreamer, Poisoner, Imp, Dreamer, Dreamer, Dreamer, Drunk, Dreamer),
@@ -1764,6 +1764,7 @@ def puzzle_NQT38():
         night_deaths={2: Dan, 3: Matt},
         hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[],
+        max_speculation=0,
     )
     solutions = (
         (Recluse, Drunk, Imp, Investigator, Baron, SnakeCharmer, FortuneTeller,
@@ -2119,7 +2120,7 @@ def puzzle_NQT44():
         ],
         hidden_characters=[Leviathan, ScarletWoman, Drunk],
         hidden_self=[Drunk],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Juggler, Leviathan, FortuneTeller, Drunk, ScarletWoman, Investigator,
@@ -2171,7 +2172,7 @@ def puzzle_NQT44_alt():
         ],
         hidden_characters=[Leviathan, ScarletWoman, Drunk],
         hidden_self=[Drunk],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Washerwoman, Drunk, Progidy, Leviathan, Shugenja, Clockmaker,
@@ -2411,7 +2412,7 @@ def puzzle_NQT48():
         night_deaths={},
         hidden_characters=[Leviathan, Xaan, Poisoner],
         hidden_self=[],
-        allow_good_double_claims=True,
+        allow_duplicate_tokens_in_bag=True,
     )
     solutions = (
         (Mathematician, Chambermaid, VillageIdiot, Leviathan, Juggler, Golem,
@@ -2715,7 +2716,6 @@ def puzzle_NQT53():
         night_deaths={2: Jasmine, 3: You},
         hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
-        max_speculation=0,
     )
     solutions = ((
         Artist, Klutz, SnakeCharmer, Witch, Clockmaker, Dreamer, Mutant, FangGu
@@ -3010,7 +3010,7 @@ def puzzle_nqt_snv_test1():
             ],
         },
         night_deaths={2: Aoife, 3: Tim},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Klutz, Mutant],
         hidden_self=[],
     )
     solutions = (
@@ -3066,7 +3066,7 @@ def puzzle_nqt_snv_test2():
             ],
         },
         night_deaths={2: Olivia, 3: Aoife},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
         hidden_self=[],
     )
     solutions = (
@@ -3117,7 +3117,7 @@ def puzzle_nqt_snv_test3():
             ],
         },
         night_deaths={2: Aoife, 3: You},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
         hidden_self=[],
     )
     solutions = (
@@ -3174,7 +3174,7 @@ def puzzle_nqt_snv_test4():
             ],
         },
         night_deaths={2: Oscar, 3: Fraser},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
         hidden_self=[],
     )
     solutions = ((

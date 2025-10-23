@@ -398,7 +398,7 @@ class Character:
         """
         if self.get_ability(character) is not None:
             return True
-        if (sim := getattr(self, 'simulated_character', None)) is not None:
+        if (sim := getattr(self, 'drunklike_character', None)) is not None:
             return sim.acts_like(character)
         # TODO: Lunatic currently doesn't decide what demon they think they are.
         return False
@@ -432,6 +432,15 @@ class Character:
             case WakePattern.EACH_NIGHT_UNTIL_SPENT:
                 return not self.spent
         raise ValueError(f'{type(self).__name__} has {self.wake_pattern=}')
+
+    @classmethod
+    def draws_wrong_token(cls) -> bool:
+        return (
+            issubclass(cls, Drunklike)
+            or cls is Hermit and any(
+                issubclass(x, Drunklike) for x in cls.outsiders
+            )
+        )
 
     @classmethod
     def get_category(cls) -> Category:
@@ -905,10 +914,10 @@ class Drunklike(Character):
     lies_about_self: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.MANUAL
 
-    simulated_character: Character | None = None
+    drunklike_character: Character | None = None
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
-        return self.simulated_character.wakes_tonight(state, me)
+        return self.drunklike_character.wakes_tonight(state, me)
 
     def _create_simulation(
         self,
@@ -918,7 +927,7 @@ class Drunklike(Character):
         """Create a parallel world where the Drunklike really has the ability"""
         sim_state = state.fork()
         sim_player = sim_state.players[me]
-        sim_player.character = sim_player.character.simulated_character
+        sim_player.character = sim_player.character.drunklike_character
         return sim_state, sim_player.character
 
     def _extract_from_simulation(
@@ -933,7 +942,7 @@ class Drunklike(Character):
         if hasattr(sim_player.character, 'spent'):
             self.spent = sim_player.character.spent
         real_player.woke_tonight |= sim_player.woke_tonight
-        self.simulated_character = sim_player.character
+        self.drunklike_character = sim_player.character
 
     def _worth_simulating(self, state: State):
         """
@@ -941,7 +950,7 @@ class Drunklike(Character):
         a few character interactions. So it's worth filtering out some basic
         cases where the output is obviously irrelevant.
         """
-        return self.simulated_character.wake_pattern in (
+        return self.drunklike_character.wake_pattern in (
             WakePattern.MANUAL,
             WakePattern.EACH_NIGHT_UNTIL_SPENT,
         )
@@ -989,7 +998,7 @@ class Drunk(Drunklike, Outsider):
         if not issubclass(drunk.claim, Townsfolk):
             # Drunk can only 'lie' about being Townsfolk
             return
-        self.simulated_character = drunk.claim()
+        self.drunklike_character = drunk.claim()
         yield from super().run_setup(state, me)
 
 @dataclass
@@ -1572,7 +1581,7 @@ class Hermit(Outsider):
         for ability in self.active_abilities:
             ability._deactivate_effects_impl(state, me)
 
-    # Todo: generate the below overrides in the build_func?
+    # Todo: auto-generate the below overrides in the build_func?
     def apply_death(self, state: State, me: PlayerID, src: PlayerID) -> StateGen:
         method_idx = self.override_registry.get('apply_death', 0)
         method = getattr(self.active_abilities[method_idx], 'apply_death')
@@ -1595,10 +1604,10 @@ class Hermit(Outsider):
         return any(x.wakes_tonight(state, me) for x in self.active_abilities)
 
     @property
-    def simulated_character(self):
+    def drunklike_character(self):
         return_val = None
         for ability in self.active_abilities:
-            sim_char = getattr(ability, 'simulated_character', None)
+            sim_char = getattr(ability, 'drunklike_character', None)
             if sim_char is not None:
                 assert return_val is None
                 return_val = sim_char
@@ -1889,7 +1898,7 @@ class Lunatic(Drunklike, Outsider):
         for demon in state.puzzle.demons:
             substate = state.fork()
             new_lunatic = substate.players[me].get_ability(Lunatic)
-            new_lunatic.simulated_character = demon()
+            new_lunatic.drunklike_character = demon()
             yield from Drunklike.run_setup(new_lunatic, substate, me)
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
@@ -1928,7 +1937,7 @@ class Marionette(Drunklike, Minion):
             if demon_neighbour.is_maybe():
                 state.math_misregistration(me)  # e.g. Recluse-Mario ticks Math
 
-        self.simulated_character = state.players[me].claim()
+        self.drunklike_character = state.players[me].claim()
         yield from super().run_setup(state, me)
 
 @dataclass
@@ -2275,7 +2284,7 @@ class Philosopher(Townsfolk):
         if self.active_ability is not None:
             if self.droisoned_philo_choice:
                 # If waking to an ability you don't have, increment Math
-                ability_t = type(self.active_ability.simulated_character)
+                ability_t = type(self.active_ability.drunklike_character)
                 if (
                     state.get_night_info(ability_t, me, state.night) is not None
                     or self.active_ability.wakes_tonight(state, me)
@@ -2294,7 +2303,7 @@ class Philosopher(Townsfolk):
             # If Philo is is droisoned when they make their choice, they become
             # a Drunk-like player who thinks they have an ability thereafter.
             self.active_ability = Drunklike(
-                simulated_character=new_character
+                drunklike_character=new_character
             )
             self.drunk_target = None
             self.droisoned_philo_choice = True
@@ -2391,8 +2400,8 @@ class Philosopher(Townsfolk):
         self.active_ability.spent = value
 
     @property
-    def simulated_character(self):
-        return getattr(self.active_ability, 'simulated_character', None)
+    def drunklike_character(self):
+        return getattr(self.active_ability, 'drunklike_character', None)
 
     @property
     def misregister_categories(self):
