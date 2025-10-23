@@ -81,7 +81,6 @@ class NQTPuzzles(unittest.TestCase):
         for puzzle_name in all_puzzles:
             with self.subTest(msg=puzzle_name):
                 print(f'\033[31;1m.', end='', flush=True)
-                # print(puzzle_name)
 
                 test_def = all_puzzles[puzzle_name]()
                 worlds = list(
@@ -1546,7 +1545,7 @@ class TestPitHag(unittest.TestCase):
         )
     
     
-    def test_creates_outsider_fanggu_jump(self):    
+    def test_creates_outsider_fanggu_jump(self):
         You, B, C, D, E = range(5)
         puzzle = Puzzle(
             players=[

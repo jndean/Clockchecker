@@ -27,11 +27,11 @@ def puzzle_NQT1():
         players=[
             Player('You', claim=Savant, day_info={
                 1: Savant.Ping(
-                    IsInPlay(Investigator), 
+                    IsInPlay(Investigator),
                     IsEvil(Tim) | IsEvil(Anna)
                 ),
                 2: Savant.Ping(
-                    Chef.Ping(1), 
+                    Chef.Ping(1),
                     DrunkBetweenTownsfolk()
                 ),
                 3: Savant.Ping(
@@ -115,7 +115,7 @@ def puzzle_NQT2():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT3a():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1f2jht3/weekly_puzzle_3a_3b_not_throwing_away_my_shot/
 
@@ -150,7 +150,7 @@ def puzzle_NQT3a():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT3b():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1f2jht3/weekly_puzzle_3a_3b_not_throwing_away_my_shot/
 
@@ -235,14 +235,14 @@ def puzzle_NQT4():
         hidden_self=[Drunk, Marionette],
     )
     solutions = (
-        (Investigator, Drunk, Marionette, LordOfTyphon, Poisoner, Recluse, 
+        (Investigator, Drunk, Marionette, LordOfTyphon, Poisoner, Recluse,
             Juggler, Dreamer),
-        (Investigator, Drunk, Poisoner, LordOfTyphon, Marionette, Recluse, 
+        (Investigator, Drunk, Poisoner, LordOfTyphon, Marionette, Recluse,
             Juggler, Dreamer),
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT5a():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fcriex/weekly_puzzle_5a_5b_you_only_guess_twice/
 
@@ -278,7 +278,7 @@ def puzzle_NQT5a():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT5b():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fcriex/weekly_puzzle_5a_5b_you_only_guess_twice/
 
@@ -316,7 +316,7 @@ def puzzle_NQT5b():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT6():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1fj1h0c/weekly_puzzle_6_super_marionette_bros/
 
@@ -369,7 +369,7 @@ def puzzle_NQT6():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT7():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1foeq4d/weekly_puzzle_7_the_savant_strikes_back/
 
@@ -532,7 +532,7 @@ def puzzle_NQT9():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT10():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1g49r8j/weekly_puzzle_10_dont_overcook_it
 
@@ -570,7 +570,7 @@ def puzzle_NQT10():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT12a():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
 
@@ -607,10 +607,10 @@ def puzzle_NQT12a():
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT12b():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
-    
+
     You, Oscar, Anna, Josh, Fraser, Tom, Aoife, Steph = range(8)
     puzzle = Puzzle(
         players=[
@@ -647,12 +647,12 @@ def puzzle_NQT12b():
         hidden_self=[],
     )
     solutions = (
-        (Librarian, Vortox, Lunatic, Mayor, Slayer, Dreamer, Clockmaker, 
+        (Librarian, Vortox, Lunatic, Mayor, Slayer, Dreamer, Clockmaker,
             ScarletWoman),
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT13():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gka3js/weekly_puzzle_13_clockblocking/
 
@@ -752,7 +752,7 @@ def puzzle_NQT15():
                 )
             }),
             Player('Oscar', claim=Klutz),
-            Player('Sarah', claim=Juggler, 
+            Player('Sarah', claim=Juggler,
                 day_info={
                     1: Juggler.Juggle({
                         You: Savant,
@@ -782,7 +782,7 @@ def puzzle_NQT15():
                 1: Artist.Ping(
                     ~IsCharacter(You, Vortox)
                     & ~IsCharacter(Oscar, Vortox)
-                    & ~IsCharacter(Sarah, Vortox) 
+                    & ~IsCharacter(Sarah, Vortox)
                 )
             }),
             Player('Jasmine', claim=SnakeCharmer, night_info={
@@ -911,14 +911,14 @@ def puzzle_NQT17():
 
 def puzzle_NQT18():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1hb72qg/weekly_puzzle_18_starring_the_xaan/
-    
+
     You, Steph, Fraser, Dan, Aoife, Tim, Olivia, Sarah = range(8)
     puzzle = Puzzle(
         players=[
             Player('You', claim=Librarian, night_info={
                 1: Librarian.Ping(Aoife, Tim, Drunk),
             }),
-            Player('Steph', claim=Juggler, 
+            Player('Steph', claim=Juggler,
                 day_info={1: Juggler.Juggle({
                     Fraser: Leviathan,
                     Aoife: Balloonist,
@@ -951,7 +951,7 @@ def puzzle_NQT18():
         hidden_self=[Drunk],
     )
     solutions = (
-        (Drunk, Juggler, Leviathan, FortuneTeller, Balloonist, Saint, Xaan, 
+        (Drunk, Juggler, Leviathan, FortuneTeller, Balloonist, Saint, Xaan,
             Recluse),
     )
     return PuzzleDef(puzzle, solutions)
@@ -1210,12 +1210,12 @@ def puzzle_NQT24():
         hidden_self=[Drunk],
     )
     solutions = (
-        (Investigator, Klutz, FortuneTeller, Washerwoman, Virgin, Librarian, 
+        (Investigator, Klutz, FortuneTeller, Washerwoman, Virgin, Librarian,
             Imp, Poisoner),
     )
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT26():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ihl8vs/weekly_puzzle_26_a_major_problem/
 
@@ -1413,7 +1413,7 @@ def puzzle_NQT30b():
     solutions = ((Clockmaker, Atheist, Knight, Seamstress, Artist, Noble),)
     return PuzzleDef(puzzle, solutions)
 
-    
+
 def puzzle_NQT31():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1j8ub5q/weekly_puzzle_31_no_your_other_left/
 
@@ -1463,7 +1463,7 @@ def puzzle_NQT32():
             Player('You', claim=Dreamer, night_info={
                 1: Dreamer.Ping(Sula, Drunk, Imp),
             }),
-            Player('Matthew', claim=Juggler, 
+            Player('Matthew', claim=Juggler,
                 day_info={
                     1: Juggler.Juggle({
                         You: Imp,
@@ -1505,7 +1505,7 @@ def puzzle_NQT32():
         hidden_self=[Drunk],
     )
     solutions = (
-        (Dreamer, Poisoner, Imp, Empath, Juggler, Saint, Undertaker, 
+        (Dreamer, Poisoner, Imp, Empath, Juggler, Saint, Undertaker,
             FortuneTeller),
     )
     return PuzzleDef(puzzle, solutions)
@@ -1573,7 +1573,7 @@ def puzzle_NQT34():
             Player('Sarah', claim=Seamstress, night_info={
                 1: Seamstress.Ping(Steph, Aoife, same=True),
             }),
-            Player('Josh', claim=Juggler, 
+            Player('Josh', claim=Juggler,
                 day_info={1: Juggler.Juggle({Steph: Artist, Sula: Clockmaker})},
                 night_info={2: Juggler.Ping(0)},
             ),
@@ -1583,7 +1583,7 @@ def puzzle_NQT34():
         ],
         day_events={
             1: [
-                Dies(player=Steph, after_nominating=True), 
+                Dies(player=Steph, after_nominating=True),
                 Execution(Aoife),
             ]
         },
@@ -1675,7 +1675,7 @@ def puzzle_NQT36():
         hidden_self=[Drunk],
     )
     solutions = (
-        (Empath, Saint, Slayer, Ravenkeeper, Investigator, FortuneTeller, Imp, 
+        (Empath, Saint, Slayer, Ravenkeeper, Investigator, FortuneTeller, Imp,
             Poisoner),
     )
     return PuzzleDef(puzzle, solutions)
@@ -1720,7 +1720,7 @@ def puzzle_NQT37():
         hidden_self=[Drunk],
     )
     solutions = (
-        (Undertaker, Washerwoman, Chef, Drunk, Librarian, FortuneTeller, Imp, 
+        (Undertaker, Washerwoman, Chef, Drunk, Librarian, FortuneTeller, Imp,
             Poisoner),
     )
     return PuzzleDef(puzzle, solutions)
@@ -1774,7 +1774,7 @@ def puzzle_NQT38():
 
 def puzzle_NQT38_alt():
     # This version of NQT Puzzle 38 was posted to the discord, but not Reddit
-    # once it was discovered that there is an unintended second solution that 
+    # once it was discovered that there is an unintended second solution that
     # relies on the Mathematician's counting of Philosophers waking to abilities
     # they never gained due to being poisoned on the night they choose.
     # https://discord.com/channels/569683781800296501/854891541969109033/1367073812063191081
@@ -1887,7 +1887,7 @@ def puzzle_NQT39():
         hidden_self=[],
     )
     solutions = (
-        (Oracle, NoDashii, Mutant, Seamstress, Sage, Artist, 
+        (Oracle, NoDashii, Mutant, Seamstress, Sage, Artist,
             Mathematician, Witch),
     )
     return PuzzleDef(puzzle, solutions)
@@ -2122,7 +2122,7 @@ def puzzle_NQT44():
         allow_good_double_claims=True,
     )
     solutions = (
-        (Juggler, Leviathan, FortuneTeller, Drunk, ScarletWoman, Investigator, 
+        (Juggler, Leviathan, FortuneTeller, Drunk, ScarletWoman, Investigator,
             Progidy, Progidy),
     )
     return PuzzleDef(puzzle, solutions)
@@ -2226,7 +2226,7 @@ def puzzle_NQT45a():
         hidden_self=[Drunk, Hermit],
     )
     solutions = (
-        (Ravenkeeper, Empath, Drunk, Investigator, Chef, ScarletWoman, Imp, 
+        (Ravenkeeper, Empath, Drunk, Investigator, Chef, ScarletWoman, Imp,
             Slayer),
     )
     return PuzzleDef(puzzle, solutions)
@@ -2367,7 +2367,7 @@ def puzzle_NQT47():
 
 def puzzle_NQT48():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ltxd8a/weekly_puzzle_48_solving_for_x/
-    
+
     You, Matthew, Olivia, Jasmine, Fraser, Sula, Dan, Tom = range(8)
     puzzle = Puzzle(
         players=[
@@ -2414,7 +2414,7 @@ def puzzle_NQT48():
         allow_good_double_claims=True,
     )
     solutions = (
-        (Mathematician, Chambermaid, VillageIdiot, Leviathan, Juggler, Golem, 
+        (Mathematician, Chambermaid, VillageIdiot, Leviathan, Juggler, Golem,
             Puzzlemaster, Xaan),
     )
     return PuzzleDef(puzzle, solutions)
@@ -2668,7 +2668,7 @@ def _puzzle_NQT52():
 
 def puzzle_NQT53():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ndehkk/weekly_puzzle_53_lets_do_the_time_warp_again/
-    
+
     You, Sarah, Josh, Olivia, Tim, Aoife, Fraser, Jasmine = range(8)
     puzzle = Puzzle(
         players=[
@@ -2715,6 +2715,7 @@ def puzzle_NQT53():
         night_deaths={2: Jasmine, 3: You},
         hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
+        max_speculation=0,
     )
     solutions = ((
         Artist, Klutz, SnakeCharmer, Witch, Clockmaker, Dreamer, Mutant, FangGu
@@ -3486,6 +3487,6 @@ if __name__ == '__main__':
         for solution in puzzle_def.solutions:
             print(f"Solution: [{','.join(c.__name__ for c in solution)}]")
         print('\033[31;1mActually found:\033[0m')
-    
+
     for world in worlds:
         print(world)

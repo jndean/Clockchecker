@@ -68,7 +68,9 @@ class Player:
     is_dead: bool = False
     woke_tonight: bool = False
     droison_count: int = 0
+
     character_history: list[str] = field(default_factory=list)
+    ever_behaved_evil: bool = False
 
     def droison(self, state: State, src: PlayerID) -> None:
         self.droison_count += 1
@@ -166,7 +168,7 @@ class Player:
             items.append(f'with Boffin[{boffin_repr}]')
         if self.is_dead:
             items.append('💀')
-        if hasattr(self, 'speculative_liar'):
+        if hasattr(self, 'speculative_evil'):
             items.append('(behaves evil)')
         return ' '.join(items)
 
@@ -215,6 +217,10 @@ class State:
         if _DEBUG:
             self.debug_key = ()  # The root debug key
 
+    @property
+    def player_ids(self):
+        return range(len(self.players))
+
     def begin_game(self, allow_good_double_claims: bool) -> bool:
         """Called after player positions and characters have been chosen"""
         self.current_phase = Phase.SETUP
@@ -239,11 +245,12 @@ class State:
 
         return True
 
-    def fork(self, fork_id: int | None = None) -> State:
+    def fork(self, fork_id: tuple[int, ...] | None = None) -> State:
         """
         Create a unique key for each set of possible branches in the state space
         so that (mainly for debugging) we can trace an output world back through
-        the branches that created it. Thankfully the solver is deterministic.
+        the branches that created it. For this reason we keep the solver
+        deterministic.
         """
         # deepcopy everything except the puzzle definition, which is shared
         puzzle, self.puzzle = self.puzzle, None
@@ -253,12 +260,12 @@ class State:
             if fork_id is None:
                 fork_id = _DEBUG_STATE_FORK_COUNTS[self.debug_key]
                 _DEBUG_STATE_FORK_COUNTS[self.debug_key] += 1
-            elif fork_id:
+            else:
                 _DEBUG_STATE_FORK_COUNTS.clear()
-            ret.debug_key = self.debug_key + (fork_id,)
+            ret.debug_key = self.debug_key + fork_id
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
             if _DEBUG_WORLD_KEYS and not ret._is_world():
-                ret.debug_cull = True
+                ret.cull_branch = True
         if puzzle.user_interrupt is not None and puzzle.user_interrupt():
             raise InterruptedError('User requested solve stops')
         return ret
@@ -437,8 +444,8 @@ class State:
         for player in self.players:
             if not (
                 isinstance(player.character, player.claim)
-                or player.character.lies_about_self
                 or info.behaves_evil(self, player.id)
+                or player.character.lies_about_self
             ):
                 return
 
@@ -465,7 +472,15 @@ class State:
         self.day = None
         yield self
 
-    def character_change(
+    def change_alignment(self, pid: PlayerID, is_evil: bool) -> StateGen:
+        # Returns a StateGen because one day I will implement alignment-change
+        # event callbacks that other characters may respond to (e.g. FT, ET).
+        player = self.players[pid]
+        player.is_evil = is_evil
+        player.ever_behaved_evil |= info.behaves_evil(self, pid)
+        yield self
+
+    def change_character(
         self,
         player_id: PlayerID,
         character: type[Character]
@@ -486,6 +501,8 @@ class State:
 
         for substate in player.character.run_setup(self, player_id):
             if not substate.check_game_over():
+                behaves_evil = info.behaves_evil(substate, player_id)
+                substate.players[player_id].ever_behaved_evil |= behaves_evil
                 yield substate
 
     def update_character_callbacks(self):
@@ -523,7 +540,7 @@ class State:
         yield self
 
     def check_game_over(self) -> bool:
-        # TODO: Check evil win condition? Doesn't come up much when solving...
+        """The game is never over, so reject games where a team has won."""
         all_demons_dead = not any(
             isinstance(p.character, characters.Demon) and not p.is_dead
             for p in self.players
@@ -537,6 +554,7 @@ class State:
             for p in self.players
         )
         # TODO: Mastermind day.
+        # TODO: Evil win condition, will become relevant in Zombuul puzzles
         game_over = all_demons_dead and no_evil_twin
         return game_over
 
@@ -576,18 +594,33 @@ class State:
         ret.append(')')
         return '\n'.join(ret)
 
-    def round_robin(self) -> StateGen:
+    def round_robin(self, config: StartingConfiguration) -> StateGen:
         """
         Called once simulating of days and nights have finished, i.e., the
         players do their final round robin. At this point any speculative liars
         must have become 'concrete' liars, otherwise the speculation was
-        incorrect.
+        incorrect. Moreover, any player who is now good but ever had the
+        capacity to lie, we must resimulate the world with the extra condition
+        that they must never have taken the opportunity to lie.
         """
         for player in self.players:
-            if not hasattr(player, 'speculative_liar'):
-                continue
-            del player.speculative_liar
-            if not info.behaves_evil(self, player.id):
+            if hasattr(player, 'speculative_evil'):
+                del player.speculative_evil
+                if not info.behaves_evil(self, player.id):
+                    return
+
+        if not any(hasattr(p, 'speculative_good') for p in self.players):
+            speculative_good = [
+                pid
+                for pid, player in enumerate(self.players)
+                if player.ever_behaved_evil and not info.behaves_evil(self, pid)
+            ]
+            if speculative_good:
+                redo_config = copy(config)
+                redo_config.speculative_good_positions = speculative_good
+                if _DEBUG:
+                    redo_config.debug_key = self.debug_key
+                yield from _world_check(self.puzzle, redo_config)
                 return
         yield self
 
@@ -624,6 +657,8 @@ class Puzzle:
     player_zero_is_you: bool = True
     # Some BMR-style puzzles set this False # TODO: NotImplementedYet?
     allow_killing_dead_players: bool = True
+    # Cap the number of speculative good liars considered
+    max_speculation: int = 1
 
 
     def __post_init__(self, hidden_characters):
@@ -694,6 +729,9 @@ class Puzzle:
         self._night_info, self._day_info, _external_night_info = zip(*(
             player._extract_info() for player in self.players
         ))
+        self.event_counts = defaultdict(int, {
+            day: len(events) for day, events in self.day_events.items()
+        })
 
         # External info retrieval
         self.external_info_registry = defaultdict(list)
@@ -787,6 +825,11 @@ class Puzzle:
         for player_id, player in enumerate(self.players):
             ret.append(f'    \033[33;1m{player.name} claims '
                        f'{player.claim.__name__}\033[0m')
+            for (_, night), info_items in self.external_info_registry.items():
+                for info_item, pid in info_items:
+                    if pid == player_id:
+                        info_str = info.pretty_print(info_item, names)
+                        ret.append(f'      N{night}: {info_str}')
             for c, all_info in (('N', self._night_info), ('D', self._day_info)):
                 for day, info_item in all_info[player_id].items():
                     if isinstance(day, tuple):
@@ -825,13 +868,11 @@ class Puzzle:
 
 def _check_valid_character_counts(
     puzzle: Puzzle,
-    liar_characters: Sequence[type[Character]],
-    liar_positions: Sequence[int],
-    speculative_liar_positions: Sequence[int],
+    config: StartingConfiguration,
 ) -> bool:
     """Check that the starting player category counts are legal."""
     setup = [p.claim for p in puzzle.players]
-    for liar, position in zip(liar_characters, liar_positions):
+    for liar, position in zip(config.liar_characters, config.liar_positions):
         setup[position] = liar
         if (
             position == 0 and puzzle.player_zero_is_you
@@ -839,10 +880,10 @@ def _check_valid_character_counts(
         ):
             return False
     # TODO: Clean up speculative liar generation, it is rubbish.
-    if puzzle.player_zero_is_you and 0 in speculative_liar_positions:
+    if puzzle.player_zero_is_you and 0 in config.speculative_evil_positions:
         return False
     max_speculation = _setup_max_speculative_liars(setup, puzzle)
-    if len(speculative_liar_positions) > max_speculation:
+    if len(config.speculative_evil_positions) > max_speculation:
         return False
 
     T, O, M, D = puzzle.category_counts
@@ -864,6 +905,7 @@ def _script_max_speculative_liars(script: Sequence[type[Character]]) -> int:
     """
     total = 0
     total += characters.FangGu in script  # FangGu jumps to a good player
+    total += characters.SnakeCharmer in script  # SC charms a demon
     # TODO: PitHag, Cerenovus go here.
     return total
 
@@ -882,18 +924,26 @@ def _setup_max_speculative_liars(
     outsiders_possible = (
         any(issubclass(c, characters.Outsider) for c in play)
         or (
-            pithag_possible 
+            pithag_possible
             and any(issubclass(c, characters.Outsider) for c in puzzle.script)
         )
     )
+    snakecharmer_possible = (
+        characters.SnakeCharmer in play
+        or (pithag_possible and characters.SnakeCharmer in puzzle.script)
+    )
     total += fanggu_possible and outsiders_possible
+    total += snakecharmer_possible
     # TODO: Cerenovus, Mezepheles, mid-game BountyHunter etc.
     return total
 
 
-def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
-    """Generate all possible initial placements of the hidden roles."""
-    max_speculative_liars = _script_max_speculative_liars(puzzle.script)
+def _starting_config_gen(puzzle: Puzzle) -> Generator[StartingConfiguration]:
+    """Generate all possible initial configurations of player roles."""
+    max_speculative_liars = min(
+        _script_max_speculative_liars(puzzle.script),
+        puzzle.max_speculation,
+    )
     n_townsfolk, n_outsiders, n_minions, n_demons = puzzle.category_counts
     liar_combinations = it.product(
         it.combinations(puzzle.demons, n_demons),
@@ -925,7 +975,13 @@ def _liar_placement_gen(puzzle: Puzzle) -> LiarGen:
                 if any(i in existing_spec_pos for i in other_spec_pos):
                     continue
                 spec_pos = existing_spec_pos + other_spec_pos
-                yield (liars, liar_positions, spec_pos, dbg_idx)
+                yield StartingConfiguration(
+                    liar_characters=liars,
+                    liar_positions=liar_positions,
+                    speculative_evil_positions=spec_pos,
+                    speculative_good_positions=(),
+                    debug_key=(dbg_idx,),
+                )
                 dbg_idx += 1
 
 def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
@@ -933,64 +989,81 @@ def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
     Utility for calling a state-generating function on all states in a StateGen.
     """
     for state in states:
-        if hasattr(state, 'debug_cull'):
+        if hasattr(state, 'cull_branch'):
             continue
         yield from fn(state)
 
-def _world_check_gen(puzzle: Puzzle, liars_generator: LiarGen) -> StateGen:
-    """Accepts starting configurations and finds all possible solutions."""
 
-    event_counts = defaultdict(int, {
-        day: len(events) for day, events in puzzle.day_events.items()
-    })
+@dataclass
+class StartingConfiguration:
+    """
+    Convenient container of everything you need (in addition to the puzzle)
+    to describe the initial assignment of characters and behaviours to players
+    (i.e. roughly the post-token-draw, pre-setup state) ready for solving.
+    """
+    liar_characters: tuple[type[Character]]
+    liar_positions: tuple[int, ...]
+    speculative_evil_positions: tuple[int, ...]
+    speculative_good_positions: tuple[int, ...]
+    debug_key: tuple[int, ...]
 
-    for (
-        liar_characters,
-        liar_positions,
-        speculation_positions,
-        debug_idx,
-    ) in liars_generator:
-        # Sanity check character counts before creating a new world
-        if not _check_valid_character_counts(
-            puzzle, liar_characters, liar_positions, speculation_positions,
-        ):
-            continue
-        # Create the world and place the hidden characters
-        world = puzzle.state_template.fork(debug_idx)
-        for liar, position in zip(liar_characters, liar_positions):
-            world.players[position].character = liar()
-            world.players[position].is_evil = issubclass(
-                liar, (characters.Minion, characters.Demon)
-            )
-        for position in speculation_positions:
-            world.players[position].speculative_liar = True
-        if not world.begin_game(puzzle.allow_good_double_claims):
-            continue
 
-        # Chains together a big ol' stack of generators corresponding to each
-        # possible action of each player, forming a pipeline through which
-        # possible world states flow. Only valid worlds are able to reach the
-        # end of the pipe.
-        worlds = [world]
-        for _ in range(len(puzzle.setup_order)):
+def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
+    """
+    Given a descriptino of an initial game configuration, simulate all choices
+    and yield those worlds that fit the puzzle constraints.
+    """
+    # Create the world and place the hidden characters
+    world = puzzle.state_template.fork(config.debug_key)
+    for liar, position in zip(config.liar_characters, config.liar_positions):
+        world.players[position].character = liar()
+        world.players[position].is_evil = issubclass(
+            liar, (characters.Minion, characters.Demon)
+        )
+        world.players[position].ever_behaved_evil = info.behaves_evil(
+            world, position
+        )
+    for position in config.speculative_evil_positions:
+        world.players[position].speculative_evil = True
+    for position in config.speculative_good_positions:
+        world.players[position].speculative_good = True
+    if not world.begin_game(puzzle.allow_good_double_claims):
+        return
+
+    # Chains together a big ol' stack of generators corresponding to each
+    # possible action of each player, forming a pipeline through which
+    # possible world states flow. Only valid worlds are able to reach the
+    # end of the pipe.
+    worlds = [world]
+    for _ in range(len(puzzle.setup_order)):
+        worlds = apply_all(worlds, lambda w: w.run_next_character())
+    worlds = apply_all(worlds, lambda w: w.end_setup())
+    for round_ in range(1, puzzle._max_night + 1):
+        for _ in range(len(puzzle.night_order)):
             worlds = apply_all(worlds, lambda w: w.run_next_character())
-        worlds = apply_all(worlds, lambda w: w.end_setup())
-        for round_ in range(1, puzzle._max_night + 1):
-            for _ in range(len(puzzle.night_order)):
+        worlds = apply_all(worlds, lambda w: w.end_night())
+        if round_ <= puzzle._max_day:
+            for _ in range(len(puzzle.day_order)):
                 worlds = apply_all(worlds, lambda w: w.run_next_character())
-            worlds = apply_all(worlds, lambda w: w.end_night())
-            if round_ <= puzzle._max_day:
-                for _ in range(len(puzzle.day_order)):
-                    worlds = apply_all(worlds, lambda w: w.run_next_character())
-                for event in range(event_counts[round_]):
-                    worlds = apply_all(
-                        worlds,
-                        lambda w, r=round_, e=event: w.run_event(r, e)
-                    )
-                if round_ < puzzle._max_day or puzzle.finish_final_day:
-                    worlds = apply_all(worlds, lambda w: w.end_day())
-        worlds = apply_all(worlds, lambda w: w.round_robin())
-        yield from worlds
+            for event in range(puzzle.event_counts[round_]):
+                worlds = apply_all(
+                    worlds,
+                    lambda w, r=round_, e=event: w.run_event(r, e)
+                )
+            if round_ < puzzle._max_day or puzzle.finish_final_day:
+                worlds = apply_all(worlds, lambda w: w.end_day())
+    worlds = apply_all(worlds, lambda w: w.round_robin(config))
+    yield from worlds
+
+
+def _world_check_gen(
+    puzzle: Puzzle,
+    config_gen: Iterator[StartingConfiguration]
+) -> StateGen:
+    """Run _world_check on all starting configurations."""
+    for config in config_gen:
+        if _check_valid_character_counts(puzzle, config):
+            yield from _world_check(puzzle, config)
 
 
 def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
@@ -1015,7 +1088,7 @@ def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
             any_solution_found = True
 
     if not any_solution_found:
-        atheist_state = puzzle.state_template.fork(fork_id=-1)
+        atheist_state = puzzle.state_template.fork(fork_id=(-1,))
         atheist_state.begin_game(True)
         if any(
             player.has_ability(characters.Atheist)
@@ -1036,9 +1109,9 @@ def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
         solutions_q.put(traceback.format_exc())
     solutions_q.put(None)  # Finished Sentinel
 
-def _liar_placement_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
-    for placement in _liar_placement_gen(puzzle):
-        liars_q.put(placement)
+def _starting_config_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
+    for config in _starting_config_gen(puzzle):
+        liars_q.put(config)
     for _ in range(num_procs):
         liars_q.put(None)  # Finished Sentinel
 
@@ -1068,8 +1141,8 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
 
     if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
         # Non-parallel version just runs everything in one process.
-        liars = _liar_placement_gen(puzzle)
-        solutions = _world_check_gen(puzzle, liars)
+        configs = _starting_config_gen(puzzle)
+        solutions = _world_check_gen(puzzle, configs)
         solutions = _filter_solutions(puzzle, solutions)
         yield from solutions
         return
@@ -1088,7 +1161,7 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
     ]
     all_workers.append(
         Process(
-            target=_liar_placement_worker,
+            target=_starting_config_worker,
             daemon=True,
             args=(puzzle, liars_queue, num_processes)
         )

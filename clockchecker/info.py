@@ -379,7 +379,9 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
     if player_id == 0 and state.puzzle.player_zero_is_you:
         return False  # You can't lie to yourself, Josef
     player = state.players[player_id]
-    if player.is_evil or hasattr(player, 'speculative_liar'):
+    if hasattr(player, 'speculative_good'):
+        return False
+    if player.is_evil or hasattr(player, 'speculative_evil'):
         return True
     return type(player.character) in (
         characters.Lunatic,
