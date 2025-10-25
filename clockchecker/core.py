@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Iterable, Mapping
-from collections import defaultdict
+from collections import Counter, defaultdict
 from copy import copy, deepcopy
 from dataclasses import dataclass, field, InitVar
 import enum
+import inspect
 import os
 from typing import Callable, TypeAlias
 
@@ -18,8 +19,11 @@ from .info import PlayerID, Info
 
 
 
-# Set True to enable debug mode
-_DEBUG = os.environ.get('DEBUG', False)
+# Flags to enable features for development
+_PROFILING = os.environ.get('PROFILING', False)
+_DEBUG = os.environ.get('DEBUG', False) or _PROFILING
+
+_PROFILING_FORK_LOCATIONS = Counter()
 _DEBUG_STATE_FORK_COUNTS = {}
 _DEBUG_WORLD_KEYS = [
     # (45, 0, 0, 3, 1, 3, 3),
@@ -27,9 +31,6 @@ _DEBUG_WORLD_KEYS = [
 
 
 StateGen: TypeAlias = Iterator['State']
-LiarPlacement: TypeAlias = tuple[list[type['Character']], tuple[int, ...], int]
-LiarGen: TypeAlias = Iterator[LiarPlacement]
-
 
 class Phase(enum.Enum):
     NIGHT = enum.auto()
@@ -247,6 +248,7 @@ class State:
         puzzle, self.puzzle = self.puzzle, None
         ret = deepcopy(self)
         self.puzzle, ret.puzzle = puzzle, puzzle
+
         if _DEBUG:
             if fork_id is None:
                 fork_id = (_DEBUG_STATE_FORK_COUNTS[self.debug_key],)
@@ -255,6 +257,9 @@ class State:
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
             if _DEBUG_WORLD_KEYS and not ret._is_world():
                 ret.cull_branch = True
+            if _PROFILING:
+                _record_fork_caller(self)
+
         if puzzle.user_interrupt is not None and puzzle.user_interrupt():
             raise InterruptedError('User requested solve stops')
         return ret
@@ -830,3 +835,36 @@ def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
     """Yields from a state-generating function on all states in a StateGen."""
     for state in states:
         yield from fn(state)
+
+
+def _record_fork_caller(state: State):
+    """
+    Record which character method just forked a world during the solve, this
+    can be aggregated into stats that are useful for profiling the combinatorial
+    complexity introduced by each character's implementation.
+    """
+    caller_frame = inspect.currentframe().f_back.f_back
+    _, _, fn_name, _, _ = inspect.getframeinfo(caller_frame)
+    cls = caller_frame.f_locals.get('self')
+    cls_prefix = f'{cls.__class__.__name__}.' if cls is not None else ''
+    caller = f'{cls_prefix}{fn_name}'
+    _PROFILING_FORK_LOCATIONS[(caller, state.debug_key)] += 1
+
+
+def summarise_profiling():
+    """Aggregate stats about the combinatorial complexity of each character."""
+    # I do not want to introduce a pandas dependency just for this one function.
+    groups = defaultdict(list)
+    for (caller, _), count in _PROFILING_FORK_LOCATIONS.items():
+        groups[caller].append(count)
+    rows = [
+        (caller, (total := sum(counts)), total / len(counts))
+        for caller, counts in groups.items()
+    ]
+    rows.sort(reverse=True, key=lambda row: row[2])
+    name_len = max(len(name) for name in groups)
+    title = f'│ {'Function': >{name_len}} │  Factor  │  Total  │'
+    print(f'┌{'─' * (len(title)-2)}┐\n{title}\n├{'─' * (len(title)-2)}┤')
+    for name, total, avg in rows:
+        print(f'│ {name: >{name_len}} │ {avg:7.2f}x │ {total: >7} │ ')
+    print(f'└{'─' * (len(title)-2)}┘')

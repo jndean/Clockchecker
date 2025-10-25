@@ -3741,8 +3741,9 @@ class Vigormortis(GenericDemon):
             minion_state = state.fork()
             minion = minion_state.players[target].character
             minion.vigormortised = True
-            # TODO: aLL of the player's abilities should be marked vigormortised
-            # not just the root ability/character.
+            # TODO: ALL of the player's abilities should be marked vigormortised
+            # not just the root ability/character. Do this by maing an ability
+            # generator on a player, which `get_ability` and `has_ability` call.
             poison_candidates = (
                 info.tf_candidates_in_direction(minion_state, target, -1)
                 + info.tf_candidates_in_direction(minion_state, target, 1)

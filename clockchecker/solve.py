@@ -255,6 +255,9 @@ def _world_check_gen(
     """Run _world_check on all starting configurations."""
     if core._DEBUG:
         core._DEBUG_STATE_FORK_COUNTS.clear()
+    if core._PROFILING:
+        core._PROFILING_FORK_LOCATIONS.clear()
+
     for config in config_gen:
         yield from _world_check(puzzle, config)
 
@@ -286,6 +289,9 @@ def _filter_solutions(puzzle: Puzzle, solutions: StateGen) -> StateGen:
         if any(p.has_ability(characters.Atheist) for p in atheist_state.players):
             yield atheist_state
 
+    if core._PROFILING:
+        core.summarise_profiling()
+
 # ------------------------------ THREADING ------------------------------ #
 
 def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
@@ -298,6 +304,8 @@ def _world_checking_worker(puzzle: Puzzle, liars_q: Queue, solutions_q: Queue):
             solutions_q.put(solution)
     except Exception as e:
         solutions_q.put(traceback.format_exc())
+    if core._PROFILING:
+        solutions_q.put(core._PROFILING_FORK_LOCATIONS)
     solutions_q.put(None)  # Finished Sentinel
 
 def _starting_config_worker(puzzle: Puzzle, liars_q: Queue, num_procs: int):
@@ -313,6 +321,8 @@ def _solution_collecting_worker(solutions_q: Queue, num_procs: int) -> StateGen:
         recvd = solutions_q.get()
         if isinstance(recvd, State):
             yield recvd
+        elif isinstance(recvd, Counter) and core._PROFILING:
+            core._PROFILING_FORK_LOCATIONS += recvd
         else:  # Finished. Maybe sentinel, maybe error
             if recvd is not None:
                 err_str = recvd
@@ -324,11 +334,12 @@ def _solution_collecting_worker(solutions_q: Queue, num_procs: int) -> StateGen:
         exc.add_note(f'\n{err_str}')
         raise exc
 
+
 def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
     """Top level solver method, accepts a puzzle and generates solutions."""
 
     if num_processes is None:
-        num_processes = 1 if core._DEBUG else os.cpu_count()
+        num_processes = int(os.environ.get('NUM_PROC', os.cpu_count()))
 
     if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
         # Non-parallel version just runs everything in one process.
