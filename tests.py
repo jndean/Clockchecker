@@ -1,4 +1,5 @@
 from copy import deepcopy
+import os
 import time
 import unittest
 
@@ -77,8 +78,8 @@ class NQTPuzzles(unittest.TestCase):
             for puzzle_name in dir(puzzles)
             if puzzle_name.startswith('puzzle_')
         }
-        print(f'Testing all {len(all_puzzles)} puzzles')
-        verbose = True
+        print(f'Test 1: solve all {len(all_puzzles)} puzzles')
+        verbose = os.environ.get('VERBOSE', False)
 
         for puzzle_name in all_puzzles:
             with self.subTest(msg=puzzle_name):
@@ -113,6 +114,7 @@ class NQTPuzzles(unittest.TestCase):
                     print(f' {duration:0.2f}s  ', end='')
                 print('\033[32;1m\b✓', end='')
         print('\033[0m')
+        print('Starting character unit tests')
 
 
 class TestRiot(unittest.TestCase):

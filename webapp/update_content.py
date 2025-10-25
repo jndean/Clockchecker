@@ -16,7 +16,7 @@ nqt_page = "https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-arch
 
 puzzle_pattern = re.compile(r'\ndef _?puzzle_(.*)\(\):\n([\s\S]*?\n)    solutions =')
 claim_pattern = re.compile(r"Player\('.*?', claim=(.+?)[,)]")
-hidden_pattern = re.compile(r"hidden_characters=\[(\w*(?:,\s*\w+)*)\s*\]")
+hidden_pattern = re.compile(r"hidden_characters=\[\s*(\w*(?:,\s*\w+)*)\s*\]")
 preamble_pattern = re.compile(r"Player\('.*?', claim=(.+?)[,)]")
 nqt_metadata_pattern = re.compile(
 r'''<tr>
@@ -66,7 +66,6 @@ def get_nqt_metadata(blog_content):
 def parse_body(body):
 	claims = claim_pattern.findall(body)
 	hidden = [x.strip() for x in hidden_pattern.search(body).group(1).split(',')]
-
 	lines = (l[4:] for l in body.splitlines())
 	preamble = []
 	for line in lines:
@@ -129,6 +128,7 @@ if __name__ == '__main__':
 	mv('characters')
 	mv('events')
 	mv('info')
+	mv('solve')
 
 	print(f'Update Complete: {len(puzzles)} puzzles')
 

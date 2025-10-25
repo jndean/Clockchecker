@@ -1764,7 +1764,6 @@ def puzzle_NQT38():
         night_deaths={2: Dan, 3: Matt},
         hidden_characters=[Imp, Baron, Spy, Poisoner, ScarletWoman, Drunk],
         hidden_self=[],
-        max_speculation=0,
     )
     solutions = (
         (Recluse, Drunk, Imp, Investigator, Baron, SnakeCharmer, FortuneTeller,
@@ -2760,6 +2759,105 @@ def puzzle_NQT54():
     )
     return PuzzleDef(puzzle, solutions)
 
+def puzzle_NQT55():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1nxahl5/weekly_puzzle_55_the_life_of_a_flowergirl/
+
+    You, Matt, Fraser, Steph, Aoife, Anna, Sarah, Jasmine = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Flowergirl,
+                day_info={1: Flowergirl.Voters([You, Fraser, Steph, Aoife, Jasmine])},
+                night_info={2: Flowergirl.Ping(True)}
+            ),
+            Player('Matt', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Sarah, Jasmine, same=True),
+            }),
+            Player('Fraser', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(4)
+            }),
+            Player('Steph', claim=Klutz),
+            Player('Aoife', claim=Artist, day_info={
+                1: Artist.Ping(~IsCharacter(Aoife, Artist))
+            }),
+            Player('Anna', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        You: Flowergirl,
+                        Fraser: FangGu,
+                        Aoife: FangGu,
+                        Sarah: Mathematician,
+                        Jasmine: Oracle,
+                    })
+                },
+                night_info={2: Juggler.Ping(5)}
+            ),
+            Player('Sarah', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+            }),
+            Player('Jasmine', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+                3: Oracle.Ping(1),
+            }),
+        ],
+        day_events={
+            1: Execution(Sarah),
+            2: [Dies(player=You, after_nominating=True), Execution(Matt)],
+        },
+        night_deaths={2: Aoife, 3: Fraser},
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_self=[],
+    )
+    solutions = (
+        (Flowergirl, Seamstress, Clockmaker, Klutz, Artist, Vortox, 
+            Mathematician, Witch),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT59():
+    # TODO: URL not up yet
+
+    You, Steph, Olivia, Oscar, Josh, Fraser, Jasmine, Matthew, Adam = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Matthew, Chef),
+            }),
+            Player('Steph', claim=Saint),
+            Player('Olivia', claim=Investigator, night_info={
+                1: Investigator.Ping(Jasmine, Adam, Spy)
+            }),
+            Player('Oscar', claim=Butler),
+            Player('Josh', claim=Recluse),
+            Player('Fraser', claim=Virgin),
+            Player('Jasmine', claim=Empath, night_info={
+                1: Empath.Ping(1),
+                2: Empath.Ping(2),
+                3: Empath.Ping(1),
+            }),
+            Player('Matthew', claim=Chef, night_info={
+                1: Chef.Ping(0)
+            }),
+            Player('Adam', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Jasmine, Empath),
+                3: Undertaker.Ping(Olivia, Investigator),
+                4: Undertaker.Ping(Matthew, Chef),
+            }),
+        ],
+        day_events={
+            1: ExecutionByST(player=Jasmine, after_nominating=Fraser),
+            2: Execution(Olivia),
+            3: Execution(Matthew),
+        },
+        night_deaths={2: You, 3: Steph, 4: Josh},
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Ravenkeeper, Saint, Investigator, Imp, Recluse, Virgin, Spy, Chef,
+            Undertaker),
+    )
+    return PuzzleDef(puzzle, solutions)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
@@ -3010,7 +3108,8 @@ def puzzle_nqt_snv_test1():
             ],
         },
         night_deaths={2: Aoife, 3: Tim},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Klutz, Mutant],
+        hidden_characters=[
+            FangGu, Vigormortis, NoDashii, Vortox, Witch, Klutz, Mutant],
         hidden_self=[],
     )
     solutions = (
@@ -3066,7 +3165,8 @@ def puzzle_nqt_snv_test2():
             ],
         },
         night_deaths={2: Olivia, 3: Aoife},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[
+            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
         hidden_self=[],
     )
     solutions = (
@@ -3117,7 +3217,8 @@ def puzzle_nqt_snv_test3():
             ],
         },
         night_deaths={2: Aoife, 3: You},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[
+            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
         hidden_self=[],
     )
     solutions = (
@@ -3174,7 +3275,8 @@ def puzzle_nqt_snv_test4():
             ],
         },
         night_deaths={2: Oscar, 3: Fraser},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[
+            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant,Klutz],
         hidden_self=[],
     )
     solutions = ((

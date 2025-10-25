@@ -47,14 +47,14 @@ class Execution(Event):
     """
     A player is executed during the day by popular vote. They might not die.
     Executions not triggered by popular vote should use an appropriate subclass
-    of Execution (e.g. executions triggered by Witches, Virgin).
+    of Execution (e.g. executions triggered by Virgin or madness).
     """
     player: PlayerID
     died: bool = True
 
     def __call__(self, state: State) -> StateGen:
-        player = state.players[self.player].character
-        yield from player.executed(state, self.player, self.died)
+        character = state.players[self.player].character
+        yield from character.executed(state, self.player, self.died)
 
 
 @dataclass
@@ -65,7 +65,6 @@ class ExecutionByST(Execution):
     the Virgin).
     Inheriting from Execution lets things like Vortox easily check Executions.
     """
-    # E.g. like nominating virgin
     after_nominating: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
         if self.after_nominating is not None:

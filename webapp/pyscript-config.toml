@@ -5,4 +5,4 @@
 "./clockchecker/characters" = "clockchecker/characters.py"
 "./clockchecker/info" = "clockchecker/info.py"
 "./clockchecker/events" = "clockchecker/events.py"
-"./clockchecker/worker" = "clockchecker/worker.py"
+"./clockchecker/solve" = "clockchecker/solve.py"

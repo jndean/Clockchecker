@@ -400,7 +400,6 @@ class Character:
             return True
         if (sim := getattr(self, 'drunklike_character', None)) is not None:
             return sim.acts_like(character)
-        # TODO: Lunatic currently doesn't decide what demon they think they are.
         return False
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
@@ -1891,7 +1890,6 @@ class Lunatic(Drunklike, Outsider):
     You think you are the Demon, but you are not.
     The demon knows who you are & who you chose at night.
     """
-    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         """Create world for each choice of claimed demon."""
@@ -1910,7 +1908,21 @@ class Lunatic(Drunklike, Outsider):
         no puzzles where the Lunatic claims Lunatic and reveals their kill
         choices, so this is not modelled.
         """
-        yield from Drunklike.run_night(self, state, me)
+        if self.is_droisoned(state, me) and state.night == self.first_night:
+            # Demon doesn't learn who the droisoned Lunatic is, increment math.
+            # Really this should be checked on subsequent nights too, but that
+            #  will (usually) be covered OK by the rest of the math logic below.
+            state.math_misregistration(me)
+        for substate in Drunklike.run_night(self, state, me):
+            lunatic = substate.players[me]
+            if (
+                lunatic.woke_tonight
+                and lunatic.get_ability(Lunatic).is_droisoned(substate, me)
+            ):
+                # MAYBE inc math, because Lunatic could have chosen whoever.
+                # This is only approximately correct, most of the time.
+                substate.math_misregistration(me, STBool.TRUE_MAYBE)
+            yield substate
 
 @dataclass
 class Marionette(Drunklike, Minion):
