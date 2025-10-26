@@ -147,6 +147,13 @@ class Player:
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)
 
+    @property
+    def lies_about_self(self):
+        return (
+            self.character.lies_about_self
+            or getattr(self, 'speculative_ceremad', False)
+        )
+
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
         items = self.character_history + [self.character._world_str(state)]
@@ -225,10 +232,13 @@ class State:
             # Reject good double claims
             good_claims = set()
             for player in self.players:
-                char = player.character
                 if (
                     info.behaves_evil(self, player.id)
-                    or (char.lies_about_self and not char.draws_wrong_token())
+                    or (
+                        # E.g. The Mutant may double claim but not the Drunk
+                        player.lies_about_self
+                        and not player.character.draws_wrong_token()
+                    )
                 ):
                     continue
                 if player.claim in good_claims:

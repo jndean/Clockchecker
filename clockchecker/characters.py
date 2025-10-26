@@ -718,6 +718,60 @@ class Butler(Outsider):
     # Will need to implement the Butler's choices if the Goon is added.
 
 @dataclass
+class Cerenovus(Minion):
+    """
+    Each night, choose a player & a good character:
+    they are "mad" they are this character tomorrow, or might be executed.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    target: PlayerID = None
+    target_history: list[PlayerID] = field(default_factory=list)
+
+    class Mad(info.ExternalInfo):
+        # Other players use this to claim they were ceremad one night
+        character: type[Character]
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        cerenovus = state.players[me]
+        if cerenovus.is_dead and not cerenovus.vigormortised:
+            yield state; return
+        if self.is_droisoned(self, me):
+            state.math_misregistration(me)
+            self.target = None
+            yield state; return
+        for target in range(len(state.players)):
+            new_state = state.fork()
+            new_cerenovus = new_state.players[me].get_ability(Cerenovus)
+            new_cerenovus.target = target
+            new_cerenovus.target_history.append(target)
+            new_cerenovus.maybe_activate_effects(new_state, me)
+            yield new_state
+
+    def end_day(self, state: State, me: PlayerID) -> bool:
+        self.maybe_deactivate_effects(state, me)
+        self.target = None
+        return True
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            player = state.players[self.target]
+            player.ceremad = getattr(player, 'ceremad', 0) + 1
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            player = state.players[self.target]
+            player.ceremad -= 1
+            if not player.ceremad:
+                del player.ceremad
+
+    def _world_str(self, state: State) -> str:
+        return (
+            f'{type(self).__name__} (Chose '
+            f'{", ".join(state.players[p].name for p in self.target_history)})'
+        )
+
+@dataclass
 class Chambermaid(Townsfolk):
     """
     Each night, choose 2 alive players (not yourself):
@@ -3995,6 +4049,7 @@ GLOBAL_NIGHT_ORDER = [
     Monk,
     EvilTwin,  # Nasty hack - see todo.md
     Witch,
+    Cerenovus,
     PitHag,
     ScarletWoman,
     Exorcist,
