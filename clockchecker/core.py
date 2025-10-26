@@ -244,6 +244,9 @@ class State:
         the branches that created it. For this reason we keep the solver
         deterministic.
         """
+        if _PROFILING and fork_id is None:
+            record_fork_caller(self.debug_key, 1)
+
         # deepcopy everything except the puzzle definition, which is shared
         puzzle, self.puzzle = self.puzzle, None
         ret = deepcopy(self)
@@ -257,8 +260,6 @@ class State:
             _DEBUG_STATE_FORK_COUNTS[ret.debug_key] = 0
             if _DEBUG_WORLD_KEYS and not ret._is_world():
                 ret.cull_branch = True
-            if _PROFILING:
-                _record_fork_caller(self)
 
         if puzzle.user_interrupt is not None and puzzle.user_interrupt():
             raise InterruptedError('User requested solve stops')
@@ -622,7 +623,7 @@ class Puzzle:
     # Some BMR-style puzzles set this False # TODO: NotImplementedYet?
     allow_killing_dead_players: bool = True
     # Cap the number of speculative good liars considered
-    max_speculation: int = 1
+    max_speculation: int = 2
 
 
     def __post_init__(self, hidden_characters):
@@ -837,23 +838,42 @@ def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
         yield from fn(state)
 
 
-def _record_fork_caller(state: State):
+def record_fork_caller(debug_key: tuple[int, ...], offset: int):
     """
-    Record which character method just forked a world during the solve, this
+    Record which (character) method just forked a world during the solve, this
     can be aggregated into stats that are useful for profiling the combinatorial
     complexity introduced by each character's implementation.
     """
-    caller_frame = inspect.currentframe().f_back.f_back
+    caller_frame = inspect.currentframe().f_back
+    for _ in range(offset):
+        caller_frame = caller_frame.f_back
     _, _, fn_name, _, _ = inspect.getframeinfo(caller_frame)
     cls = caller_frame.f_locals.get('self')
     cls_prefix = f'{cls.__class__.__name__}.' if cls is not None else ''
     caller = f'{cls_prefix}{fn_name}'
-    _PROFILING_FORK_LOCATIONS[(caller, state.debug_key)] += 1
+    _PROFILING_FORK_LOCATIONS[(caller, debug_key)] += 1
 
 
-def summarise_profiling():
+def summarise_fork_profiling():
     """Aggregate stats about the combinatorial complexity of each character."""
-    # I do not want to introduce a pandas dependency just for this one function.
+    # Produces tables like the following:
+    # ┌───────────────────────────────────────────────────┐
+    # │                     Function │  Factor  │  Total  │
+    # ├───────────────────────────────────────────────────┤
+    # │     _place_hidden_characters │ 1032.00x │    1032 │
+    # │           NoDashii.run_night │    8.00x │   68096 │
+    # │             FangGu.run_night │    7.86x │  286672 │
+    # │             Vortox.run_night │    7.66x │   51776 │
+    # │              Witch.run_night │    7.18x │   72480 │
+    # │        Vigormortis.run_night │    5.00x │    4480 │
+    # │      _speculate_evil_players │    3.13x │    1660 │
+    # │ SnakeCharmer._run_night_evil │    1.04x │    2486 │
+    # │           NoDashii.run_setup │    1.00x │     703 │
+    # └───────────────────────────────────────────────────┤
+    #                                           │  489385 │
+    #                                           └─────────┘
+    if not _PROFILING:
+        return
     groups = defaultdict(list)
     for (caller, _), count in _PROFILING_FORK_LOCATIONS.items():
         groups[caller].append(count)
@@ -863,8 +883,11 @@ def summarise_profiling():
     ]
     rows.sort(reverse=True, key=lambda row: row[2])
     name_len = max(len(name) for name in groups)
+    print('Profiling returned the following stats about forking worlds')
     title = f'│ {'Function': >{name_len}} │  Factor  │  Total  │'
     print(f'┌{'─' * (len(title)-2)}┐\n{title}\n├{'─' * (len(title)-2)}┤')
     for name, total, avg in rows:
         print(f'│ {name: >{name_len}} │ {avg:7.2f}x │ {total: >7} │ ')
-    print(f'└{'─' * (len(title)-2)}┘')
+    print(f'└{'─' * (len(title)-2)}┤')
+    print(f'{' ' * (len(title)-11)}│ {sum(r[1] for r in rows): >7} │')
+    print(f'{' ' * (len(title)-11)}└{'─' * 9}┘')
