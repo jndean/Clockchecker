@@ -355,7 +355,7 @@ class State:
                 else f' claiming {player.claim.__name__}'
             )
             print(
-                f'Running [{self.current_phase.name} {round_} '
+                f'DBG {self.debug_key} [{self.current_phase.name} {round_} '
                 f'{type(ability).__name__}] for {player.name} (the '
                 f'{type(player.character).__name__}{claim})'
             )
@@ -457,6 +457,9 @@ class State:
         self._math_misregistration_bounds = [0, 0]
         self._math_misregisterers = set()
 
+        if self._is_world():
+            print(f'DBG {self.debug_key} [NIGHT {self.night} END]')
+            print(self)
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
         self.day = self.night
@@ -892,7 +895,7 @@ def summarise_fork_profiling():
         for caller, counts in groups.items()
     ]
     rows.sort(reverse=True, key=lambda row: row[2])
-    name_len = max(len(name) for name in groups)
+    name_len = max((len(name) for name in groups), default=0)
     print('Profiling returned the following stats about forking worlds')
     title = f'│ {'Function': >{name_len}} │  Factor  │  Total  │'
     print(f'┌{'─' * (len(title)-2)}┐\n{title}\n├{'─' * (len(title)-2)}┤')

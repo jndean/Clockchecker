@@ -1601,3 +1601,60 @@ class TestPitHag(unittest.TestCase):
             solutions=((Artist, Leviathan, PitHag, Dreamer, Empath),),
             solution_endchars=((Artist, FangGu, PitHag, Dreamer, FangGu),),
         )
+
+    def test_creates_snakecharmer_charms_demon_changes_demon_fanggu_jump(self):
+        """
+        Buckle up. The solution that needs to be found to this test is:
+        Starting lying players:  B = FangGu
+                                 C = PitHag
+                                 D = SnakeCharmer (speculatively acting evil)
+        Nothing happens N1. On night 2:
+            SnakeCharmer charms the FangGu.
+            PitHag changes old demon (now good SC) into Mutant
+            New FangGu hits the new Mutant and jumps
+        Ending lying players:  B = FangGu
+                               C = PitHag
+                               D = FangGu (dead, and evil)
+        """
+        You, B, C, D, E, F= range(6)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, SnakeCharmer)
+                        & IsCharacter(E, Dreamer)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('E', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(C, PitHag, Empath),
+                    2: Dreamer.Ping(D, FangGu, Empath),
+                }),
+                Player('F', claim=Klutz),
+            ],
+            day_events={},
+            night_deaths={2: D},
+            hidden_characters=[FangGu, PitHag, SnakeCharmer],
+            hidden_self=[],
+            also_on_script=[Mutant],
+            category_counts=(4, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, PitHag, SnakeCharmer, Dreamer, Klutz),),
+            solution_endchars=((Artist, FangGu, PitHag, FangGu, Dreamer, Klutz),),
+        )

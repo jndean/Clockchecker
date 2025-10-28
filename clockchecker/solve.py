@@ -341,6 +341,10 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
         world.players[position].speculative_ceremad = True
     if not world.begin_game(puzzle.allow_duplicate_tokens_in_bag):
         return
+    # if config.liar_positions == (1, 2, 3) and config.speculative_evil_positions == (3,):
+    #     print('Beginning')
+    #     print(config)
+    #     print(world.debug_key)
 
     # Chains together a big ol' stack of generators corresponding to each
     # possible action of each player, forming a pipeline through which
