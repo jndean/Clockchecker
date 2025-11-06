@@ -49,9 +49,20 @@ class StartingConfiguration:
 def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
     """Generate all possible initial configurations of player roles."""
     _, _, num_minions, num_demons = puzzle.category_counts
-    num_speculative_liars =_max_speculative_evil_from_puzzle(puzzle)
+    (
+        max_speculative_evil,
+        speculative_evil_characters,
+        max_speculative_ceremad,
+        speculative_ceremad_characters
+    ) = _speculative_lying_starting_characters(puzzle)
     liar_combinations = it.product(
-        it.combinations(puzzle.demons, num_demons),
+        it.chain(*[
+            it.combinations(puzzle.demons, i)
+            for i in range(
+                max(0, num_demons - max_speculative_ceremad - max_speculative_evil),
+                num_demons + 1,
+            )
+        ]),
         it.chain(*[
             it.combinations(puzzle.minions, i)
             for i in range(num_minions, len(puzzle.minions) + 1)
@@ -61,33 +72,186 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
             for i in range(len(puzzle.hidden_good) + 1)
         ]),
         it.chain(*[
-            it.combinations(puzzle.speculative_liars, i)
-            for i in range(
-                1 + min(num_speculative_liars, len(puzzle.speculative_liars))
-            )
+            it.combinations(speculative_evil_characters, i)
+            for i in range(max_speculative_evil + 1)
+        ]),
+        it.chain(*[
+            it.combinations(speculative_ceremad_characters, i)
+            for i in range(max_speculative_ceremad + 1)
         ])
     )
     player_ids = list(range(len(puzzle.players)))
     dbg_idx = 0
-    for demons, minions, hidden_good, speculative_evil in liar_combinations:
-        liars = demons + minions + hidden_good + speculative_evil
+    for demons, minions, hidden_good, spec_evil, spec_mad in liar_combinations:
+        liars = demons + minions + hidden_good + spec_evil + spec_mad
+        l, e, m = len(liars), len(spec_evil), len(spec_mad)
+        if e + m > puzzle.max_speculation:
+            continue
+        spec_evil_slice = slice(l - e - m, l - m)
+        spec_mad_slice = slice(l - m, l)
         for liar_pos in it.permutations(player_ids, len(liars)):
-            spec_evil_pos = liar_pos[len(liars) - len(speculative_evil):]
+            spec_evil_pos = liar_pos[spec_evil_slice]
+            spec_mad_pos = liar_pos[spec_mad_slice]
             config = StartingConfiguration(
                 liar_characters=liars,
                 liar_positions=liar_pos,
                 speculative_evil_positions=spec_evil_pos,
+                speculative_ceremad_positions=spec_mad_pos,
                 speculative_good_positions=(),
-                speculative_ceremad_positions=(),
                 debug_key=(dbg_idx,),
             )
             if _check_token_counts(puzzle, config.get_characters(puzzle)):
                 if core._PROFILING:
                     core.record_fork_caller((), 0)
-                facts = _facts_for_speculation(puzzle, config)
-                for subconfig in _speculate_evil_players(puzzle, config, facts):
-                    yield from _speculate_mad_players(puzzle, subconfig, facts)
+                yield from _speculate_evil_good_evil(puzzle, config)
                 dbg_idx += 1
+
+def _speculative_lying_starting_characters(puzzle: Puzzle) -> tuple[
+    int, list[type[Character]], int, list[type[Character]],
+]:
+    """Determine which characters could lying be at the start of the game."""
+    evil_liars = set()
+    max_speculative_evil = 0
+    pithag_on_script = characters.PitHag in puzzle.script
+    fanggu_on_script = characters.FangGu in puzzle.script
+    snakecharmer_on_script = characters.SnakeCharmer in puzzle.script
+    cerenovus_on_script = characters.Cerenovus in puzzle.script
+    philo_on_script = characters.Philosopher in puzzle.script
+    good_on_script = [
+        c for c in puzzle.script
+        if not issubclass(c, (characters.Minion, characters.Demon))
+    ]
+    outsiders_on_script = [
+        character for character in puzzle.script
+        if issubclass(character, characters.Outsider)
+    ]
+    some_good_character_can_become_evil = (
+        snakecharmer_on_script
+        or (fanggu_on_script and outsiders_on_script)
+    )
+    if pithag_on_script and some_good_character_can_become_evil:
+        evil_liars.update(good_on_script)
+    if fanggu_on_script:
+        max_speculative_evil += 1
+        evil_liars.update(outsiders_on_script)
+    if snakecharmer_on_script:
+        max_speculative_evil += 1
+        evil_liars.add(characters.SnakeCharmer)
+        if philo_on_script:
+            evil_liars.add(characters.Philosopher)
+
+    ceremad_liars = puzzle.script if cerenovus_on_script else []
+    # Sort for determinism
+    evil_liars = list(sorted(list(evil_liars), key=lambda c: c.__name__))
+    return (
+        max_speculative_evil,
+        evil_liars,
+        int(cerenovus_on_script),
+        ceremad_liars,
+    )
+
+def _speculate_evil_good_evil(
+    puzzle: Puzzle,
+    config: StartingConfiguration,
+) -> ConfigGen:
+    """
+    Speculate on a case that will not be covered by regular hidden character
+    placement and speculation: starting evils who turn good then turn evil again
+    """
+    existing_speculation = (
+        config.speculative_evil_positions + config.speculative_ceremad_positions
+    )
+    max_extra_speculation = min(
+        puzzle.max_speculation - len(existing_speculation),
+        1,
+    )
+    facts = _facts_for_speculation(puzzle, config)
+    evil_good_evil_possible = (
+        facts['starting_evil_can_turn_good'] and facts['anyone_becomes_evil']
+    )
+    if max_extra_speculation <= 0 or not evil_good_evil_possible:
+        # No extra speculation required
+        yield config
+        return
+
+    starting_evils = [
+        player for player in config.liar_positions
+        if player not in existing_speculation
+    ]
+    dbg_idx = 0
+    for extra_speculation in it.chain(*[
+        it.combinations(starting_evils, i)
+        for i in range(max_extra_speculation + 1)
+    ]):
+        if core._PROFILING:
+            core.record_fork_caller(config.debug_key, 0)
+        new_config = copy(config)
+        new_config.speculative_evil_positions += extra_speculation
+        new_config.debug_key += (dbg_idx, )
+        if core._PROFILING:
+            core.record_fork_caller(config.debug_key, 0)
+
+        yield new_config
+        dbg_idx += 1
+
+
+
+def _speculate_evil_players(
+    puzzle: Puzzle,
+    config: StartingConfiguration,
+    config_facts: dict[str, int],
+) -> ConfigGen:
+    """
+    While `_hidden_character_placement` will place hidden characters that might
+    become evil (like outsiders in a FangGu game) and mark them as speculatively
+    evil, we may still need to generate possibilities of players being
+    speculatively evil because of a character type they didn't start as (e.g.
+    they might get Pit-Hag'd into an outsider later). This function is a lot
+    more individual-character-aware than the approach taken elsewere in the
+    solver, because naive speculation of evils can make even simple puzzles slow
+    so it is worth hard-coding some game-knowledge into generating as few
+    possibilities as we can.
+    """
+    # We can compute a more accurate speculation cap here with all the config
+    # facts than we could before the config had been generated.
+    max_spec = _max_speculative_evil_from_config_facts(puzzle, config_facts)
+    remaining_spec = max_spec - len(config.speculative_evil_positions)
+    if not remaining_spec:
+        yield config; return
+
+    in_play = config.get_characters(puzzle)
+    speculation_candidates = []
+    for pid, character in enumerate(in_play):
+        if pid in config.speculative_evil_positions:
+            continue
+        i_can_be_fanggu_jumped = config_facts['fanggu_possible'] and (
+            issubclass(character, characters.Outsider)
+            or config_facts['anyone_becomes_outsider']
+        )
+        i_can_be_snakecharmer = (
+            config_facts['anyone_becomes_snakecharmer']
+            or character is characters.SnakeCharmer
+            or (
+                character is characters.Philosopher
+                and characters.SnakeCharmer in puzzle.script
+            )
+        )
+        if i_can_be_fanggu_jumped or i_can_be_snakecharmer:
+            speculation_candidates.append(pid)
+
+    dbg_idx = 0
+    for speculation_pos in it.chain(*[
+        it.combinations(speculation_candidates, i)
+        for i in range(remaining_spec + 1)
+    ]):
+        if core._PROFILING:
+            core.record_fork_caller(config.debug_key, 0)
+        new_config = copy(config)
+        new_config.speculative_evil_positions += speculation_pos
+        new_config.debug_key += (dbg_idx,)
+        yield new_config
+        dbg_idx += 1
+
 
 def _check_token_counts(
     puzzle: Puzzle,
@@ -156,8 +320,11 @@ def _facts_for_speculation(
     starting_minions_can_turn_good = (
         minions_can_become_demons and snakecharmer_possible
     )
+    starting_evil_can_turn_good = (
+        starting_minions_can_turn_good or starting_demons_can_turn_good
+    )
     # TODO: Barber
-    # outsider_in_play = any(issubclass(c, characters.Outsider) for c in play)
+    # outsiders_in_play = any(issubclass(c, characters.Outsider) for c in play)
     # barber_possible = (
     #     characters.Barber in play
     #     or (
@@ -165,7 +332,7 @@ def _facts_for_speculation(
     #         and (pithag_possible or evil_philosopher_possible)))
     anyone_becomes_outsider = (
         (pithag_possible and outsiders_in_script)
-        # or (barber_possible and outsider_in_play)
+        # or (barber_possible and outsiders_in_play)
     )
     anyone_becomes_philo = (
         (pithag_possible and characters.Philosopher in puzzle.script)
@@ -178,6 +345,10 @@ def _facts_for_speculation(
         )
         # or (barber_possible and characters.SnakeCharmer in play)
     )
+    anyone_becomes_evil = (
+        (anyone_becomes_outsider and fanggu_possible)
+        or anyone_becomes_snakecharmer
+    )
     return {
         'cerenovus_possible': cerenovus_possible,
         'fanggu_possible': fanggu_possible,
@@ -188,6 +359,8 @@ def _facts_for_speculation(
         'anyone_becomes_snakecharmer': anyone_becomes_snakecharmer,
         'starting_minions_can_turn_good': starting_minions_can_turn_good,
         'starting_demons_can_turn_good': starting_demons_can_turn_good,
+        'starting_evil_can_turn_good': starting_evil_can_turn_good,
+        'anyone_becomes_evil': anyone_becomes_evil,
     }
 
 
@@ -214,9 +387,9 @@ def _speculate_evil_players(
     if not remaining_spec:
         yield config; return
 
-
+    in_play = config.get_characters(puzzle)
     speculation_candidates = []
-    for pid, character in enumerate(config.get_characters(puzzle)):
+    for pid, character in enumerate(in_play):
         if pid in config.speculative_evil_positions:
             continue
         i_can_be_fanggu_jumped = config_facts['fanggu_possible'] and (
@@ -225,9 +398,9 @@ def _speculate_evil_players(
         )
         i_can_be_snakecharmer = (
             config_facts['anyone_becomes_snakecharmer']
-            or issubclass(character, characters.SnakeCharmer)
+            or character is characters.SnakeCharmer
             or (
-                issubclass(character, characters.Philosopher)
+                character is characters.Philosopher
                 and characters.SnakeCharmer in puzzle.script
             )
         )
@@ -341,10 +514,6 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
         world.players[position].speculative_ceremad = True
     if not world.begin_game(puzzle.allow_duplicate_tokens_in_bag):
         return
-    # if config.liar_positions == (1, 2, 3) and config.speculative_evil_positions == (3,):
-    #     print('Beginning')
-    #     print(config)
-    #     print(world.debug_key)
 
     # Chains together a big ol' stack of generators corresponding to each
     # possible action of each player, forming a pipeline through which
@@ -356,19 +525,19 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
     for _ in range(len(puzzle.setup_order)):
         worlds = _apply_all(worlds, lambda w: w.run_next_character())
     worlds = _apply_all(worlds, lambda w: w.end_setup())
-    for round_ in range(1, puzzle._max_night + 1):
+    for round_ in range(1, puzzle.max_night + 1):
         # NIGHT
         for _ in range(len(puzzle.night_order)):
             worlds = _apply_all(worlds, lambda w: w.run_next_character())
         worlds = _apply_all(worlds, lambda w: w.end_night())
-        if round_ <= puzzle._max_day:
+        if round_ <= puzzle.max_day:
             # DAY
             for _ in range(len(puzzle.day_order)):
                 worlds = _apply_all(worlds, lambda w: w.run_next_character())
             for event in range(puzzle.event_counts[round_]):
                 worlds = _apply_all(
                     worlds, lambda w, r=round_, e=event: w.run_event(r, e))
-            if round_ < puzzle._max_day or puzzle.finish_final_day:
+            if round_ < puzzle.max_day or puzzle.finish_final_day:
                 worlds = _apply_all(worlds, lambda w: w.end_day())
 
     # ROUND ROBIN
@@ -385,6 +554,8 @@ def _round_robin(state: State, config: StartingConfiguration) -> StateGen:
     capacity to lie, we must resimulate the world with the extra condition
     that they must never have taken the opportunity to lie.
     """
+    state.log('[ROUND ROBIN]')
+
     for player in state.players:
         if hasattr(player, 'speculative_evil'):
             del player.speculative_evil
@@ -404,8 +575,9 @@ def _round_robin(state: State, config: StartingConfiguration) -> StateGen:
             redo_config = copy(config)
             redo_config.speculative_good_positions = speculative_good
             if core._DEBUG:
-                redo_config.debug_key = state.debug_key
-                core._DEBUG_STATE_FORK_COUNTS[redo_config.debug_key] = 0
+                redo_config.debug_key = state.debug_key + (
+                    core._DEBUG_STATE_FORK_COUNTS[state.debug_key],)
+                core._DEBUG_STATE_FORK_COUNTS[state.debug_key] += 1
             if core._PROFILING:
                 core.record_fork_caller(state.debug_key, 0)
             yield from _world_check(state.puzzle, redo_config)

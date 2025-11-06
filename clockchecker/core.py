@@ -25,6 +25,7 @@ _DEBUG = os.environ.get('DEBUG', False) or _PROFILING
 
 _PROFILING_FORK_LOCATIONS = Counter()
 _DEBUG_STATE_FORK_COUNTS = {}
+_DEBUG_LOG_RECENT = None
 _DEBUG_WORLD_KEYS = [
     # (45, 0, 0, 3, 1, 3, 3),
 ]
@@ -299,6 +300,20 @@ class State:
             for _key in keys
         )
 
+    def log(self, message: str | Callable[[], str]):
+        """
+        When _DEBUG is enabled, log a trace of actions in a tree-like format
+        that make it slightly easier to follow what's happening in the
+        depth-first search of the possibility space.
+        """
+        if self._is_world():
+            if not isinstance(message, str):
+                message = message()
+            global _DEBUG_LOG_RECENT
+            underhang = '↝' if self.debug_key == _DEBUG_LOG_RECENT else ''
+            print(f'S{self.debug_key}{underhang} {message}')
+            _DEBUG_LOG_RECENT = self.debug_key
+
     def run_next_character(self) -> StateGen:
         """Run all players who have the ability of the next character."""
         order = (
@@ -306,7 +321,6 @@ class State:
             else self.puzzle.day_order if self.current_phase is Phase.DAY
             else self.puzzle.setup_order
         )
-
         if self.phase_order_index >= len(order):
             yield self
             return
@@ -347,18 +361,17 @@ class State:
                 "feel free to remove this error and continue recursing."
             )
 
-        if self._is_world():
-            # Some telemetry that is nice to see when debug mode is enabled
-            round_ = self.night if self.night else self.day if self.day else ''
-            claim = (
-                '' if player.claim is self.currently_acting_character
-                else f' claiming {player.claim.__name__}'
-            )
-            print(
-                f'DBG {self.debug_key} [{self.current_phase.name} {round_} '
-                f'{type(ability).__name__}] for {player.name} (the '
-                f'{type(player.character).__name__}{claim})'
-            )
+        # Some telemetry that is nice to see when debug mode is enabled
+        round_ = self.night if self.night else self.day if self.day else ''
+        claim = (
+            '' if player.claim is self.currently_acting_character
+            else f' claiming {player.claim.__name__}'
+        )
+        self.log(
+            f'[{self.current_phase.name} {round_} '
+            f'{type(ability).__name__}] for {player.name} (the '
+            f'{type(player.character).__name__}{claim})'
+        )
 
         match self.current_phase:
             case Phase.NIGHT:
@@ -405,12 +418,21 @@ class State:
         if events is None:
             yield self
         else:
-            if self._is_world():
-                names = {p: plyr.name for p, plyr in enumerate(self.players)}
-                print(f'Running {info.pretty_print(events[event], names)}')
+            self.log(lambda: info.pretty_print(
+                events[event],
+                {p: player.name for p, player in enumerate(self.players)}
+            ))
             yield from events[event](self)
 
     def end_setup(self) -> StateGen:
+        # Check good players are what they claim to be
+        for player in self.players:
+            if not (
+                isinstance(player.character, player.claim)
+                or info.behaves_evil(self, player.id)
+                or player.lies_about_self
+            ):
+                return
         self.current_phase = Phase.NIGHT
         self.phase_order_index = 0
         self.night = 1
@@ -418,6 +440,8 @@ class State:
         yield self
 
     def end_night(self) -> StateGen:
+        self.log(f'[NIGHT {self.night} END]')
+
         for player in self.players:
             if not player.character.end_night(self, player.id):
                 return
@@ -450,16 +474,12 @@ class State:
             if not (
                 isinstance(player.character, player.claim)
                 or info.behaves_evil(self, player.id)
-                or player.character.lies_about_self
+                or player.lies_about_self
             ):
                 return
 
         self._math_misregistration_bounds = [0, 0]
         self._math_misregisterers = set()
-
-        if self._is_world():
-            print(f'DBG {self.debug_key} [NIGHT {self.night} END]')
-            print(self)
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
         self.day = self.night
@@ -591,10 +611,9 @@ class State:
         ret = [f'World{self.debug_key if _DEBUG else ""}(']
         pad = max(len(player.name) for player in self.players) + 1
         for player in self.players:
-            char = type(player.character)
             rhs = player._world_str(self)
             colour = 0
-            if char.lies_about_self or info.behaves_evil(self, player.id):
+            if player.lies_about_self or info.behaves_evil(self, player.id):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
@@ -639,31 +658,30 @@ class Puzzle:
     max_speculation: int = 2
 
 
-    def __post_init__(self, hidden_characters):
+    def __post_init__(self, hidden_characters: list[type[Character]]):
         """Finish building Puzzle representation from user inputs."""
         if self.category_counts is None:
             self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
                 len(self.players)
             ]
-        self.demons, self.minions, self.hidden_good, self.speculative_liars = (
-            [], [], [], []
+        self.demons, self.minions, self.hidden_good = (
+            [], [], []
         )
         for character in hidden_characters:
             collection = (
                 self.demons if issubclass(character, characters.Demon) else
                 self.minions if issubclass(character, characters.Minion) else
-                self.hidden_good if character.lies_about_self else
-                self.speculative_liars
+                self.hidden_good
             )
             collection.append(character)
         self._validate_inputs()
 
-        self._max_day = max(
+        self.max_day = max(
             max((max(p.day_info, default=0) for p in self.players)),
             max(self.day_events, default=0),
         )
-        self._max_night = max(
-            self._max_day,
+        self.max_night = max(
+            self.max_day,
             max((
                 max((n for n, _ in p.night_info), default=0)
                 for p in self.players
@@ -674,8 +692,8 @@ class Puzzle:
             )),
             max(self.night_deaths, default=0),
         )
-        self._max_day = max(self._max_day, self._max_night - 1)
-        self.finish_final_day |= (self._max_day < self._max_night)
+        self.max_day = max(self.max_day, self.max_night - 1)
+        self.finish_final_day |= (self.max_day < self.max_night)
 
         for i, player in enumerate(self.players):
             player.id = i
@@ -719,7 +737,10 @@ class Puzzle:
                     self.external_info_registry[(character, night)].append(
                         (item, pid)
                     )
-        self.external_info_registry = dict(self.external_info_registry)
+        self.external_info_registry: dict[
+            tuple[type[Character], int],
+            tuple[info.ExternalInfo, PlayerID],
+        ] = dict(self.external_info_registry)
 
         assert self.player_zero_is_you ^ (self.players[0].name != 'You'), (
             "Player 0 must be called 'You' iff puzzle.player_zero_is_you=True"
@@ -781,7 +802,6 @@ class Puzzle:
             [type(p.character) for p in self.players]
             + self.demons + self.minions
             + self.hidden_good + self.hidden_self
-            + self.speculative_liars
         )
         registered_characters = (
             characters.GLOBAL_NIGHT_ORDER
@@ -794,6 +814,9 @@ class Puzzle:
                     f'Character {character.__name__} has not been placed in the'
                     ' night order. Did you forget?'
                 )
+        for character in self.hidden_good:
+            if not character.lies_about_self:
+                raise ValueError(f"{character.__name__} can't be in hidden?")
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
 
@@ -819,7 +842,7 @@ class Puzzle:
             '    Other Players: [{}]'.format(", ".join(
                 character.__name__ for character in
                 self.demons + self.minions +
-                self.hidden_good + self.speculative_liars
+                self.hidden_good
             )),
             f'    You: [{", ".join(c.__name__ for c in self.hidden_self)}]',
         ])

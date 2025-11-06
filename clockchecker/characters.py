@@ -731,12 +731,23 @@ class Cerenovus(Minion):
     class Mad(info.ExternalInfo):
         # Other players use this to claim they were ceremad one night
         character: type[Character]
+        def __call__(self, state: State, src: PlayerID) -> bool:
+            return (
+                getattr(state.players[src], 'ceremad', 1)
+                and any(
+                    (ability := player.get_ability(Cerenovus)) is not None
+                    and ability.target == src
+                    for player in state.players
+                )
+            )
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
+        # TODO: I believe a valid optimisation would be to only pick players who
+        # are speculatively_mad/claiming madness/executed by ST on non-final day
         cerenovus = state.players[me]
         if cerenovus.is_dead and not cerenovus.vigormortised:
             yield state; return
-        if self.is_droisoned(self, me):
+        if self.is_droisoned(state, me):
             state.math_misregistration(me)
             self.target = None
             yield state; return
@@ -764,6 +775,24 @@ class Cerenovus(Minion):
             player.ceremad -= 1
             if not player.ceremad:
                 del player.ceremad
+
+    @staticmethod
+    def global_end_night(state: State) -> bool:
+        """Check truthful mad players report their madness on subsequent nights"""
+        if state.night == state.puzzle.max_night:
+            return True
+        players_claiming_madness = [
+            pid for _, pid in state.puzzle.external_info_registry.get(
+                (Cerenovus, state.night), []
+            )
+        ]
+        return not any(
+            getattr(player, 'ceremad', 0)
+            and player.id not in players_claiming_madness
+            and not getattr(player, 'speculative_ceremad', False)  # Still mad in round robin
+            and not info.behaves_evil(state, player.id)
+            for player in state.players
+        )
 
     def _world_str(self, state: State) -> str:
         return (
@@ -1294,6 +1323,7 @@ class FangGu(GenericDemon):
                 ):
                     kill_state.math_misregistration(me)
                 kill_target = kill_state.players[target].character
+                kill_state.log(f'FangGu attacks {state.players[target].name}')
                 yield from kill_target.attacked_at_night(kill_state, target, me)
                 # Let MAYBE through to also create a jump world
                 if already_jumped or fails_jump or is_outsider.is_false():
@@ -1307,12 +1337,11 @@ class FangGu(GenericDemon):
                 and not isinstance(target_player.character, Outsider)
             ):
                 jump_state.math_misregistration(me)
-            for jump_substate in jump_state.change_character(target, FangGu):
-                new_fanggu = jump_substate.players[target]
-                new_fanggu.is_evil = True
-                new_me = jump_substate.players[me].get_ability(FangGu)
-                new_me.death_explanation = f'Jumped N{jump_substate.night}'
-                yield from new_me.apply_death(jump_substate, me, src=me)
+            for ss in jump_state.change_character(target, FangGu):
+                for jump_substate in ss.change_alignment(target, is_evil=True):
+                    new_me = jump_substate.players[me].get_ability(FangGu)
+                    new_me.death_explanation = f'Jumped N{jump_substate.night}'
+                    yield from new_me.apply_death(jump_substate, me, src=me)
 
 @dataclass
 class Flowergirl(Townsfolk):
@@ -2098,7 +2127,7 @@ class Mutant(Outsider):
         # Outsider if it is still a sober and healthy Mutant on the final day.
 
         player = state.players[me]
-        if player.is_dead or state.day != state.puzzle._max_day:
+        if player.is_dead or state.day != state.puzzle.max_day:
             yield state
         elif not issubclass(player.claim, Outsider):
             yield state
@@ -2505,6 +2534,8 @@ class PitHag(Minion):
         for target in state.player_ids:
             for char_t in characters:
                 new_state = state.fork()
+                new_state.log(f'PitHag changes {state.players[target].name}'
+                              f' into {char_t.__name__}')
                 new_pithag = new_state.players[me].get_ability(PitHag)
                 new_pithag.target_history.append((target, char_t))
                 for substate in new_state.change_character(target, char_t):
@@ -2514,6 +2545,7 @@ class PitHag(Minion):
                         yield from PitHag._arbitrary_deaths(substate, me)
         # No change world
         self.target_history.append((None, None))
+        state.log('PitHag picks in-play character')
         yield state
 
     @staticmethod
@@ -3343,10 +3375,12 @@ class SnakeCharmer(Townsfolk):
         # World class 2: all the possible jumps
         for target in maybe_demons:
             jump_state = state.fork()
+            jump_state.log(f'SnakeCharmer jumps {state.players[target].name}')
             new_sc = jump_state.players[me].get_ability(SnakeCharmer)
             yield from new_sc._jump(jump_state, target, me)
         # World class 3: jump not triggered
         if any(q.not_true() for q in demon_queries):
+            state.log(f'SnakeCharmer misses')
             yield state
 
     def _jump(self, state: State, target: PlayerID, me: PlayerID) -> StateGen:

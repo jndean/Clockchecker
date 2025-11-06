@@ -2804,11 +2804,11 @@ def puzzle_NQT55():
             2: [Dies(player=You, after_nominating=True), Execution(Matt)],
         },
         night_deaths={2: Aoife, 3: Fraser},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = (
-        (Flowergirl, Seamstress, Clockmaker, Klutz, Artist, Vortox, 
+        (Flowergirl, Seamstress, Clockmaker, Klutz, Artist, Vortox,
             Mathematician, Witch),
     )
     return PuzzleDef(puzzle, solutions)
@@ -3108,8 +3108,7 @@ def puzzle_nqt_snv_test1():
             ],
         },
         night_deaths={2: Aoife, 3: Tim},
-        hidden_characters=[
-            FangGu, Vigormortis, NoDashii, Vortox, Witch, Klutz, Mutant],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = (
@@ -3165,8 +3164,7 @@ def puzzle_nqt_snv_test2():
             ],
         },
         night_deaths={2: Olivia, 3: Aoife},
-        hidden_characters=[
-            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = (
@@ -3217,8 +3215,7 @@ def puzzle_nqt_snv_test3():
             ],
         },
         night_deaths={2: Aoife, 3: You},
-        hidden_characters=[
-            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = (
@@ -3275,8 +3272,7 @@ def puzzle_nqt_snv_test4():
             ],
         },
         night_deaths={2: Oscar, 3: Fraser},
-        hidden_characters=[
-            FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant,Klutz],
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = ((

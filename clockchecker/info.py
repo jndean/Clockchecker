@@ -264,6 +264,16 @@ class CharAttrEq(Info):
         return STBool(val is not missing and val == self.value)
 
 @dataclass
+class PlayerAttrEq(Info):
+    player: PlayerID
+    attr: str
+    value: Any
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        missing = []  # A unique object for pointer comparison using `is`
+        val = getattr(state.players[self.player], self.attr, missing)
+        return STBool(val is not missing and val == self.value)
+
+@dataclass
 class ExactlyN(Info):
     N: int
     args: Sequence[Info] | Sequence[STBool]

@@ -8,7 +8,7 @@ import puzzles
 
 
 # Suppress test stack frames in assertion errors. We never care which line
-# line raised teh error
+# raised the error
 __unittest = True
 
 
@@ -1305,7 +1305,8 @@ class TestFangGu(unittest.TestCase):
             ],
             day_events={},
             night_deaths={2: B},
-            hidden_characters=[FangGu, Klutz],
+            hidden_characters=[FangGu],
+            also_on_script=[Klutz],
             hidden_self=[],
             category_counts=(3, 0, 0, 1),
         )
@@ -1314,6 +1315,39 @@ class TestFangGu(unittest.TestCase):
             puzzle,
             solutions=((Artist, FangGu, Klutz, Seamstress),),
             solution_endchars=((Artist, FangGu, FangGu, Seamstress),),
+        )
+
+    def test_jumps_to_hidden_drunk(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Drunk)
+                        & IsCharacter(D, NightWatchman)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Acrobat),
+                Player('D', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(C), # Not reciprocated since C Speculatively evil
+                }),
+            ],
+            day_events={},
+            night_deaths={2: B},
+            hidden_characters=[FangGu],
+            also_on_script=[Drunk],
+            hidden_self=[Drunk],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Drunk, NightWatchman),),
+            solution_endchars=((Artist, FangGu, FangGu, NightWatchman),),
         )
 
 class TestFortuneTeller(unittest.TestCase):
@@ -1545,8 +1579,9 @@ class TestPitHag(unittest.TestCase):
             ],
             day_events={},
             night_deaths={},
-            hidden_characters=[Leviathan, PitHag, Puzzlemaster],
+            hidden_characters=[Leviathan, PitHag],
             hidden_self=[],
+            also_on_script=[Puzzlemaster],
             category_counts=(2, 0, 1, 1),
         )
         assert_solutions(
@@ -1602,7 +1637,14 @@ class TestPitHag(unittest.TestCase):
             solution_endchars=((Artist, FangGu, PitHag, Dreamer, FangGu),),
         )
 
-    def test_creates_snakecharmer_charms_demon_changes_demon_fanggu_jump(self):
+    def test_some_arbitrary_deaths(self):
+        pass  # TODO maybe a gossip and demon do some killing
+    def test_all_arbitrary_deaths(self):
+        pass  # TODO nobody else gets to kill
+
+
+class TestSpeculation(unittest.TestCase):
+    def test_sc_charms_demon_ph_makes_outsider_fanggu_jumps(self):
         """
         Buckle up. The solution that needs to be found to this test is:
         Starting lying players:  B = FangGu
@@ -1616,7 +1658,7 @@ class TestPitHag(unittest.TestCase):
                                C = PitHag
                                D = FangGu (dead, and evil)
         """
-        You, B, C, D, E, F= range(6)
+        You, B, C, D, E, F = range(6)
         puzzle = Puzzle(
             players=[
                 Player('You', claim=Artist, day_info={
@@ -1647,9 +1689,9 @@ class TestPitHag(unittest.TestCase):
             ],
             day_events={},
             night_deaths={2: D},
-            hidden_characters=[FangGu, PitHag, SnakeCharmer],
+            hidden_characters=[FangGu, PitHag],
             hidden_self=[],
-            also_on_script=[Mutant],
+            also_on_script=[Mutant, SnakeCharmer],
             category_counts=(4, 0, 1, 1),
         )
         assert_solutions(
@@ -1658,3 +1700,153 @@ class TestPitHag(unittest.TestCase):
             solutions=((Artist, FangGu, PitHag, SnakeCharmer, Dreamer, Klutz),),
             solution_endchars=((Artist, FangGu, PitHag, FangGu, Dreamer, Klutz),),
         )
+
+    def test_sc_charms_demon_covered_by_madness(self):
+        """The demon is SnakeCharmed, but also cerelocked so stays quiet."""
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Cerenovus)
+                        & IsCharacter(D, SnakeCharmer)
+                        & IsCharacter(E, Dreamer)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=SnakeCharmer, night_info={
+                    1: SnakeCharmer.Choice(B),
+                    2: SnakeCharmer.Choice(D),
+                }),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('E', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Leviathan, Empath),
+                    2: Dreamer.Ping(D, Leviathan, Empath),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Cerenovus, SnakeCharmer, Dreamer),),
+            solution_endchars=((Artist, SnakeCharmer, Cerenovus, Leviathan, Dreamer),),
+        )
+
+    def test_evil_becomes_good_becomes_evil(self):
+        """
+        Demon gets snakecharmed then pit-hagged into a Saint, lies for a day
+        then gets FangGu jumped so ends as evil. Requires starting evil players
+        to be tested as speculative liars so that they can lie for the iterim
+        day despite being good.
+        Different from test_sc_charms_demon_ph_makes_outsider_fanggu_jumps
+        because the demon spends a whole day as a good Saint rather than being
+        jumped instantly.
+        """
+        You, B, C, D, E, F = range(6)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, SnakeCharmer)
+                        & IsCharacter(E, Dreamer)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                    3: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('E', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(C, PitHag, Empath),
+                    2: Dreamer.Ping(D, FangGu, Empath),
+                    3: Dreamer.Ping(B, FangGu, Empath),
+                }),
+                Player('F', claim=Klutz),
+            ],
+            day_events={},
+            night_deaths={2: C, 3: D},
+            hidden_characters=[FangGu, PitHag],
+            hidden_self=[],
+            also_on_script=[Saint, SnakeCharmer],
+            category_counts=(4, 0, 1, 1),
+            deduplicate_initial_characters=False
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, PitHag, SnakeCharmer, Dreamer, Klutz),),
+            solution_endchars=((Artist, FangGu, PitHag, FangGu, Dreamer, Klutz),),
+        )
+
+    def test_pithag_makes_mutant_and_jumped_lies_about_starting_tf(self):
+        # E.g, starting empath becomes mutant, gets jumped, lies about starting as dreamer with bad pings
+        pass  # TODO
+    def test_drunk_fanggu_jumped(self):
+        # E.g, i.e. make sure hidden good characters can be speculated evil
+        pass  # TODO
+
+
+# class TestCerenovus(unittest.TestCase):
+#     def test_one_player_mad(self):
+#         You, B, C, D = range(4)
+#         puzzle = Puzzle(
+#             players=[
+#                 Player('You', claim=Artist, day_info={
+#                     1: Artist.Ping(
+#                         IsCharacter(B, Leviathan)
+#                         & IsCharacter(C, Cerenovus)
+#                         & IsCharacter(D, Dreamer)
+#                     )
+#                 }),
+#                 Player('B', claim=Empath, night_info={
+#                     1: Empath.Ping(0),
+#                     2: Empath.Ping(0),
+#                 }),
+#                 Player('C', claim=Empath, night_info={
+#                     1: Empath.Ping(0),
+#                     2: Empath.Ping(0),
+#                 }),
+#                 Player('D', claim=Empath, night_info={
+#                     1: Empath.Ping(0),
+#                     2: Empath.Ping(0),
+#                 }),
+#             ],
+#             day_events={},
+#             night_deaths={},
+#             hidden_characters=[Leviathan, Cerenovus],
+#             hidden_self=[],
+#             category_counts=(2, 0, 1, 1),
+#         )
+#         assert_solutions(
+#             self,
+#             puzzle,
+#             solutions=((Artist, Leviathan, Cerenovus, Dreamer),),
+#             info_condition=(
+#                 PlayerAttrEq(D, 'ceremad', 1)
+#                 & CharAttrEq(C, 'target', D)
+#             )
+#         )
+#     def test_good_player_not_claiming_mad(self):
+#     def test_mad_player_claiming_mad_previous_day(self):
