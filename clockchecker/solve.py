@@ -100,11 +100,15 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
                 speculative_good_positions=(),
                 debug_key=(dbg_idx,),
             )
-            if _check_token_counts(puzzle, config.get_characters(puzzle)):
-                if core._PROFILING:
-                    core.record_fork_caller((), 0)
-                yield from _speculate_evil_good_evil(puzzle, config)
-                dbg_idx += 1
+            in_play = config.get_characters(puzzle)
+            if _check_token_counts(puzzle, in_play):
+                facts = _facts_for_speculation(puzzle, in_play)
+                for subconf in _speculate_evil_good_evil(puzzle, config, facts):
+                    if _check_speculation(puzzle, subconf, in_play, facts):
+                        if core._PROFILING:
+                            core.record_fork_caller((), 0)
+                        yield subconf
+                        dbg_idx += 1
 
 def _speculative_lying_starting_characters(puzzle: Puzzle) -> tuple[
     int, list[type[Character]], int, list[type[Character]],
@@ -153,6 +157,7 @@ def _speculative_lying_starting_characters(puzzle: Puzzle) -> tuple[
 def _speculate_evil_good_evil(
     puzzle: Puzzle,
     config: StartingConfiguration,
+    facts: dict[str, int],
 ) -> ConfigGen:
     """
     Speculate on a case that will not be covered by regular hidden character
@@ -165,7 +170,6 @@ def _speculate_evil_good_evil(
         puzzle.max_speculation - len(existing_speculation),
         1,
     )
-    facts = _facts_for_speculation(puzzle, config)
     evil_good_evil_possible = (
         facts['starting_evil_can_turn_good'] and facts['anyone_becomes_evil']
     )
@@ -193,7 +197,6 @@ def _speculate_evil_good_evil(
 
         yield new_config
         dbg_idx += 1
-
 
 
 def _speculate_evil_players(
@@ -282,34 +285,33 @@ def _check_token_counts(
 
 def _facts_for_speculation(
     puzzle: Puzzle,
-    config: StartingConfiguration
+    in_play: list[type[Character]],
 ) -> dict[str, bool]:
     """
     Compute a set of facts about a game that are useful for speculating on what
     might happen in the game, particularly who might change role/alignment.
     """
-    play = config.get_characters(puzzle)
-    pithag_possible = characters.PitHag in play  # TODO: Alchemist
+    pithag_possible = characters.PitHag in in_play  # TODO: Alchemist
     outsiders_in_script = any(
         issubclass(c, characters.Outsider) for c in puzzle.script)
     outsiders_possible = (
-        any(issubclass(c, characters.Outsider) for c in play)
+        any(issubclass(c, characters.Outsider) for c in in_play)
         or (pithag_possible and outsiders_in_script)
     )
     fanggu_possible = (
-        characters.FangGu in play
+        characters.FangGu in in_play
         or (pithag_possible and characters.FangGu in puzzle.script)
     )
     cerenovus_possible = (  # TODO: Alchemist
-        characters.Cerenovus in play
+        characters.Cerenovus in in_play
         or (pithag_possible and characters.Cerenovus in puzzle.script)
     )
     philo_possible = (
-        characters.Philosopher in play
+        characters.Philosopher in in_play
         or (pithag_possible and characters.Philosopher in puzzle.script)
     )
     snakecharmer_possible = (
-        characters.SnakeCharmer in play
+        characters.SnakeCharmer in in_play
         or (
             characters.SnakeCharmer in puzzle.script
             and (pithag_possible or philo_possible)
@@ -363,6 +365,43 @@ def _facts_for_speculation(
         'anyone_becomes_evil': anyone_becomes_evil,
     }
 
+def _check_speculation(
+    puzzle: Puzzle,
+    config: StartingConfiguration,
+    in_play: list[type[Character]],
+    facts: dict[str, int],
+):
+    """Reject worlds with invalid speculation, just for improved efficiency."""
+    if (
+        config.speculative_ceremad_positions
+        and not facts['cerenovus_possible']
+    ):
+        return False
+    fanggu_used = False
+    for pid in config.speculative_evil_positions:
+        character = in_play[pid]
+        i_can_be_fanggu_jumped = (
+            facts['fanggu_possible']
+            and not fanggu_used
+            and (
+                issubclass(character, characters.Outsider)
+                or facts['anyone_becomes_outsider']
+        ))
+        i_can_be_snakecharmer = (
+            character is characters.SnakeCharmer
+            or facts['anyone_becomes_snakecharmer']
+            or (
+                character is characters.Philosopher
+                and characters.SnakeCharmer in puzzle.script
+            )
+        )
+        fanggu_used |= i_can_be_fanggu_jumped and not i_can_be_snakecharmer
+        if (
+            not i_can_be_fanggu_jumped
+            and not i_can_be_snakecharmer
+        ):
+            return False
+    return True
 
 def _speculate_evil_players(
     puzzle: Puzzle,
