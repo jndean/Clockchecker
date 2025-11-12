@@ -2705,6 +2705,7 @@ class Politician(Outsider):
     If you were the player most responsible for your team losing,
     you change alignment & win, even if dead.
     """
+    lies_about_self: ClassVar[bool] = True
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
