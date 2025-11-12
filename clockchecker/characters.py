@@ -2668,12 +2668,29 @@ class Poisoner(Minion):
         )
 
 @dataclass
+class Politician(Outsider):
+    """
+    If you were the player most responsible for your team losing,
+    you change alignment & win, even if dead.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+@dataclass
 class PoppyGrower(Townsfolk):
     """
     Each night, choose a player (not yourself):
     tomorrow, you may only vote if they are voting too.
     """
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    @dataclass
+    class InPlay(info.ExternalInfo):
+        def __call__(self, state: State, src: PlayerID) -> bool:
+            for player in state.players:
+                pg = player.get_ability(PoppyGrower)
+                if not (pg is None or pg.is_droisoned(state, player.id)):
+                    return True
+            return False
 
 @dataclass
 class Princess(Townsfolk):
@@ -3042,7 +3059,10 @@ class Riot(Demon):
 
         assert isinstance(nomination, events.Dies)
         nominee = state.players[nomination.player]
-        yield from nominee.character.killed(state, nominee.id, riot_id)
+        if nominee.is_dead:
+            yield state
+        else:
+            yield from nominee.character.killed(state, nominee.id, riot_id)
 
 @dataclass
 class Sage(Townsfolk):
@@ -4037,6 +4057,7 @@ GLOBAL_SETUP_ORDER = [
 ]
 
 GLOBAL_NIGHT_ORDER = [
+    PoppyGrower,
     Philosopher,
     Xaan,
     Leviathan,
@@ -4112,7 +4133,7 @@ INACTIVE_CHARACTERS = [
     Lunatic,
     Marionette,
     Mayor,
-    PoppyGrower,
+    Politician,
     Princess,
     Recluse,
     Saint,

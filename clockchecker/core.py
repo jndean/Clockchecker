@@ -459,7 +459,6 @@ class State:
 
         if self._is_world():
             print(f'DBG {self.debug_key} [NIGHT {self.night} END]')
-            print(self)
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
         self.day = self.night
