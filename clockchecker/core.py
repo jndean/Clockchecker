@@ -480,6 +480,9 @@ class State:
 
         self._math_misregistration_bounds = [0, 0]
         self._math_misregisterers = set()
+
+        if self._is_world():
+            print(f'DBG {self.debug_key} [NIGHT {self.night} END]')
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
         self.day = self.night

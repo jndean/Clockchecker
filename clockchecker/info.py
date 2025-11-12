@@ -395,7 +395,7 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
         return True
     return type(player.character) in (
         characters.Lunatic,
-        # characters.Politician, (TODO)
+        characters.Politician,
     )
 
 def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
