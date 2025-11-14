@@ -1518,6 +1518,7 @@ class Golem(Outsider):
         self,
         state: State,
         nomination: events.UneventfulNomination,
+        me: PlayerID,
     ) -> StateGen:
         return self.nominates(state, nomination)
 
@@ -2749,6 +2750,7 @@ class Princess(Townsfolk):
         self,
         state: State,
         nomination: events.UneventfulNomination,
+        me: PlayerID,
     ) -> StateGen:
         self._nominates(state, nomination.nominator, nomination.player)
         yield state
@@ -3768,20 +3770,34 @@ class Witch(Minion):
             yield state; return
 
         if self.is_droisoned(state, me):
-            state.math_misregistration(me) # TODO: I think this is wrong, see todo.md
+            # Uninteresting to distinguish worlds where curse misfired or didn't
+            # handle both with a single MAYBE math misregistration.
+            state.math_misregistration(me, STBool.TRUE_MAYBE)
             yield state; return
 
-        for target in state.player_ids:
-            if state.players[target].is_dead:
-                # There are enough ways for curse not to trigger, don't need
-                # this one too (until we implement the Goon...)
-                continue
+        # Only spawn worlds cursing people who nominate tomorrow (plus one more)
+        # TODO: If goon ability in play, consider cursing them (even droisoned)
+        def nominator_from_event(e):
+            return (
+                e.player if (isinstance(e, events.Dies) and e.after_nominating)
+                else e.nominator if isinstance(e, events.UneventfulNomination)
+                else None
+            )
+        curse_candidates = [
+            nominator
+            for ev in state.puzzle.day_events.get(state.night, [])
+            if (nominator := nominator_from_event(ev)) is not None
+        ]
+        for target in curse_candidates:
             new_state = state.fork()
             new_witch = new_state.players[me].get_ability(Witch)
             new_witch.maybe_deactivate_effects(new_state, me)
             new_witch.target = target
             new_witch.maybe_activate_effects(new_state, me)
             yield new_state
+
+        # The world without a successful curse
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
@@ -3790,7 +3806,19 @@ class Witch(Minion):
     def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
             del state.players[self.target].witch_cursed
-
+    
+    def uneventful_nomination(
+        self,
+        state: State,
+        nomination: events.UneventfulNomination,
+        me: PlayerID,
+    ) -> StateGen:
+        nominator = state.players[nomination.nominator]
+        if self.target is not nominator.id:
+            yield state
+        elif nominator.character.cant_die(state, nominator.id):
+            state.math_misregistration(me)
+            yield state
 
 @dataclass
 class Vigormortis(GenericDemon):
@@ -3907,6 +3935,7 @@ class Virgin(Townsfolk):
         self,
         state: State,
         nomination: events.UneventfulNomination,
+        me: PlayerID,
     ) -> StateGen:
         virgin = state.players[nomination.player]
         nominator_is_tf = info.IsCategory(nomination.nominator, Townsfolk)(

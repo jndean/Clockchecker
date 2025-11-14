@@ -1518,6 +1518,73 @@ class TestFortuneTeller(unittest.TestCase):
         ))
 
 
+class TestWitch(unittest.TestCase):
+
+    def test_kills(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Witch)
+                        & IsCharacter(D, Saint)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(B, C, demon=True),
+                }),
+                Player('D', claim=Saint),
+            ],
+            day_events={1: Dies(player=D, after_nominating=True)},
+            night_deaths={},
+            hidden_characters=[Leviathan, Witch],
+            hidden_self=[],
+            category_counts=(1, 1, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Witch, Saint),),
+        )
+
+    def test_no_kills(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Witch)
+                        & IsCharacter(D, Saint)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(B, C, demon=True),
+                }),
+                Player('D', claim=Saint),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Witch],
+            hidden_self=[],
+            category_counts=(1, 1, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Witch, Saint),),
+        )
+    
+    def test_reject_uneventful_nom(self):
+        pass # TODO:
+
 class TestPitHag(unittest.TestCase):
 
     def test_changes_demon(self):

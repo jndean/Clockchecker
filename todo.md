@@ -62,8 +62,6 @@ behaving evil (or NotImplementedError) _not_ just being evil.
 
 	- Currently 'safe_from_demon' doesn't protect from demon poisoning. It's easy to implement this if the poisoning is applied after safe_from_demon, but we don't track where droison count comes from so it is not currently possible to implement this if the poisoning happens first.
 
-	- I think poisoned witch is incrementing Math wrong and also not picking a target, which it should.
-
 	- In general, Mathematician is implemented badly. Currently only "first-degree" math numbers are counted, e.g. during run_night, an ability doesn't work on the spot. However, a drunk Poisoner, Xaan, No Dashii etc who is failing to poison their target should increment the count, but only at the moment that their target's ability _does_ work. This happens at an arbitrary point later, and is not implemented. E.g., a droisoned Monk or Soldier failing to protect from the demon won't Math right, poisoned Princess etc...
 	The Spy misregistering as good is detected fine by Mathematician, but a drunk Spy _not_ misregistering as good when they would normally is _not_ picked up by Math.
 

@@ -92,17 +92,29 @@ class UneventfulNomination(Event):
     nominator: PlayerID
     player: PlayerID | None = None
     def __call__(self, state: State) -> StateGen:
-        def _run(states: StateGen, pid: PlayerID, character: type[Character]):
+        def _run(
+            states: StateGen,
+            pid: PlayerID | None,
+            character: type[Character],
+        ):
             for _state in states:
-                ability = _state.players[pid].get_ability(character)
-                if ability is not None:
-                    yield from ability.uneventful_nomination(_state, self)
+                abilities = [
+                    (ability, i)
+                    for i in (_state.player_ids if pid is None else (pid,))
+                    if (ability := _state.players[i].get_ability(character))
+                    is not None
+                ]
+                assert len(abilities) < 2, 'TODO: easy generator stacking :)'
+                if abilities:
+                    ability, i = abilities[0]  # TODO
+                    yield from ability.uneventful_nomination(_state, self, i)
                 else:
                     yield _state
         states = [state]
         states = _run(states, self.nominator, characters.Princess)
         states = _run(states, self.nominator, characters.Golem)
         states = _run(states, self.player, characters.Virgin)
+        states = _run(states, None, characters.Witch)
         if getattr(state, "rioting_count", 0):
             # yielf from characters.Riot.day_three_nomination(state, self)
             raise NotImplementedError("Riot.uneventful_nomination D3")
