@@ -1581,9 +1581,78 @@ class TestWitch(unittest.TestCase):
             puzzle,
             solutions=((Artist, Leviathan, Witch, Saint),),
         )
-    
-    def test_reject_uneventful_nom(self):
-        pass # TODO:
+
+    def test_reject_no_curse_when_everyone_nominated(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Witch)
+                        & IsCharacter(D, Saint)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(B, C, demon=True),
+                }),
+                Player('D', claim=Saint),
+            ],
+            day_events={1: [
+                UneventfulNomination(player=You, nominator=You),
+                UneventfulNomination(player=B, nominator=B),
+                UneventfulNomination(player=C, nominator=C),
+                UneventfulNomination(player=D, nominator=D),
+            ]},
+            night_deaths={},
+            hidden_characters=[Leviathan, Witch],
+            hidden_self=[],
+            category_counts=(1, 1, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=(),
+        )
+
+    def test_starpassed_witch_deactivates(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, Witch)
+                        & IsCharacter(D, Seamstress)
+                        & IsCharacter(E, Saint)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=FortuneTeller, night_info={
+                    1: FortuneTeller.Ping(B, C, demon=True),
+                }),
+                Player('D', claim=Seamstress),
+                Player('E', claim=Saint),
+            ],
+            day_events={
+                2: Dies(player=E, after_nominating=True),
+            },
+            night_deaths={2: B},
+            hidden_characters=[Imp, Witch],
+            hidden_self=[],
+            category_counts=(2, 1, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=(),
+        )
+
 
 class TestPitHag(unittest.TestCase):
 

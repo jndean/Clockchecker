@@ -1406,13 +1406,28 @@ class FortuneTeller(Townsfolk):
             return real_result == claimed_result
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        # Any good player could be chosen as the red herring
-        for player in state.player_ids:
-            if info.IsEvil(player)(state, me).not_true():
-                new_state = state.fork()
-                new_ft = new_state.players[me].get_ability(FortuneTeller)
-                new_ft.red_herring = player
-                yield new_state
+        # Simulate all worlds where the red herring is chosen, plus just one
+        # where is some random other person
+        redherrings = set()
+        good_team = set(
+            pid for pid in state.player_ids
+            if info.IsEvil(pid)(state, me).not_true()
+        )
+        for night in range(1, state.puzzle.max_night + 1):
+            if (ping := state.get_night_info(FortuneTeller, me, night)) is None:
+                continue
+            if ping.player1 in good_team:
+                redherrings.add(ping.player1)
+            if ping.player2 in good_team:
+                redherrings.add(ping.player2)
+        unchosen_good = good_team - redherrings
+        if unchosen_good:
+            redherrings.add(unchosen_good.pop())
+        for player in redherrings:
+            new_state = state.fork()
+            new_ft = new_state.players[me].get_ability(FortuneTeller)
+            new_ft.red_herring = player
+            yield new_state
 
     def _world_str(self, state: State) -> str:
         return (
@@ -3783,21 +3798,25 @@ class Witch(Minion):
                 else e.nominator if isinstance(e, events.UneventfulNomination)
                 else None
             )
-        curse_candidates = [
+        nominators = [
             nominator
             for ev in state.puzzle.day_events.get(state.night, [])
             if (nominator := nominator_from_event(ev)) is not None
         ]
-        for target in curse_candidates:
+        for target in nominators:
             new_state = state.fork()
             new_witch = new_state.players[me].get_ability(Witch)
-            new_witch.maybe_deactivate_effects(new_state, me)
             new_witch.target = target
             new_witch.maybe_activate_effects(new_state, me)
             yield new_state
 
-        # The world without a successful curse
-        yield state
+        for target in state.player_ids:
+            if target not in nominators:
+                # The world without a successful curse
+                self.target = target
+                self.maybe_activate_effects(state, me)
+                yield state
+                return
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
