@@ -1773,10 +1773,195 @@ class TestPitHag(unittest.TestCase):
             solution_endchars=((Artist, FangGu, PitHag, Dreamer, FangGu),),
         )
 
-    def test_some_arbitrary_deaths(self):
-        pass  # TODO maybe a gossip and demon do some killing
-    def test_all_arbitrary_deaths(self):
-        pass  # TODO nobody else gets to kill
+    def test_arbitrary_multiple_extra_deaths(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Dreamer)
+                        & IsCharacter(E, Empath)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Imp, Empath),
+                    2: Dreamer.Ping(B, Leviathan, Empath),
+                }),
+                Player('E', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: [C, E]},
+            hidden_characters=[Imp, Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, PitHag, Dreamer, Empath),),
+            solution_endchars=((Artist, Leviathan, PitHag, Dreamer, Empath),),
+        )
+
+    def test_arbitrary_no_deaths(self):
+        You, B, C = range(3)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Imp, Empath),
+                    2: Dreamer.Ping(B, Leviathan, Empath),
+                }),
+                Player('B', claim=Recluse),
+                Player('C', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(1, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Dreamer, Imp, PitHag),),
+            solution_endchars=((Dreamer, Leviathan, PitHag),),
+        )
+
+    def test_arbitrary_deaths_blocks_kill(self):
+        # Current problems:
+        # 1. PitHag arbitrary deaths func doesn't actually implement the bit
+        # where it comes back at the end of the night to kill remaining living
+        # players
+        # 2. Chars like Gmbler kill before PitHag starts preventing deaths, but
+        # ST could retroactively decide gambler lived. So need to have PitHag
+        # Spawn the demon-making world at night start, begin kill prevention,
+        # then at night-order time do the kills itself.
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Gambler)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Gambler, night_info={
+                    2: Gambler.Gamble(You, Leviathan),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: C},
+            hidden_characters=[Imp, Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, PitHag, Gambler),),
+            solution_endchars=((Artist, Leviathan, PitHag, Gambler),),
+        )
+
+    def test_kills_at_night_end(self):
+        # A Chambermaid is allowed to pick the player who died that night,
+        # because they are killed at night's end by PitHag arbitrary deaths.
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Chambermaid)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Chambermaid, night_info={
+                    1: Chambermaid.Ping(You, B, 0),
+                    2: Chambermaid.Ping(You, C, 1),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: C},
+            hidden_characters=[Imp, Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, PitHag, Chambermaid),),
+            solution_endchars=((Artist, Leviathan, PitHag, Chambermaid),),
+        )
+
+    def test_kills_at_night_end2(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Chambermaid)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Chambermaid, night_info={
+                    1: Chambermaid.Ping(You, B, 0),
+                    2: Chambermaid.Ping(You, C, 1),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: C},
+            hidden_characters=[Leviathan, Imp, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, PitHag, Chambermaid),),
+            solution_endchars=((Artist, Imp, PitHag, Chambermaid),),
+        )
 
 
 class TestSpeculation(unittest.TestCase):

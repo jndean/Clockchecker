@@ -147,13 +147,6 @@ class Character:
         """
         return True
 
-    def end_night(self, state: State, me: PlayerID) -> bool:
-        """
-        Take dawn actions (e.g. monk stops protecting).
-        Can return False to invalidate the world.
-        """
-        return True
-
     @staticmethod
     def global_end_night(state: State) -> bool:
         """
@@ -334,7 +327,7 @@ class Character:
         TODO: Innkeeper should be checked here. Sailor or Lleech should extend
         this method. Things like Soldier and Monk live in `safe_from_attacker`.
         """
-        return getattr(state, 'arbitrary_death_night', -1) == state.night
+        return hasattr(state, 'pithag_preventing_kills')
 
     def is_droisoned(self, state: State, me: PlayerID) -> bool:
         """
@@ -2106,10 +2099,10 @@ class Monk(Townsfolk):
         self.maybe_activate_effects(state, me)
         yield state
 
-    def end_night(self, state: State, me: PlayerID) -> bool:
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
         self.maybe_deactivate_effects(state, me)
         self.target = None
-        return True
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
@@ -2555,10 +2548,10 @@ class PitHag(Minion):
                 new_pithag = new_state.players[me].get_ability(PitHag)
                 new_pithag.target_history.append((target, char_t))
                 for substate in new_state.change_character(target, char_t):
-                    if not issubclass(char_t, Demon):
-                        yield substate
-                    else:
+                    if issubclass(char_t, Demon):
                         yield from PitHag._arbitrary_deaths(substate, me)
+                    else:
+                        yield substate
         # No change world
         self.target_history.append((None, None))
         state.log('PitHag picks in-play character')
@@ -2571,33 +2564,59 @@ class PitHag(Minion):
         # the night order, every night, along with all combinations of allowing
         # real kills to succeed or fail is pretty infeasible.
         # Instead I generate two worlds:
-        # (1) The PitHag allows the rest of the night to play out, then kills
-        #     the remaining unexplained deaths this night.
-        # (2) The PitHag causes ALL deaths that happen this night right now, and
-        #    prevents any other character from killing tonight.
+        # (1) The PitHag prevents deaths for the rest of the night, then enacts
+        #     all required deaths at the end of the night.
+        # (2) The PitHag allows the rest of the night to play out, then kills
+        #     the remaining unexplained deaths at the end of the night.
+        # (3) The PitHag causes all deaths right now, and prevents any other
+        #     character from killing tonight.
         # This will cover the vast majority of cases, but may miss some very
-        # timing-sensitive cases. E.g., the PitHag kills the Philo-Sage right
-        # now, next the demon kills the real (now-sober) Sage. But that's very
-        # whacky. Better coverage of cases can be added later if needed...
+        # timing-plus-character-sensitive cases. E.g., the PitHag kills the
+        # Philo-Sage right now, next the demon kills the real (now-sober) Sage.
+        # But that's quite whacky. Better coverage of cases can be added later
+        # if needed...
 
         # World 1: Let the night continue, come back later to do remaining kills
-        yield state.fork()
+        all_kills_later_state = state.fork()
+        all_kills_later_state.pithag_kills_at_night_end = me
+        all_kills_later_state.pithag_preventing_kills = me
+        all_kills_later_state.log(f'PitHag prevents all deaths until night end')
+        yield all_kills_later_state
 
-        # World 2: kill all right now, prevents further deaths.
+        # World 2: Let the night continue, come back later to do remaining kills
+        remaining_kills_later_state = state.fork()
+        remaining_kills_later_state.pithag_kills_at_night_end = me
+        yield remaining_kills_later_state
+
+        # World 3: kill all right now, prevent any further deaths.
+        for substate in PitHag._kill_all_remaining_deaths(state, me):
+            substate.pithag_preventing_kills = me
+            yield substate
+
+    @staticmethod
+    def _kill_all_remaining_deaths(state: State, me: PlayerID) -> StateGen:
         deaths = [
             death.player
             for death in state.puzzle.night_deaths.get(state.night, ())
             if info.IsAlive(death.player)(state, me).is_true()
             and isinstance(death, events.NightDeath)
         ]
+        state.log(f'PitHag kills {[state.players[d].name for d in deaths]}')
         states = [state]
         for pid in deaths:
-            states = core.apply_all(states, lambda s, pid=pid: (
-                s.players[pid].character.attacked_at_night(s, pid, me)
+            states = core.apply_all(states, lambda state, pid=pid: (
+                state.players[pid].character.attacked_at_night(state, pid, me)
             ))
-        for substate in states:
-            substate.arbitrary_death_night = state.night
-            yield substate
+        yield from states
+
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
+        if hasattr(state, 'pithag_preventing_kills'):
+            del state.pithag_preventing_kills
+        if hasattr(state, 'pithag_kills_at_night_end'):
+            del state.pithag_kills_at_night_end
+            yield from PitHag._kill_all_remaining_deaths(state, me)
+        else:
+            yield state
 
     def _world_str(self, state: State) -> str:
         return (
@@ -3825,7 +3844,7 @@ class Witch(Minion):
     def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
             del state.players[self.target].witch_cursed
-    
+
     def uneventful_nomination(
         self,
         state: State,

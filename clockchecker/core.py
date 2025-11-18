@@ -440,11 +440,26 @@ class State:
         yield self
 
     def end_night(self) -> StateGen:
+        # Split into this func, which handles generating all the possible night
+        # end scenarios using each character's end_night function, and the
+        # _end_night function, which handles actually applying the end-of-night
+        # book-keeping to each of those generated states.
         self.log(f'[NIGHT {self.night} END]')
 
-        for player in self.players:
-            if not player.character.end_night(self, player.id):
-                return
+        def end_character_nights(state, pid):
+            character = state.players[pid].character
+            if hasattr(character, 'end_night'):
+                yield from character.end_night(state, pid)
+            else:
+                yield state
+
+        states = [self]
+        for pid in self.player_ids:
+            states = apply_all(states, end_character_nights, pid=pid)
+        states = apply_all(states, lambda state: state._end_night())
+        yield from states
+
+    def _end_night(self) -> StateGen:
         for char_t in self.puzzle.script:
             if not char_t.global_end_night(self):
                 return
@@ -481,8 +496,6 @@ class State:
         self._math_misregistration_bounds = [0, 0]
         self._math_misregisterers = set()
 
-        if self._is_world():
-            print(f'DBG {self.debug_key} [NIGHT {self.night} END]')
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
         self.day = self.night
@@ -871,10 +884,14 @@ class Puzzle:
         return str(self)
 
 
-def apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:
+def apply_all(
+    states: StateGen,
+    fn: Callable[[State], StateGen],
+    **kwargs,
+) -> StateGen:
     """Yields from a state-generating function on all states in a StateGen."""
     for state in states:
-        yield from fn(state)
+        yield from fn(state, **kwargs)
 
 
 def record_fork_caller(debug_key: tuple[int, ...], offset: int):
@@ -930,3 +947,14 @@ def summarise_fork_profiling():
     print(f'└{'─' * (len(title)-2)}┤')
     print(f'{' ' * (len(title)-11)}│ {sum(r[1] for r in rows): >7} │')
     print(f'{' ' * (len(title)-11)}└{'─' * 9}┘')
+
+
+def _debug_keys_from_DEBUG() -> list[tuple[int, ...]]:
+    if not isinstance(_DEBUG, str):
+        return []
+    s = _DEBUG.strip()
+    if s[0] != '(' or s[-1] != ')':
+        return []
+    return [tuple(int(x.strip()) for x in s[1:-1].split(','))]
+
+_DEBUG_WORLD_KEYS.extend(_debug_keys_from_DEBUG())
