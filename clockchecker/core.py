@@ -448,10 +448,7 @@ class State:
 
         def end_character_nights(state, pid):
             character = state.players[pid].character
-            if hasattr(character, 'end_night'):
-                yield from character.end_night(state, pid)
-            else:
-                yield state
+            yield from character.end_night(state, pid)
 
         states = [self]
         for pid in self.player_ids:

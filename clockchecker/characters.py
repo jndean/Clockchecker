@@ -139,6 +139,13 @@ class Character:
         if self.default_info_check(state, me):
             yield state
 
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
+        """
+        Take dawn actions (e.g. PitHag cleans up unexplained kills on arbitrary
+        death nights).
+        """
+        yield state
+
     def end_day(self, state: State, me: PlayerID) -> bool:
         """
         Take dusk actions (e.g. poisoner stops poisoning).
@@ -1643,7 +1650,7 @@ class Hermit(Outsider):
             states = core.apply_all(states, lambda s, ability=ability: getattr(
                 s.players[me].get_ability(Hermit).active_abilities[ability],
                 funcname,
-            ))
+            )(s, me))
         yield from states
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
@@ -1663,6 +1670,9 @@ class Hermit(Outsider):
 
     def end_day(self, state: State, me: PlayerID) -> bool:
         return all(x.end_day(state, me) for x in self.active_abilities)
+
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
+        return self._run_all_abilities(state, me, 'end_night', me)
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         for ability in self.active_abilities:
@@ -2446,6 +2456,12 @@ class Philosopher(Townsfolk):
         if self.active_ability is None:
             return super().run_day(state, me)
         return self.active_ability.run_day(state, me)
+
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
+        if self.active_ability is None:
+            yield state
+        else:
+            yield from self.active_ability.end_night(state, me)
 
     def end_day(self, state: State, me: PlayerID) -> bool:
         if self.active_ability is None:
