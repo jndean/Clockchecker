@@ -2171,3 +2171,7 @@ class TestSpeculation(unittest.TestCase):
 #         )
 #     def test_good_player_not_claiming_mad(self):
 #     def test_mad_player_claiming_mad_previous_day(self):
+
+
+# Test:
+# Ravenkeeper killed by pukka

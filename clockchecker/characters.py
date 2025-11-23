@@ -169,6 +169,7 @@ class Character:
         state: State,
         me: PlayerID,
         even_if_dead: bool = False,
+        even_if_droisoned: bool = False,
     ) -> bool:
         """Most info roles can inherit this pattern for their info check."""
         if state.current_phase is core.Phase.NIGHT:
@@ -197,7 +198,7 @@ class Character:
             state.math_misregistration(me)
             return not result.truth()
 
-        if self.is_droisoned(state, me):
+        if not even_if_droisoned and self.is_droisoned(state, me):
             if not getattr(self, 'self_droison', False):
                 state.math_misregistration(me, result)
             return True
@@ -733,7 +734,7 @@ class Cerenovus(Minion):
         character: type[Character]
         def __call__(self, state: State, src: PlayerID) -> bool:
             return (
-                getattr(state.players[src], 'ceremad', 1)
+                getattr(state.players[src], 'ceremad', 0)
                 and any(
                     (ability := player.get_ability(Cerenovus)) is not None
                     and ability.target == src
@@ -2023,7 +2024,7 @@ class Lunatic(Drunklike, Outsider):
             ):
                 # MAYBE inc math, because Lunatic could have chosen whoever.
                 # This is only approximately correct, most of the time.
-                substate.math_misregistration(me, STBool.TRUE_MAYBE)
+                substate.math_misregistration(me, info.STBool.TRUE_MAYBE)
             yield substate
 
 @dataclass
@@ -3033,7 +3034,11 @@ class Ravenkeeper(Townsfolk):
             death_night = ravenkeeper.death_night
             if death_night is None or death_night != state.night:
                 return info.STBool.FALSE
-            return info.IsCharacter(self.player, self.character)(state, src)
+            result = info.IsCharacter(self.player, self.character)(state, src)
+            if ravenkeeper.died_droisoned:
+                state.math_misregistration(src, result)
+                return result ^ info.STBool.FALSE_MAYBE
+            return result
 
     def apply_death(
         self,
@@ -3044,13 +3049,19 @@ class Ravenkeeper(Townsfolk):
         """Override Reason: Record when death happened."""
         if state.night is not None:
             self.death_night = state.night
+            self.died_droisoned = self.is_droisoned(state, me)
             state.players[me].woke()
         yield from super().apply_death(state, me, src)
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        """Override Reason: Even if dead."""
+        """Override Reason: Even if dead & droisoned."""
         # The Ping checks the death was on the same night.
-        if self.default_info_check(state, me, even_if_dead=True):
+        # We escape the droison check performed by default_info_check and
+        # manually check inside the ping, because e.g. a Pukka would undroison
+        # the RK before it's position in the night order.
+        if self.default_info_check(
+            state, me, even_if_dead=True, even_if_droisoned=True
+        ):
             yield state
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
@@ -3169,10 +3180,14 @@ class Sage(Townsfolk):
             death_night = sage.death_night
             if death_night is None or death_night != state.night:
                 return info.STBool.FALSE
-            return (
+            result = (
                 info.IsCategory(self.player1, Demon)(state, src)
                 | info.IsCategory(self.player2, Demon)(state, src)
             )
+            if sage.died_droisoned:
+                state.math_misregistration(src, result)
+                return result ^ info.STBool.FALSE_MAYBE
+            return result
 
     def apply_death(
         self,
@@ -3184,13 +3199,16 @@ class Sage(Townsfolk):
         killed_by_demon = info.IsCategory(src, Demon)(state, me)
         if state.night is not None and killed_by_demon.not_false():
             self.death_night = state.night
+            self.died_droisoned = self.is_droisoned(state, me)
             state.players[me].woke()
         yield from super().apply_death(state, me, src)
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Even if dead."""
         # The Ping checks the death was on the same night.
-        if self.default_info_check(state, me, even_if_dead=True):
+        if self.default_info_check(
+            state, me, even_if_dead=True, even_if_droisoned=True
+        ):
             yield state
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
@@ -3600,6 +3618,69 @@ class Spy(Minion):
     )
     wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
 
+
+@dataclass
+class Sweetheart(Outsider):
+    """
+    When you die, 1 player is drunk from now on.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    target: PlayerID | None = None
+
+    def apply_death(
+        self,
+        state: State,
+        me: PlayerID,
+        src: PlayerID | None = None,
+    ) -> StateGen:
+        if self.is_droisoned(state, me):
+            yield from super().apply_death(state, me, src)
+            return
+        for player in state.player_ids:
+            new_state = state.fork()
+            new_sweetheart = new_state.players[me].get_ability(Sweetheart)
+            new_sweetheart.target = player
+            new_sweetheart.maybe_activate_effects(new_state, me, Reason.DEATH)
+            new_state.log(f'Sweetheart drunking {state.players[player].name}')
+            yield from super().apply_death(new_state, me, src)
+
+    def maybe_activate_effects(
+        self,
+        state: State,
+        me: PlayerID,
+        reason: Reason,
+    ) -> None:
+        """Override Reason: Even when dead."""
+        if reason is Reason.RESURRECTION:
+            raise NotImplementedError('Resurrecting Sweetheart')
+        if not (
+            self.effects_active
+            or self.is_droisoned(state, me)
+        ):
+            self.effects_active = True
+            state.players[self.target].droison(state, me)
+
+    def maybe_deactivate_effects(
+        self,
+        state: State,
+        me: PlayerID,
+        reason: Reason,
+    ) -> None:
+        """Override Reason: Even when dead."""
+        if (
+            self.effects_active
+            and reason is not Reason.DEATH
+            and self.target != me  # Break recursion
+        ):
+            self.effects_active = False
+            state.players[self.target].undroison(state, me)
+
+    def _world_str(self, state: State) -> str:
+        if self.effects_active and self.target is not None:
+            return f'Sweetheart ({state.players[self.target].name} is drunk)'
+        return 'Sweetheart'
+
 @dataclass
 class Undertaker(Townsfolk):
     """
@@ -3822,7 +3903,7 @@ class Witch(Minion):
         if self.is_droisoned(state, me):
             # Uninteresting to distinguish worlds where curse misfired or didn't
             # handle both with a single MAYBE math misregistration.
-            state.math_misregistration(me, STBool.TRUE_MAYBE)
+            state.math_misregistration(me, info.STBool.TRUE_MAYBE)
             yield state; return
 
         # Only spawn worlds cursing people who nominate tomorrow (plus one more)
@@ -4258,5 +4339,6 @@ INACTIVE_CHARACTERS = [
     Slayer,
     Soldier,
     Spy,
+    Sweetheart,
     Virgin,
 ]

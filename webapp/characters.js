@@ -56,10 +56,12 @@ const characterSamples = {
         { name: "Puzzlemaster", value: "Player('You', claim=Puzzlemaster, day_info={\n    2: Puzzlemaster.Ping(guess=Adam, demon=Balthazar),\n}),\n"},
         { name: "Recluse", value: "Player('Tom', claim=Recluse),\n"},
         { name: "Saint", value: "Player('Tim', claim=Saint),\n"},
+        { name: "Sweetheart", value: "Player('Tor', claim=Sweetheart),\n"},
     ],
     "Minions": [
         { name: "Baron", value: "Player('Fraser', claim=Baron),\n"},
         { name: "Boffin", value: "Player('Herrman', claim=Boffin),\n"},
+        { name: "Cerenovus", value: "Player('Foreman', claim=Saint, night_info={\n    1: Cerenovus.Mad(SnakeCharmer),\n}),\n"},
         { name: "EvilTwin", value: "Player('Hannah', claim=Empath, night_info={\n    1: [\n        EvilTwin.Is(Jasmine),\n        Empath.Ping(0),\n    ],\n    2: Empath.Ping(1),\n}),\n"},
         { name: "Goblin", value: "Player('Fraser', claim=Goblin),\n"},
         { name: "Marionette", value: "Player('Frayser', claim=Marionette),\n"},

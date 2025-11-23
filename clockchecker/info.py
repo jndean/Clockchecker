@@ -471,9 +471,9 @@ def retracted(info: Info) -> Info:
 # ------------------ Custom Info For Specific Puzzles -------------------- #
 
 
-# Required for a Savant statement in Puzzle #1
 @dataclass
 class DrunkBetweenTownsfolk(Info):
+    """Required for a Savant statement in Puzzle #1"""
     def __call__(self, state: State, src: PlayerID) -> STBool:
         N = len(state.players)
         result = STBool.FALSE
@@ -488,10 +488,9 @@ class DrunkBetweenTownsfolk(Info):
             result |= found_drunk & tf_neighbours
         return result
 
-
-# Required for a Savant statement in Puzzle #15
 @dataclass
 class LongestRowOfTownsfolk(Info):
+    """Required for a Savant statement in Puzzle #15"""
     length: int | None = None
     minimum: int = -999
     maximum: int = 999
@@ -515,9 +514,9 @@ class LongestRowOfTownsfolk(Info):
             return STBool(self.minimum <= longest <= self.maximum)
 
 
-# Required for a Artist statement in Puzzle #42
 @dataclass
 class WidowPoisoned(Info):
+    """Required for a Artist statement in Puzzle #42"""
     player: PlayerID
     def __call__(self, state: State, src: PlayerID) -> STBool:
         target = state.players[self.player]
@@ -532,3 +531,22 @@ class WidowPoisoned(Info):
             )
             for player in state.players
         ))
+
+
+@dataclass
+class CharacterTypesAmongPlayers(Info):
+    """Required for Savant statement in Puzzle #61"""
+    players: list[PlayerID]
+    count: int
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        count = 0
+        for char_type in characters.ALL_CATEGORIES:
+            is_type = [
+                IsCategory(player, char_type)(state, src)
+                for player in self.players
+            ]
+            assert not any(x.is_maybe() for x in is_type), (
+                "Puzzle 61 has no misregistration, so ommit that logic for now."
+            )
+            count += any(x.not_false() for x in is_type)
+        return STBool(count == self.count)

@@ -163,6 +163,8 @@ class Player:
             items.append(f'with Boffin[{boffin_repr}]')
         if self.is_dead:
             items.append('💀')
+        if self.droison_count:
+            items.append('🧪')
         if hasattr(self, 'speculative_evil'):
             items.append('(behaves evil)')
         return ' '.join(items)

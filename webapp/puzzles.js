@@ -2592,7 +2592,7 @@ puzzle = Puzzle(
 }, {
 name: 'NQT55',
 claims: ['Flowergirl', 'Seamstress', 'Clockmaker', 'Klutz', 'Artist', 'Juggler', 'Mathematician', 'Oracle'],
-hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant', 'Klutz'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
 `# NQT55: The Life of a Flowergirl
 # https://www.reddit.com/r/BloodOnTheClocktower/comments/1nxahl5/weekly_puzzle_55_the_life_of_a_flowergirl/
@@ -2638,7 +2638,7 @@ puzzle = Puzzle(
         2: [Dies(player=You, after_nominating=True), Execution(Matt)],
     },
     night_deaths={2: Aoife, 3: Fraser},
-    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }, {
@@ -2787,6 +2787,76 @@ puzzle = Puzzle(
     night_deaths={2: Aoife, 3: You},
     hidden_characters=[NoDashii, Vortox, Goblin, Drunk],
     hidden_self=[Goblin],
+)`
+}, {
+name: 'NQT61',
+claims: ['Savant', 'Seamstress', 'Mathematician', 'Sweetheart', 'Juggler', 'Oracle', 'Dreamer', 'SnakeCharmer'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+value:
+`# Other: NQT61
+# TODO: URL not available yet
+
+You, Matthew, Fraser, Steph, Josh, Anna, Tim, Oscar = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Savant, day_info={
+            1: Savant.Ping(
+                LongestRowOfTownsfolk(3),
+                IsInPlay(NoDashii) & IsInPlay(Witch) & Clockmaker.Ping(3),
+            ),
+            2: Savant.Ping(
+                ExactlyN(N=2, args=[
+                    IsCategory(Steph, Townsfolk),
+                    IsCategory(Josh, Townsfolk),
+                    IsCategory(Oscar, Townsfolk),
+                ]),
+                CharacterTypesAmongPlayers([Matthew, Steph, Josh, Tim], 2)
+            ),
+        }),
+        Player('Matthew', claim=Seamstress, night_info={
+            1: Seamstress.Ping(Fraser, Anna, same=True),
+        }),
+        Player('Fraser', claim=Mathematician, night_info={
+            1: Mathematician.Ping(2),
+            2: Mathematician.Ping(2),
+            3: Mathematician.Ping(2),
+        }),
+        Player('Steph', claim=Sweetheart),
+        Player('Josh', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    You: Savant,
+                    Matthew: Vigormortis,
+                    Fraser: Mathematician,
+                    Steph: Witch,
+                    Tim: FangGu,
+                })
+            },
+            night_info={2: Juggler.Ping(0)}
+        ),
+        Player('Anna', claim=Oracle, night_info={
+            2: Oracle.Ping(0),
+            3: Oracle.Ping(0),
+        }),
+        Player('Tim', claim=Dreamer, night_info={
+            1: Dreamer.Ping(Fraser, Mathematician, Witch),
+            2: Dreamer.Ping(Josh, Mutant, FangGu),
+        }),
+        Player('Oscar', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Fraser),
+        }),
+        
+    ],
+    day_events={
+        1: [
+            Dies(player=Oscar, after_nominating=True),
+            Execution(Matthew),
+        ],
+        2: Execution(You),
+    },
+    night_deaths={2: Steph, 3: Tim},
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    hidden_self=[],
 )`
 }
 ], "Other": [{
@@ -2986,7 +3056,7 @@ puzzle = Puzzle(
 }, {
 name: 'nqt_snv_test1',
 claims: ['Dreamer', 'SnakeCharmer', 'Artist', 'Juggler', 'Klutz', 'Mathematician', 'Oracle', 'Clockmaker'],
-hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Klutz', 'Mutant'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
 `# Other: nqt_snv_test1
 # NQT posts 4 test SnV puzles in discord
@@ -3039,14 +3109,13 @@ puzzle = Puzzle(
         ],
     },
     night_deaths={2: Aoife, 3: Tim},
-    hidden_characters=[
-        FangGu, Vigormortis, NoDashii, Vortox, Witch, Klutz, Mutant],
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }, {
 name: 'nqt_snv_test2',
 claims: ['Clockmaker', 'Juggler', 'SnakeCharmer', 'Mathematician', 'Artist', 'Klutz', 'Oracle', 'Dreamer'],
-hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant', 'Klutz'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
 `# Other: nqt_snv_test2
 # NQT posts 4 test SnV puzles in discord
@@ -3096,14 +3165,13 @@ puzzle = Puzzle(
         ],
     },
     night_deaths={2: Olivia, 3: Aoife},
-    hidden_characters=[
-        FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }, {
 name: 'nqt_snv_test3',
 claims: ['Artist', 'Oracle', 'Klutz', 'SnakeCharmer', 'Clockmaker', 'Juggler', 'Mathematician', 'Dreamer'],
-hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant', 'Klutz'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
 `# Other: nqt_snv_test3
 # NQT posts 4 test SnV puzles in discord
@@ -3147,14 +3215,13 @@ puzzle = Puzzle(
         ],
     },
     night_deaths={2: Aoife, 3: You},
-    hidden_characters=[
-        FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant, Klutz],
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }, {
 name: 'nqt_snv_test4',
 claims: ['SnakeCharmer', 'Dreamer', 'Klutz', 'Oracle', 'Clockmaker', 'Juggler', 'Artist', 'Mathematician'],
-hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant', 'Klutz'],
+hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
 `# Other: nqt_snv_test4
 # NQT posts 4 test SnV puzles in discord
@@ -3204,8 +3271,7 @@ puzzle = Puzzle(
         ],
     },
     night_deaths={2: Oscar, 3: Fraser},
-    hidden_characters=[
-        FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant,Klutz],
+    hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }, {

@@ -33,7 +33,7 @@ behaving evil (or NotImplementedError) _not_ just being evil.
  - Implement the events system! (Some of the below could be token callbcaks, not events...)
  - Characters that would like to listen for character_changed events:
    - NoDashii to update poisoned neighbours
-   - Vigormortis to update poisoned neighbours of killed minions
+   - Vigormortis to update poisoned neighbours of killed minions and unvigormortise killed minions
    - Xaan to poison new townsfolk
    - Philo to drunk new players with the same role
  - Characters that would like to listen for alignment_changed events:
