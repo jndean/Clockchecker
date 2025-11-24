@@ -146,13 +146,9 @@ class Character:
         """
         yield state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
-        """
-        Take dusk actions (e.g. poisoner stops poisoning).
-        Can return False to invalidate the world, e.g., Vortox uses this to
-        reject worlds with no executions.
-        """
-        return True
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
+        """Take dusk actions (e.g. poisoner stops poisoning)."""
+        yield state
 
     @staticmethod
     def global_end_night(state: State) -> bool:
@@ -760,10 +756,10 @@ class Cerenovus(Minion):
             new_cerenovus.maybe_activate_effects(new_state, me)
             yield new_state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         self.maybe_deactivate_effects(state, me)
         self.target = None
-        return True
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.target is not None:
@@ -946,11 +942,11 @@ class Courtier(Townsfolk):
             new_courtier.maybe_activate_effects(new_state, me)
             yield new_state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         if self.target is not None and (state.day - self.choice_night) >= 2:
             self.maybe_deactivate_effects(state, me)
             self.target = None
-        return True
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.target == me:
@@ -1669,8 +1665,8 @@ class Hermit(Outsider):
     def run_day(self, state: State, me: PlayerID) -> StateGen:
         return self._run_all_abilities(state, me, 'run_day', me)
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
-        return all(x.end_day(state, me) for x in self.active_abilities)
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
+        return self._run_all_abilities(state, me, 'end_day', me)
 
     def end_night(self, state: State, me: PlayerID) -> StateGen:
         return self._run_all_abilities(state, me, 'end_night', me)
@@ -2464,10 +2460,10 @@ class Philosopher(Townsfolk):
         else:
             yield from self.active_ability.end_night(state, me)
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         if self.active_ability is None:
-            return True
-        return self.active_ability.end_day(state, me)
+            yield state; return
+        yield from self.active_ability.end_day(state, me)
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.active_ability is None:
@@ -2544,6 +2540,20 @@ class PitHag(Minion):
         default_factory=list
     )
 
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
+        # PitHag arbitrary deaths can prevent deaths backwards in time, so we
+        # must speculatively create a parallel world where there are arbitrary
+        # deaths from the start of the night, and and filter out the incorrect
+        # choices later.
+        if state.day == state.puzzle.max_night:
+            # Next night is not coming.
+            yield state; return
+        assert not hasattr(state, 'pithag_preventing_kills'), 'Todo: 2 PitHags'
+        arbitrary_death_state = state.fork()
+        arbitrary_death_state.pithag_preventing_kills = me
+        yield arbitrary_death_state
+        yield state
+
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         pithag = state.players[me]
         if state.night == 1 or pithag.is_dead and not pithag.vigormortised:
@@ -2557,6 +2567,15 @@ class PitHag(Minion):
             character for character in state.puzzle.script
             if info.IsInPlay(character)(state, me).not_true()
         ]
+        def _can_register_as_demon(character):
+            return (issubclass(character, Demon)
+                    or Demon in character.misregister_categories)
+        if getattr(state, 'pithag_preventing_kills', None) == me:
+            # In this world we already speculated this is an arbitrary death
+            # night, i.e., PitHag must create demon.
+            characters = [c for c in characters if _can_register_as_demon(c)]
+            if not characters:
+                return
         for target in state.player_ids:
             for char_t in characters:
                 new_state = state.fork()
@@ -2565,7 +2584,7 @@ class PitHag(Minion):
                 new_pithag = new_state.players[me].get_ability(PitHag)
                 new_pithag.target_history.append((target, char_t))
                 for substate in new_state.change_character(target, char_t):
-                    if issubclass(char_t, Demon):
+                    if _can_register_as_demon(char_t):
                         yield from PitHag._arbitrary_deaths(substate, me)
                     else:
                         yield substate
@@ -2581,10 +2600,10 @@ class PitHag(Minion):
         # the night order, every night, along with all combinations of allowing
         # real kills to succeed or fail is pretty infeasible.
         # Instead I generate two worlds:
-        # (1) The PitHag prevents deaths for the rest of the night, then enacts
+        # (1) The PitHag prevents deaths for the whole night, then enacts
         #     all required deaths at the end of the night.
-        # (2) The PitHag allows the rest of the night to play out, then kills
-        #     the remaining unexplained deaths at the end of the night.
+        # (2) The PitHag allows the night to play out, then kills remaining
+        #     unexplained deaths at the end of the night.
         # (3) The PitHag causes all deaths right now, and prevents any other
         #     character from killing tonight.
         # This will cover the vast majority of cases, but may miss some very
@@ -2594,11 +2613,13 @@ class PitHag(Minion):
         # if needed...
 
         # World 1: Let the night continue, come back later to do remaining kills
-        all_kills_later_state = state.fork()
-        all_kills_later_state.pithag_kills_at_night_end = me
-        all_kills_later_state.pithag_preventing_kills = me
-        all_kills_later_state.log(f'PitHag prevents all deaths until night end')
-        yield all_kills_later_state
+        # Added wrinkle: PitHag has already decided if we are in World 1 at the
+        # end of the previous day (see PitHag.end_day()), so detect that here
+        if getattr(state, 'pithag_preventing_kills', None) == me:
+            state.pithag_kills_at_night_end = me
+            state.log(f'PitHag prevents all deaths until night end')
+            yield state
+            return
 
         # World 2: Let the night continue, come back later to do remaining kills
         remaining_kills_later_state = state.fork()
@@ -2728,10 +2749,10 @@ class Poisoner(Minion):
             new_poisoner.maybe_activate_effects(new_state, src)
             yield new_state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         self.maybe_deactivate_effects(state, me)
         self.target = None
-        return True
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
         if self.target == me:
@@ -2816,11 +2837,11 @@ class Princess(Townsfolk):
             if state.active_princesses == 0:
                 del state.active_princesses
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         if self.first_night < state.day:
             self.maybe_deactivate_effects(state, me)
             self.activated = False
-        return True
+        yield state
 
 @dataclass
 class Progidy(Townsfolk):
@@ -4129,9 +4150,10 @@ class Vortox(GenericDemon):
         self.maybe_activate_effects(state, me)
         yield state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         events_ = state.puzzle.day_events.get(state.day, [])
-        return any(isinstance(ev, events.Execution) for ev in events_)
+        if any(isinstance(ev, events.Execution) for ev in events_):
+            yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         state.vortox = True
@@ -4205,11 +4227,11 @@ class Xaan(Minion):
         self.maybe_activate_effects(state, me)
         yield state
 
-    def end_day(self, state: State, me: PlayerID) -> bool:
+    def end_day(self, state: State, me: PlayerID) -> StateGen:
         if self.targets is not None:
             self.maybe_deactivate_effects(state, me)
             self.targets = None
-        return True
+        yield state
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.targets is not None:

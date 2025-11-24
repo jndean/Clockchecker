@@ -502,9 +502,16 @@ class State:
         yield self
 
     def end_day(self) -> StateGen:
-        for player in self.players:
-            if not player.character.end_day(self, player.id):
-                return
+        def end_character_days(state, pid):
+            character = state.players[pid].character
+            yield from character.end_day(state, pid)
+        states = [self]
+        for pid in self.player_ids:
+            states = apply_all(states, end_character_days, pid=pid)
+        states = apply_all(states, lambda state: state._end_day())
+        yield from states
+
+    def _end_day(self) -> StateGen:
         self.previously_alive = [
             info.IsAlive(player)(self, None).is_true()
             for player in range(len(self.players))
