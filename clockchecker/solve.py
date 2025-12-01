@@ -315,6 +315,11 @@ def _check_speculation(
     facts: dict[str, int],
 ):
     """Reject worlds with invalid speculation, just for improved efficiency."""
+    if puzzle.player_zero_is_you and (
+            0 in config.speculative_ceremad_positions
+            or 0 in config.speculative_evil_positions
+    ):
+        return False
     if (
         config.speculative_ceremad_positions
         and not facts['cerenovus_possible']
@@ -574,6 +579,13 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
             core._PROFILING_FORK_LOCATIONS += config_queue.get()
 
     core.summarise_fork_profiling()
+
+
+def solve_and_print(puzzle: Puzzle, num_processes=None) -> None:
+    # Convenience function, because I often find myself wanting to quickly
+    # insert a loop like this in the middle of a test.
+    for solution in solve(puzzle, num_processes=num_processes):
+        print(solution)
 
 
 def _apply_all(states: StateGen, fn: Callable[[State], StateGen]) -> StateGen:

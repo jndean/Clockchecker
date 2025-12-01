@@ -1653,7 +1653,6 @@ class TestWitch(unittest.TestCase):
             solutions=(),
         )
 
-
 class TestPitHag(unittest.TestCase):
 
     def test_changes_demon(self):
@@ -1690,6 +1689,51 @@ class TestPitHag(unittest.TestCase):
             solutions=((Artist, Leviathan, PitHag, Dreamer),),
             solution_endchars=((Artist, Imp, PitHag, Dreamer),),
         )
+
+    def test_changes_townsfolk(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Steward)
+                    )
+                }),
+                Player('B', claim=Philosopher, night_info={
+                    1: [
+                        Philosopher.Choice(Empath),
+                        Empath.Ping(0),
+                    ],
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Philosopher, PitHag),
+                    2: Dreamer.Ping(D, Leviathan, Artist),
+                }),
+                Player('D', claim=Steward, night_info={
+                    1: Steward.Ping(You),
+                    2: [
+                        CharacterChange(Dreamer),
+                        Dreamer.Ping(You, Artist, Leviathan),
+                    ]
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, PitHag, Steward),),
+            solution_endchars=((Artist, Leviathan, PitHag, Dreamer),),
+        )
+
 
     def test_new_character_runs_setup(self):
         You, B, C, D = range(4)
@@ -2121,56 +2165,266 @@ class TestSpeculation(unittest.TestCase):
             solution_endchars=((Artist, FangGu, PitHag, FangGu, Dreamer, Klutz),),
         )
 
-    def test_pithag_makes_mutant_and_jumped_lies_about_starting_tf(self):
-        # E.g, starting empath becomes mutant, gets jumped, lies about starting as dreamer with bad pings
-        pass  # TODO
-    def test_drunk_fanggu_jumped(self):
-        # E.g, i.e. make sure hidden good characters can be speculated evil
-        pass  # TODO
+    def test_jumped_tf_lies_about_starting_tf(self):
+        # E.g, starting empath becomes mutant, gets jumped, lies about starting as dreamer with bad pings so as not to double claim demon.
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Empath)
+                        & IsCharacter(E, Butler)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Empath, PitHag),
+                    2: Dreamer.Ping(E, Empath, FangGu),
+                }),
+                Player('E', claim=Butler),
+            ],
+            day_events={1: Execution(E)},
+            night_deaths={2: B},
+            hidden_characters=[FangGu, PitHag],
+            hidden_self=[],
+            also_on_script=[Saint],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, PitHag, Empath, Butler),),
+            solution_endchars=((Artist, FangGu, PitHag, FangGu, Butler),),
+        )
+
+    def test_drunk_speculatively_lies_about_nightwatchman(self):
+        # I.e. make sure hidden good characters can be speculated
+        # evil, so here the Drunk speculatively lies about the
+        # NightWatchman ping before being FanGu jumped.
+
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, FangGu)
+                        & IsCharacter(C, Drunk)
+                        & IsCharacter(D, NightWatchman)
+                    )
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('C', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(You, Drunk, FangGu),
+                    2: Dreamer.Ping(D, Drunk, FangGu),
+                }),
+                Player('D', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(C),
+                }),
+            ],
+            day_events={},
+            night_deaths={2: B},
+            hidden_characters=[FangGu, Drunk],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, FangGu, Drunk, NightWatchman),),
+            solution_endchars=((Artist, FangGu, FangGu, NightWatchman),),
+        )
 
 
-# class TestCerenovus(unittest.TestCase):
-#     def test_one_player_mad(self):
-#         You, B, C, D = range(4)
-#         puzzle = Puzzle(
-#             players=[
-#                 Player('You', claim=Artist, day_info={
-#                     1: Artist.Ping(
-#                         IsCharacter(B, Leviathan)
-#                         & IsCharacter(C, Cerenovus)
-#                         & IsCharacter(D, Dreamer)
-#                     )
-#                 }),
-#                 Player('B', claim=Empath, night_info={
-#                     1: Empath.Ping(0),
-#                     2: Empath.Ping(0),
-#                 }),
-#                 Player('C', claim=Empath, night_info={
-#                     1: Empath.Ping(0),
-#                     2: Empath.Ping(0),
-#                 }),
-#                 Player('D', claim=Empath, night_info={
-#                     1: Empath.Ping(0),
-#                     2: Empath.Ping(0),
-#                 }),
-#             ],
-#             day_events={},
-#             night_deaths={},
-#             hidden_characters=[Leviathan, Cerenovus],
-#             hidden_self=[],
-#             category_counts=(2, 0, 1, 1),
-#         )
-#         assert_solutions(
-#             self,
-#             puzzle,
-#             solutions=((Artist, Leviathan, Cerenovus, Dreamer),),
-#             info_condition=(
-#                 PlayerAttrEq(D, 'ceremad', 1)
-#                 & CharAttrEq(C, 'target', D)
-#             )
-#         )
-#     def test_good_player_not_claiming_mad(self):
-#     def test_mad_player_claiming_mad_previous_day(self):
+class TestCerenovus(unittest.TestCase):
+    def test_one_player_mad(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                    day_info={
+                        1: Artist.Ping(
+                            IsCharacter(B, Leviathan)
+                            & IsCharacter(C, Cerenovus)
+                            & IsCharacter(D, Dreamer)
+                        )
+                    },
+                    night_info={1: Cerenovus.Mad()},
+                ),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[Dreamer],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Cerenovus, Dreamer),),
+            info_condition=(
+                PlayerAttrEq(D, 'ceremad', 1)
+                & CharAttrEq(C, 'target', D)
+            )
+        )
+
+    def test_good_player_not_claiming_mad(self):
+        # Checks good player must admit madness once no longer mad.
+        #No one claims mad D1, so there are two solutions, one for each evil player who mau have been mad D1.
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                    day_info={
+                        1: Artist.Ping(
+                            IsCharacter(B, Leviathan)
+                            & IsCharacter(C, Cerenovus)
+                            & IsCharacter(D, Empath)
+                        )
+                    },
+                    night_info={2: Cerenovus.Mad()},
+                ),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                    2: Empath.Ping(1),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+            deduplicate_initial_characters=False
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=(
+                (Artist, Leviathan, Cerenovus, Empath),
+                (Artist, Leviathan, Cerenovus, Empath),
+            ),
+        )
+
+    def test_mad_player_claiming_mad_previous_day(self):
+        # Check the player mad on final day can claim madness on previous days
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Cerenovus)
+                        & IsCharacter(D, Knight)
+                    ),
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                    2: Empath.Ping(1),
+                }),
+                Player('D', claim=Courtier, night_info={
+                    1: [
+                        Courtier.Choice(Leviathan),
+                        Cerenovus.Mad(Knight),
+                    ],
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[Knight],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Cerenovus, Knight),),
+            info_condition=(
+                PlayerAttrEq(D, 'ceremad', 1)
+                & CharAttrEq(C, 'target', D)
+            )
+        )
+
+    def test_drunk_cerenovus_final_day(self):
+        # Check drunk cerenovus can't influence final day.
+        # If the Courtier didn't drunk the Cerenovus, the solution would be that
+        # D is mad in final
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Cerenovus)
+                        & IsCharacter(D, Knight)
+                        & IsCharacter(E, Courtier)
+                    ),
+                }),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(1),
+                    2: Empath.Ping(1),
+                }),
+                Player('D', claim=Courtier, night_info={
+                    1: [
+                        Courtier.Choice(Leviathan),
+                        Cerenovus.Mad(Knight),
+                    ],
+                }),
+                Player('E', claim=Courtier, night_info={
+                    2: Courtier.Choice(Cerenovus),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[Knight],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+#     def test_claimed_role_change(self):
+
 
 
 # Test:

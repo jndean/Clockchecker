@@ -171,7 +171,7 @@ class Character:
         if state.current_phase is core.Phase.NIGHT:
             ping = state.get_night_info(type(self), me, state.night)
         elif state.current_phase is core.Phase.DAY:
-            ping = state.get_day_info(me)
+            ping = state.get_day_info(type(self), me)
 
         if ping is None or info.behaves_evil(state, me) or self.lies_about_self:
             return True
@@ -725,9 +725,10 @@ class Cerenovus(Minion):
     target: PlayerID = None
     target_history: list[PlayerID] = field(default_factory=list)
 
+    @dataclass
     class Mad(info.ExternalInfo):
         # Other players use this to claim they were ceremad one night
-        character: type[Character]
+        character: type[Character] | None = None
         def __call__(self, state: State, src: PlayerID) -> bool:
             return (
                 getattr(state.players[src], 'ceremad', 0)
@@ -748,7 +749,7 @@ class Cerenovus(Minion):
             state.math_misregistration(me)
             self.target = None
             yield state; return
-        for target in range(len(state.players)):
+        for target in state.player_ids:
             new_state = state.fork()
             new_cerenovus = new_state.players[me].get_ability(Cerenovus)
             new_cerenovus.target = target
@@ -778,11 +779,11 @@ class Cerenovus(Minion):
         """Check truthful mad players report their madness on subsequent nights"""
         if state.night == state.puzzle.max_night:
             return True
-        players_claiming_madness = [
+        players_claiming_madness = set(
             pid for _, pid in state.puzzle.external_info_registry.get(
                 (Cerenovus, state.night), []
             )
-        ]
+        )
         return not any(
             getattr(player, 'ceremad', 0)
             and player.id not in players_claiming_madness
@@ -2521,7 +2522,7 @@ class Philosopher(Townsfolk):
         return getattr(self.active_ability, 'drunklike_character', None)
 
     @property
-    def misregister_categories(self):
+    def misregister_categories(self) -> tuple[Category, ...]:
         return (
             () if self.active_ability is None
             else self.active_ability.misregister_categories
@@ -2569,7 +2570,8 @@ class PitHag(Minion):
         ]
         def _can_register_as_demon(character):
             return (issubclass(character, Demon)
-                    or Demon in character.misregister_categories)
+                    or (isinstance(character.misregister_categories, tuple)
+                        and Demon in character.misregister_categories))
         if getattr(state, 'pithag_preventing_kills', None) == me:
             # In this world we already speculated this is an arbitrary death
             # night, i.e., PitHag must create demon.
@@ -3256,7 +3258,7 @@ class Savant(Townsfolk):
     def run_day(self, state: State, me: PlayerID) -> StateGen:
         """ Override Reason: Novel Vortox effect on Savant, see Savant.Ping."""
         savant = state.players[me]
-        ping = state.get_day_info(me)
+        ping = state.get_day_info(Savant, me)
         if (
             savant.is_dead
             or ping is None

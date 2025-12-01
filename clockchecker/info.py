@@ -313,6 +313,19 @@ class CustomInfo(Info):
     def __call__(self, state: State, src: PlayerID) -> STBool:
         return self.method(state)
 
+@dataclass
+class CharacterChange(NotInfo):
+    """
+    Used to mark when a player wants their claimed character to change in
+    the night. Players don't really know at what point in the night order
+    they changed character, so it's not completely obvious when the correct
+    time to apply their claim change is. We apply it in one of two ways:
+    1. If Puzzle.change_character is called on a player and it matches this
+        CharacterChange, the player's claim is updated at that moment.
+    2. Any remaining change claims are applied at the end of the night, just
+        before all player's claims are checked.
+    """
+    character: type[Character]
 
 
 # ------------------- Some helper utilities -------------------- #
@@ -393,9 +406,11 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
         return False
     if player.is_evil or hasattr(player, 'speculative_evil'):
         return True
-    return type(player.character) in (
-        characters.Lunatic,
-        characters.Politician,
+    return any(
+        player.acts_like(c) for c in (
+            characters.Lunatic,
+            characters.Politician,
+        )
     )
 
 def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
@@ -455,17 +470,14 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
     return f'{type(info).__qualname__}({", ".join(ret)})'
 
 
-def info_creator(info: Info) -> type[Character]:
-    return getattr(characters, type(info).__qualname__.split('.')[0])
-
-
-def retracted(info: Info) -> Info:
-    """
-    A `retracted(Empath.Ping(0))` is one claimed at the time but retracted by
-    the final game state displayed in the Puzzle.
-    """
-    info.is_retracted = True
-    return info
+# These type hints really are 'hints'...
+def info_creator(info: Info | Any) -> type[Character] | Any:
+    if (
+        len(name_parts := type(info).__qualname__.split('.')) > 1
+        and (creator := getattr(characters, name_parts[0], None)) is not None
+    ):
+        return creator
+    return type(info)
 
 
 # ------------------ Custom Info For Specific Puzzles -------------------- #

@@ -50,6 +50,8 @@ behaving evil (or NotImplementedError) _not_ just being evil.
 
 # Active Bugs To Fix:
 
+        - Currently players can be ceremad as evil characters. Would need to add a final day check on mad player claims.
+
 	- Not respecting the jinx on cannibal/juggler. What a ridiculous jinx!
 
 	- EvilTwin is doesn't pick a new twin if they change alignment

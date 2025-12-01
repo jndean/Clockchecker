@@ -53,69 +53,40 @@ if __name__ == '__main__':
         hidden_self=[],
     )
 
-    You, Matthew, Fraser, Steph, Josh, Anna, Tim, Oscar = range(8)
+
+    You, B, C, D = range(4)
     puzzle = Puzzle(
         players=[
-            Player('You', claim=Savant, day_info={
-                1: Savant.Ping(
-                    LongestRowOfTownsfolk(3),
-                    IsInPlay(NoDashii) & IsInPlay(Witch) & Clockmaker.Ping(3),
-                ),
-                2: Savant.Ping(
-                    ExactlyN(N=2, args=[
-                        IsCategory(Steph, Townsfolk),
-                        IsCategory(Josh, Townsfolk),
-                        IsCategory(Oscar, Townsfolk),
-                    ]),
-                    CharacterTypesAmongPlayers([Matthew, Steph, Josh, Tim], 2)
-                ),
+            Player('You', claim=Artist, day_info={
+                1: Artist.Ping(
+                    IsCharacter(B, Leviathan)
+                    & IsCharacter(C, PitHag)
+                    & IsCharacter(D, Steward)
+                )
             }),
-            Player('Matthew', claim=Seamstress, night_info={
-                1: Seamstress.Ping(Fraser, Anna, same=True),
+            Player('B', claim=Philosopher, night_info={
+                1: [
+                    Philosopher.Choice(Empath),
+                    Empath.Ping(0),
+                ],
+                2: Empath.Ping(0),
             }),
-            Player('Fraser', claim=Mathematician, night_info={
-                1: Mathematician.Ping(2),
-                2: Mathematician.Ping(2),
-                3: Mathematician.Ping(2),
+            Player('C', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(0),
             }),
-            Player('Steph', claim=Sweetheart),
-            Player('Josh', claim=Juggler,
-                day_info={
-                    1: Juggler.Juggle({
-                        You: Savant,
-                        Matthew: Vigormortis,
-                        Fraser: Mathematician,
-                        Steph: Witch,
-                        Tim: FangGu,
-                    })
-                },
-                night_info={2: Juggler.Ping(0)}
-            ),
-            Player('Anna', claim=Oracle, night_info={
-                2: Oracle.Ping(0),
-                3: Oracle.Ping(0),
+            Player('D', claim=Steward, night_info={
+                1: Steward.Ping(You),
+                2: CharacterChange(Klutz),
             }),
-            Player('Tim', claim=Dreamer, night_info={
-                1: Dreamer.Ping(Fraser, Mathematician, Witch),
-                2: Dreamer.Ping(Josh, Mutant, FangGu),
-            }),
-            Player('Oscar', claim=SnakeCharmer, night_info={
-                1: SnakeCharmer.Choice(Fraser),
-            }),
-            
         ],
-        day_events={
-            1: [
-                Dies(player=Oscar, after_nominating=True),
-                Execution(Matthew),
-            ],
-            2: Execution(You),
-        },
-        night_deaths={2: Steph, 3: Tim},
-        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        day_events={},
+        night_deaths={},
+        hidden_characters=[Leviathan, PitHag],
         hidden_self=[],
+        also_on_script=[Klutz],
+        category_counts=(2, 0, 1, 1),
     )
-
 
     print(puzzle, '\n\nSolving...\n')
     count = 0

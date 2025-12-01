@@ -3018,7 +3018,6 @@ def puzzle_NQT61():
             Player('Oscar', claim=SnakeCharmer, night_info={
                 1: SnakeCharmer.Choice(Fraser),
             }),
-            
         ],
         day_events={
             1: [

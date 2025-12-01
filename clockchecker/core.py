@@ -186,14 +186,22 @@ class Player:
                 character = info.info_creator(item)
                 if isinstance(item, (info.Info, info.NotInfo)):
                     assert (night, character) not in self.night_info, (
-                        "One info per night from own ability (for now?)."
+                        "One info per night per ability (for now?)."
                     )
                     self.night_info[(night, character)] = item
                 else:
                     assert isinstance(item, info.ExternalInfo)
                     self.external_night_info[(night, character)].append(item)
-
         self.external_night_info = dict(self.external_night_info)
+
+        existing_day_info = list(self.day_info.items())
+        self.day_info: Mapping[tuple[int, type[Character]], info.Info] = {}
+        for day, day_info in existing_day_info:
+            character = info.info_creator(day_info)
+            assert (day, character) not in self.day_info, (
+                "One info per day per ability (for now?)."
+            )
+            self.day_info[(day, character)] = day_info
 
     def _extract_info(self):
         # TODO: These should be created in Puzzle, not State, obviously.
@@ -286,8 +294,8 @@ class State:
     ):
         return self.puzzle._night_info[player].get((night, character), None)
 
-    def get_day_info(self, player: PlayerID):
-        return self.puzzle._day_info[player].get(self.day, None)
+    def get_day_info(self, character: type[Character], player: PlayerID):
+        return self.puzzle._day_info[player].get((self.day, character), None)
 
     def _is_world(self, key: tuple[int] | None = None) -> bool:
         """
@@ -330,9 +338,25 @@ class State:
         character_t = order[self.phase_order_index]
         self.currently_acting_character = character_t
         self.players_still_to_act = [
-            pid for pid in range(len(self.players))
-            if self.players[pid].acts_like(character_t)
+            player.id for player in self.players
+            if player.acts_like(character_t)
         ]
+
+        # Make sure no good players incorrectly claim to act as this character
+        for player in self.players:
+            ping = (
+                self.get_night_info(character_t, player.id, self.night)
+                if self.night is not None
+                else self.get_day_info(character_t, player.id)
+            )
+            if (
+                ping is not None and
+                player.id not in self.players_still_to_act
+                and not info.behaves_evil(self, player.id)
+                and not player.lies_about_self
+            ):
+                return
+
         states = self.run_all_players_with_currently_acting_character()
         if self.current_phase is Phase.NIGHT:
             states = State.run_external_night_info(
@@ -483,8 +507,13 @@ class State:
             return
         del self.previously_alive
 
-        # Check good players are what they claim to be
+        # Check good players are what they claim to be. Update claim if changed.
         for player in self.players:
+            claim = self.get_night_info(
+                info.CharacterChange, player.id, self.night
+            )
+            if claim is not None:
+                player.claim = claim.character
             if not (
                 isinstance(player.character, player.claim)
                 or info.behaves_evil(self, player.id)
@@ -535,6 +564,10 @@ class State:
         player_id: PlayerID,
         character: type[Character]
     ) -> StateGen:
+        """
+        Changes a player's character. If the player reports a matching character
+        change, updates 'player.claim' now.
+        """
         player = self.players[player_id]
         player.character_history.append(player.character._world_str(self))
         player.character_history.append(self._change_str())
@@ -699,7 +732,10 @@ class Puzzle:
         self._validate_inputs()
 
         self.max_day = max(
-            max((max(p.day_info, default=0) for p in self.players)),
+            max(
+                max((d for d, _ in p.day_info), default=0)
+                for p in self.players
+            ),
             max(self.day_events, default=0),
         )
         self.max_night = max(
@@ -736,9 +772,10 @@ class Puzzle:
         # Events can be entered in Player.day_info or in State.day_events,
         # b/c that feels nice. Move them all to one place before solving.
         for player in self.players:
-            for day, maybe_event in list(player.day_info.items()):
+            for key, maybe_event in list(player.day_info.items()):
+                day, _ = key
                 if isinstance(maybe_event, events.Event):
-                    del player.day_info[day]
+                    del player.day_info[key]
                     maybe_event.player = player.id
                     if day in self.day_events:
                         self.day_events[day].insert(0, maybe_event)
@@ -961,6 +998,6 @@ def _debug_keys_from_DEBUG() -> list[tuple[int, ...]]:
     s = _DEBUG.strip()
     if s[0] != '(' or s[-1] != ')':
         return []
-    return [tuple(int(x.strip()) for x in s[1:-1].split(','))]
+    return [tuple(int(x.strip()) for x in s[1:-1].split(',') if x.strip())]
 
 _DEBUG_WORLD_KEYS.extend(_debug_keys_from_DEBUG())
