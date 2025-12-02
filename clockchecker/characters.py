@@ -290,7 +290,7 @@ class Character:
             yield state
         if died:
             self.death_explanation = 'executed'
-            yield from self.killed(state, me)
+            yield from self.killed(state, me, src=None)
         elif self.cant_die(state, me):
             yield state
 
@@ -298,7 +298,7 @@ class Character:
         self,
         state: State,
         me: PlayerID,
-        src: PlayerID | None = None,
+        src: PlayerID | None,
     ) -> StateGen:
         """Check the death is logically valid, then apply it."""
         if not self.cant_die(state, me) and not state.players[me].is_dead:
@@ -749,7 +749,35 @@ class Cerenovus(Minion):
             state.math_misregistration(me)
             self.target = None
             yield state; return
-        for target in state.player_ids:
+
+        # As an optimisation we can target just the following:
+        # - good players who are retro-actively claiming ceremadness tonight
+        # - speculatively ceremad players
+        # - players executed by ST tomorrow (which might be a madness break)
+        # - plus one choice of player who would never admit it
+        evil_behaving_players = set(
+            pid for pid in state.player_ids if info.behaves_evil(state, pid)
+        )
+        good_behaving_players_claiming_mad = (
+            Cerenovus.players_claiming_ceremad_tonight(state)
+            - evil_behaving_players
+        )
+        speculatively_mad_players = set(
+            player.id for player in state.players
+            if getattr(player, 'speculative_ceremad', 0)
+        )
+        players_executed_by_ST_tomorrow = set(
+            ev.player for ev in state.puzzle.day_events.get(state.night + 1, [])
+        )
+        targets = (
+            good_behaving_players_claiming_mad
+            .union(speculatively_mad_players)
+            .union(players_executed_by_ST_tomorrow)
+        )
+        if evil_behaving_players:
+            targets.add(evil_behaving_players.pop())
+
+        for target in targets:
             new_state = state.fork()
             new_cerenovus = new_state.players[me].get_ability(Cerenovus)
             new_cerenovus.target = target
@@ -775,18 +803,21 @@ class Cerenovus(Minion):
                 del player.ceremad
 
     @staticmethod
+    def players_claiming_ceremad_tonight(state: State) -> set[PlayerID]:
+        ext_info = state.puzzle.external_info_registry.get(
+            (Cerenovus, state.night), []
+        )
+        return set(pid for _, pid in ext_info)
+
+    @staticmethod
     def global_end_night(state: State) -> bool:
         """Check truthful mad players report their madness on subsequent nights"""
         if state.night == state.puzzle.max_night:
             return True
-        players_claiming_madness = set(
-            pid for _, pid in state.puzzle.external_info_registry.get(
-                (Cerenovus, state.night), []
-            )
-        )
+        claiming_madness = Cerenovus.players_claiming_ceremad_tonight(state)
         return not any(
             getattr(player, 'ceremad', 0)
-            and player.id not in players_claiming_madness
+            and player.id not in claiming_madness
             and not getattr(player, 'speculative_ceremad', False)  # Still mad in round robin
             and not info.behaves_evil(state, player.id)
             for player in state.players
@@ -2149,7 +2180,7 @@ class Mutant(Outsider):
         elif not issubclass(player.claim, Outsider):
             yield state
         elif self.is_droisoned(state, me):
-            state.math_misregistration(me, info.FALSE_MAYBE)  # Maybe ST is just nice?
+            state.math_misregistration(me, info.STBool.FALSE_MAYBE)  # Maybe ST is just nice?
             yield state
 
         # TODO: Currently we can only tick up Math on a poisoned mutant on final
@@ -2389,7 +2420,8 @@ class Philosopher(Townsfolk):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if info.behaves_evil(state, me):
-            raise NotImplementedError('Evil Philosopher')
+            # raise NotImplementedError('Evil Philosopher')
+            print('TMP ', end='')
 
         philo = state.players[me]
 
@@ -3216,10 +3248,14 @@ class Sage(Townsfolk):
         self,
         state: State,
         me: PlayerID,
-        src: PlayerID | None = None,
+        src: PlayerID | None,
     ) -> StateGen:
         """Override Reason: Record when death happened."""
-        killed_by_demon = info.IsCategory(src, Demon)(state, me)
+        killed_by_demon = (
+            info.IsCategory(src, Demon)(state, me)
+            if src is not None
+            else info.STBool.FALSE
+        )
         if state.night is not None and killed_by_demon.not_false():
             self.death_night = state.night
             self.died_droisoned = self.is_droisoned(state, me)
@@ -3677,9 +3713,10 @@ class Sweetheart(Outsider):
         """Override Reason: Even when dead."""
         if reason is Reason.RESURRECTION:
             raise NotImplementedError('Resurrecting Sweetheart')
-        if not (
-            self.effects_active
-            or self.is_droisoned(state, me)
+        if (
+            not self.effects_active
+            and not self.is_droisoned(state, me)
+            and self.target is not None
         ):
             self.effects_active = True
             state.players[self.target].droison(state, me)
@@ -3959,7 +3996,7 @@ class Witch(Minion):
 
     def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:
-            state.players[self.target].witch_cursed = state.players[me].name
+            state.players[self.target].witch_cursed = me
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
         if self.target is not None:

@@ -131,9 +131,10 @@ class Dies(Event):
     def __call__(self, state: State) -> StateGen:
         if self.after_nominating:
             dying = state.players[self.player]
-            if (witch := getattr(dying, 'witch_cursed', None)) is not None:
-                dying.character.death_explanation = f"cursed by {witch}"
-                yield from dying.character.killed(state, self.player)
+            if (wid := getattr(dying, 'witch_cursed', None)) is not None:
+                witch = state.players[wid]
+                dying.character.death_explanation = f"cursed by {witch.name}"
+                yield from dying.character.killed(state, self.player, src=wid)
         elif self.after_nominated_by is not None:
             nominator = state.players[self.after_nominated_by]
             if getattr(state, "rioting_count", 0):
@@ -177,5 +178,5 @@ class Doomsayer:
             b = info.IsEvil(self.died)(state, self.player)
             if not (a ^ b).is_true():
                 yield from state.players[self.died].character.killed(
-                    state, self.died
+                    state, self.died, src=None  # Calling player is not killer?
                 )

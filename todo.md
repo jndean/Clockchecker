@@ -8,7 +8,9 @@
 
 - EASY: Update descriptions of STBools in docstrings/README
 
-- Current creation of speculative liars is wasteful, could create less setups rather than creating then rejecting them for having too many liars or having You speculatively lie in liar_gen.
+- EASY: Puzzle.allow_duplicate_tokens_in_bag is being used to allow multiple VIs, but
+  VIs should have their own mechanism for this so that we can specify no OTHER
+  duplicate tokens (otherwise we're going to have e.g. speculatively-lying duplicate snakecharmers popping up in VI puzzles).
 
 - GOOD: Make Player.character private (Player.\_character?) and any time something wants to access player's character it should call player.get_character(CharacterType) with the expected character type. (Maybe it can call with None explicitly to get the root character?). This can then recurse into wrapped characters and return the instance of the ability that is expected
 

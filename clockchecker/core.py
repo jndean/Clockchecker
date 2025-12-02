@@ -266,7 +266,7 @@ class State:
         deterministic.
         """
         if _PROFILING and fork_id is None:
-            record_fork_caller(self.debug_key, 1)
+            record_fork_caller(self.debug_key, self.night or self.day, 1)
 
         # deepcopy everything except the puzzle definition, which is shared
         puzzle, self.puzzle = self.puzzle, None
@@ -937,7 +937,7 @@ def apply_all(
         yield from fn(state, **kwargs)
 
 
-def record_fork_caller(debug_key: tuple[int, ...], offset: int):
+def record_fork_caller(debug_key: tuple[int, ...], round: int, offset: int):
     """
     Record which (character) method just forked a world during the solve, this
     can be aggregated into stats that are useful for profiling the combinatorial
@@ -950,7 +950,7 @@ def record_fork_caller(debug_key: tuple[int, ...], offset: int):
     cls = caller_frame.f_locals.get('self')
     cls_prefix = f'{cls.__class__.__name__}.' if cls is not None else ''
     caller = f'{cls_prefix}{fn_name}'
-    _PROFILING_FORK_LOCATIONS[(caller, debug_key)] += 1
+    _PROFILING_FORK_LOCATIONS[(caller, debug_key, round)] += 1
 
 
 def summarise_fork_profiling():
@@ -973,24 +973,47 @@ def summarise_fork_profiling():
     #                                           └─────────┘
     if not _PROFILING:
         return
-    groups = defaultdict(list)
-    for (caller, _), count in _PROFILING_FORK_LOCATIONS.items():
-        groups[caller].append(count)
-    rows = [
-        (caller, (total := sum(counts)), total / len(counts))
-        for caller, counts in groups.items()
-    ]
-    rows.sort(reverse=True, key=lambda row: row[2])
-    name_len = max((len(name) for name in groups), default=0)
-    print('Profiling returned the following stats about forking worlds')
-    title = f'│ {'Function': >{name_len}} │  Factor  │  Total  │'
-    print(f'┌{'─' * (len(title)-2)}┐\n{title}\n├{'─' * (len(title)-2)}┤')
-    for name, total, avg in rows:
-        print(f'│ {name: >{name_len}} │ {avg:7.2f}x │ {total: >7} │ ')
-    print(f'└{'─' * (len(title)-2)}┤')
-    print(f'{' ' * (len(title)-11)}│ {sum(r[1] for r in rows): >7} │')
-    print(f'{' ' * (len(title)-11)}└{'─' * 9}┘')
+    wide = os.environ.get('WIDE', False)
+    max_round = 0
+    matrix = defaultdict(lambda: defaultdict(list))  # Actually a ragged 3D tensor :)
+    for (fname, _, round), count in _PROFILING_FORK_LOCATIONS.items():
+        matrix[fname][round].append(count)
+        if round is not None:
+            max_round = max(max_round, round)
+    table = []
+    rounds = [None] + list(range(1, max_round + 1))
+    for fname in matrix:
+        row = [
+            ((t := sum(matrix[fname][r])), l, t / l)
+            if (l := len(matrix[fname][r]))
+            else (0, 0, 0.)
+            for r in rounds
+        ]
+        t = sum(t for t, _, _ in row)
+        l = sum(f for _, f, _ in row)
+        table.append((fname, [(t, l, t / l)] + (row if wide else [])))
 
+    table.sort(reverse=True, key=lambda row: row[1][0][2])
+
+    print('Profiling returned the following stats about forking worlds')
+    name_len = max((len(name) for name in matrix), default=0)
+    title = f'│ {'Function': >{name_len}} │     Avg x Total   │'
+    if wide:
+        for round in rounds:
+            title += f'       N{round}/D{round}       │' if round else '       Setup       │'
+    w = len(title)
+    print(f'┌{'─' * (w-2)}┐\n{title}\n├{'─' * (w-2)}┤')
+    for fname, cols in table:
+        rest = ''.join(
+            f' {avg:7.1f} x {count: <7} │'
+            if count else '         -         │'
+            for _, count, avg in cols
+        )
+        print(f'│ {fname: >{name_len}} │{rest}')
+    print(f'└{'─' * (w-2)}┤')
+    sum_msg = f'Total Forks: {sum(row[1][0][0] for row in table)}'
+    print(f'{' ' * (w-len(sum_msg)-4)}│ {sum_msg} │')
+    print(f'{' ' * (w-len(sum_msg)-4)}└{'─' * (len(sum_msg) + 2)}┘')
 
 def _debug_keys_from_DEBUG() -> list[tuple[int, ...]]:
     if not isinstance(_DEBUG, str):

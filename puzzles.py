@@ -571,6 +571,57 @@ def puzzle_NQT10():
     return PuzzleDef(puzzle, solutions)
 
 
+def _puzzle_NQT11():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1g9k8ny/weekly_puzzle_11_false_is_the_new_black/
+    print('NQT11 WIP')
+    You, Sula, Sarah, Tom, Matthew, Anna, Aoife, Hannah = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(2)
+            }),
+            Player('Sula', claim=Philosopher, night_info={
+                2: [
+                    Philosopher.Choice(SnakeCharmer),
+                    SnakeCharmer.Choice(Sarah),
+                ],
+            }),
+            Player('Sarah', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Matthew, Cerenovus, Seamstress),
+                2: Dreamer.Ping(Aoife, Vortox, Mutant),
+                3: Dreamer.Ping(You, Vortox, Mutant),
+            }),
+            Player('Tom', claim=Sweetheart),
+            Player('Matthew', claim=Seamstress,
+                night_info={
+                    1: Seamstress.Ping(Aoife, Tom, same=True),
+                    2: CharacterChange(Artist),
+                },
+                day_info={2: Artist.Ping(IsCharacter(You, Clockmaker))},
+            ),
+            Player('Anna', claim=Sage, night_info={
+                2: Sage.Ping(Matthew, Hannah),
+            }),
+            Player('Aoife', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Tom),
+                2: SnakeCharmer.Choice(Hannah),
+                3: SnakeCharmer.Choice(Matthew),
+            }),
+            Player('Hannah', claim=Artist, day_info={
+                1: Artist.Ping(IsEvil(You)),
+            }),
+        ],
+        day_events={1: Execution(You), 2: Execution(Sula)},
+        night_deaths={2: Anna, 3: Tom},
+        hidden_characters=[Vortox, Cerenovus, PitHag, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        # TODO
+    )
+    return PuzzleDef(puzzle, solutions)
+
+
 def puzzle_NQT12a():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1gexyoq/weekly_puzzle_12a_12b_thunderstruck
 

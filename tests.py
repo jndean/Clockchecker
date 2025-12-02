@@ -2293,7 +2293,7 @@ class TestCerenovus(unittest.TestCase):
 
     def test_good_player_not_claiming_mad(self):
         # Checks good player must admit madness once no longer mad.
-        #No one claims mad D1, so there are two solutions, one for each evil player who mau have been mad D1.
+        # No one claims mad D1, so only solution is evil player is mad.
         You, B, C, D = range(4)
         puzzle = Puzzle(
             players=[
@@ -2331,9 +2331,9 @@ class TestCerenovus(unittest.TestCase):
         assert_solutions(
             self,
             puzzle,
-            solutions=(
-                (Artist, Leviathan, Cerenovus, Empath),
-                (Artist, Leviathan, Cerenovus, Empath),
+            solutions=((Artist, Leviathan, Cerenovus, Empath),),
+            condition=(
+                lambda s: s.players[C].character.target_history[0] in (B, C)
             ),
         )
 
@@ -2423,9 +2423,57 @@ class TestCerenovus(unittest.TestCase):
         )
         assert_solutions(self, puzzle, solutions=())
 
-#     def test_claimed_role_change(self):
+    def test_claimed_role_change(self):
+        # Check that a ceremad player can claim to have changed character
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                    day_info={
+                        1: Artist.Ping(
+                            IsCharacter(B, Leviathan)
+                            & IsCharacter(C, Cerenovus)
+                            & IsCharacter(D, Dreamer)
+                        )
+                    },
+                    night_info={1: Cerenovus.Mad()},
+                ),
+                Player('B', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('C', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                    2: Empath.Ping(0),
+                }),
+                Player('D', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(You, Artist, Cerenovus),
+                    2: [
+                        CharacterChange(Empath),
+                        Empath.Ping(1),
+                    ],
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Cerenovus, Dreamer),),
+            info_condition=(
+                PlayerAttrEq(D, 'ceremad', 1)
+                & CharAttrEq(C, 'target', D)
+            )
+        )
 
 
 
 # Test:
+# Test SnakeCharmer. Also, test demon claims to have been charmed.
+#   Maybe a philo snakecharmer too
 # Ravenkeeper killed by pukka

@@ -106,7 +106,7 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
                 for subconf in _speculate_evil_good_evil(puzzle, config, facts):
                     if _check_speculation(puzzle, subconf, in_play, facts):
                         if core._PROFILING:
-                            core.record_fork_caller((), 0)
+                            core.record_fork_caller((), None, 0)
                         yield subconf
                         dbg_idx += 1
 
@@ -188,12 +188,12 @@ def _speculate_evil_good_evil(
         for i in range(max_extra_speculation + 1)
     ]):
         if core._PROFILING:
-            core.record_fork_caller(config.debug_key, 0)
+            core.record_fork_caller(config.debug_key, None, 0)
         new_config = copy(config)
         new_config.speculative_evil_positions += extra_speculation
         new_config.debug_key += (dbg_idx, )
         if core._PROFILING:
-            core.record_fork_caller(config.debug_key, 0)
+            core.record_fork_caller(config.debug_key, None, 0)
 
         yield new_config
         dbg_idx += 1
@@ -440,7 +440,7 @@ def _round_robin(state: State, config: StartingConfiguration) -> StateGen:
                     core._DEBUG_STATE_FORK_COUNTS[state.debug_key],)
                 core._DEBUG_STATE_FORK_COUNTS[state.debug_key] += 1
             if core._PROFILING:
-                core.record_fork_caller(state.debug_key, 0)
+                core.record_fork_caller(state.debug_key, None, 0)
             yield from _world_check(state.puzzle, redo_config)
             return
     yield state
