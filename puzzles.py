@@ -573,7 +573,6 @@ def puzzle_NQT10():
 
 def _puzzle_NQT11():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1g9k8ny/weekly_puzzle_11_false_is_the_new_black/
-    print('NQT11 WIP')
     You, Sula, Sarah, Tom, Matthew, Anna, Aoife, Hannah = range(8)
     puzzle = Puzzle(
         players=[
@@ -591,7 +590,7 @@ def _puzzle_NQT11():
                 2: Dreamer.Ping(Aoife, Vortox, Mutant),
                 3: Dreamer.Ping(You, Vortox, Mutant),
             }),
-            Player('Tom', claim=Sweetheart),
+            Player('Tom', claim=Butler),  # Substitution, no effect on solve
             Player('Matthew', claim=Seamstress,
                 night_info={
                     1: Seamstress.Ping(Aoife, Tom, same=True),
@@ -608,7 +607,7 @@ def _puzzle_NQT11():
                 3: SnakeCharmer.Choice(Matthew),
             }),
             Player('Hannah', claim=Artist, day_info={
-                1: Artist.Ping(IsEvil(You)),
+                1: Artist.Ping(IsEvil(You)),  # Just something that can't be true
             }),
         ],
         day_events={1: Execution(You), 2: Execution(Sula)},

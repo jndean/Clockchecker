@@ -85,7 +85,7 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
     for demons, minions, hidden_good, spec_evil, spec_mad in liar_combinations:
         liars = demons + minions + hidden_good + spec_evil + spec_mad
         l, e, m = len(liars), len(spec_evil), len(spec_mad)
-        if e + m > puzzle.max_speculation:
+        if e + m > puzzle.compromises.max_speculation:
             continue
         spec_evil_slice = slice(l - e - m, l - m)
         spec_mad_slice = slice(l - m, l)
@@ -167,7 +167,7 @@ def _speculate_evil_good_evil(
         config.speculative_evil_positions + config.speculative_ceremad_positions
     )
     max_extra_speculation = min(
-        puzzle.max_speculation - len(existing_speculation),
+        puzzle.compromises.max_speculation - len(existing_speculation),
         1,
     )
     evil_good_evil_possible = (
@@ -423,7 +423,11 @@ def _round_robin(state: State, config: StartingConfiguration) -> StateGen:
             if not info.behaves_evil(state, player.id):
                 return
         if hasattr(player, 'speculative_ceremad'):
-            if not getattr(player, 'ceremad', 0):
+            if (
+                not getattr(player, 'ceremad', 0)
+                # Players mad as their own character aren't free to lie (retro)
+                or isinstance(player.character, player.claim)
+            ):
                 return
 
     if not any(hasattr(p, 'speculative_good') for p in state.players):

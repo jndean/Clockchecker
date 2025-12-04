@@ -40,6 +40,32 @@ class Phase(enum.Enum):
 
 
 @dataclass
+class CompromiseConfig:
+    """
+    Config options for compromising the solver's thoroughness in the name of
+    efficiency. The settings are collected here to indicate that they may cause a
+    solution to be missed. They cannot cause illegal solutions to be returned.
+    Settings that are not compromises but instead configure the rules of the
+    solve (e.g., 'allow_killing_dead_players') live on the Puzzle config
+    instead, so that it is clear how each setting impacts solution correctness.
+
+    The default values in this class are the ones that incur no compromise.
+    """
+    # Reduce evil night kill choices that are pointless because there's no way
+    # for the required death to happen. This will miss solitions where a player
+    # is resurrected the same night they die so never appear dead, or the
+    # targetted player is not generally safe but would survive for a more
+    # difficult to predict reason.
+    # This setting is not universally implemented, but enabling it gives
+    # character implementations the option to take a more efficient path.
+    evil_only_target_players_who_die_or_are_safe: bool = False
+    # Cap the number of speculative good liars considered. Reducing this count
+    # will miss worlds where a greater number of players who start good are
+    # lying because they become evil by the end.
+    max_speculation: int = 99
+
+
+@dataclass
 class Player:
     """
     An instance of a player.
@@ -509,10 +535,9 @@ class State:
 
         # Check good players are what they claim to be. Update claim if changed.
         for player in self.players:
-            claim = self.get_night_info(
+            if None is not (claim := self.get_night_info(
                 info.CharacterChange, player.id, self.night
-            )
-            if claim is not None:
+            )):
                 player.claim = claim.character
             if not (
                 isinstance(player.character, player.claim)
@@ -696,6 +721,7 @@ class Puzzle:
     category_counts: tuple[int, int, int, int] | None = None
     also_on_script: list[type[Character]] = field(default_factory=list)
 
+    compromises: CompromiseConfig = field(default_factory=CompromiseConfig)
     user_interrupt: Callable[[], bool] | None = None
 
     # --------- SOLVER OPTIONS --------- #
@@ -709,8 +735,6 @@ class Puzzle:
     player_zero_is_you: bool = True
     # Some BMR-style puzzles set this False # TODO: NotImplementedYet?
     allow_killing_dead_players: bool = True
-    # Cap the number of speculative good liars considered
-    max_speculation: int = 2
 
 
     def __post_init__(self, hidden_characters: list[type[Character]]):
@@ -956,21 +980,21 @@ def record_fork_caller(debug_key: tuple[int, ...], round: int, offset: int):
 def summarise_fork_profiling():
     """Aggregate stats about the combinatorial complexity of each character."""
     # Produces tables like the following:
-    # ┌───────────────────────────────────────────────────┐
-    # │                     Function │  Factor  │  Total  │
-    # ├───────────────────────────────────────────────────┤
-    # │     _place_hidden_characters │ 1032.00x │    1032 │
-    # │           NoDashii.run_night │    8.00x │   68096 │
-    # │             FangGu.run_night │    7.86x │  286672 │
-    # │             Vortox.run_night │    7.66x │   51776 │
-    # │              Witch.run_night │    7.18x │   72480 │
-    # │        Vigormortis.run_night │    5.00x │    4480 │
-    # │      _speculate_evil_players │    3.13x │    1660 │
-    # │ SnakeCharmer._run_night_evil │    1.04x │    2486 │
-    # │           NoDashii.run_setup │    1.00x │     703 │
-    # └───────────────────────────────────────────────────┤
-    #                                           │  489385 │
-    #                                           └─────────┘
+    # ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+    # │                     Function │  AvgFan x Calls   │       Setup       │       N1/D1       │       N2/D2       │       N3/D3       │
+    # ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+    # │     _place_hidden_characters │  3282.0 x 1       │  3282.0 x 1       │         -         │         -         │         -         │
+    # │           NoDashii.run_night │     8.0 x 683     │         -         │         -         │     8.0 x 682     │     5.0 x 1       │
+    # │             FangGu.run_night │     7.7 x 3175    │         -         │         -         │     8.0 x 2932    │     4.7 x 243     │
+    # │             Vortox.run_night │     7.6 x 570     │         -         │         -         │     8.0 x 502     │     5.0 x 68      │
+    # │        Vigormortis.run_night │     5.0 x 136     │         -         │         -         │     5.0 x 136     │         -         │
+    # │ SnakeCharmer._run_night_evil │     1.0 x 3171    │         -         │     1.0 x 2311    │     1.0 x 805     │     1.5 x 55      │
+    # │              Witch.run_night │     1.0 x 2092    │         -         │         -         │     1.0 x 2092    │         -         │
+    # │                 _round_robin │     1.0 x 11      │     1.0 x 11      │         -         │         -         │         -         │
+    # │           NoDashii.run_setup │     1.0 x 753     │     1.0 x 420     │     1.0 x 214     │     1.0 x 119     │         -         │
+    # └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+    #                                                                                                                │ Total Forks: 44430 │
+    #                                                                                                                └────────────────────┘
     if not _PROFILING:
         return
     wide = os.environ.get('WIDE', False)
@@ -997,7 +1021,7 @@ def summarise_fork_profiling():
 
     print('Profiling returned the following stats about forking worlds')
     name_len = max((len(name) for name in matrix), default=0)
-    title = f'│ {'Function': >{name_len}} │     Avg x Total   │'
+    title = f'│ {'Function': >{name_len}} │  AvgFan x Calls   │'
     if wide:
         for round in rounds:
             title += f'       N{round}/D{round}       │' if round else '       Setup       │'

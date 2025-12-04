@@ -173,10 +173,18 @@ class Character:
         elif state.current_phase is core.Phase.DAY:
             ping = state.get_day_info(type(self), me)
 
-        if ping is None or info.behaves_evil(state, me) or self.lies_about_self:
+        player = state.players[me]
+        if (
+                ping is None
+                or info.behaves_evil(state, me)
+                or (
+                    player.lies_about_self
+                    # Can only lie about ping if lying about character. E.g., Mad.
+                    and not isinstance(player.character, player.claim)
+                )
+        ):
             return True
 
-        player = state.players[me]
         if player.is_dead and not even_if_dead:
             return False
 
@@ -740,8 +748,6 @@ class Cerenovus(Minion):
             )
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        # TODO: I believe a valid optimisation would be to only pick players who
-        # are speculatively_mad/claiming madness/executed by ST on non-final day
         cerenovus = state.players[me]
         if cerenovus.is_dead and not cerenovus.vigormortised:
             yield state; return
@@ -759,7 +765,7 @@ class Cerenovus(Minion):
             pid for pid in state.player_ids if info.behaves_evil(state, pid)
         )
         good_behaving_players_claiming_mad = (
-            Cerenovus.players_claiming_ceremad_tonight(state)
+            Cerenovus._players_claiming_ceremad_tonight(state)
             - evil_behaving_players
         )
         speculatively_mad_players = set(
@@ -803,7 +809,7 @@ class Cerenovus(Minion):
                 del player.ceremad
 
     @staticmethod
-    def players_claiming_ceremad_tonight(state: State) -> set[PlayerID]:
+    def _players_claiming_ceremad_tonight(state: State) -> set[PlayerID]:
         ext_info = state.puzzle.external_info_registry.get(
             (Cerenovus, state.night), []
         )
@@ -814,7 +820,7 @@ class Cerenovus(Minion):
         """Check truthful mad players report their madness on subsequent nights"""
         if state.night == state.puzzle.max_night:
             return True
-        claiming_madness = Cerenovus.players_claiming_ceremad_tonight(state)
+        claiming_madness = Cerenovus._players_claiming_ceremad_tonight(state)
         return not any(
             getattr(player, 'ceremad', 0)
             and player.id not in claiming_madness
@@ -2303,7 +2309,7 @@ class NightWatchman(Townsfolk):
             state.get_night_info(NightWatchman, pid, state.night) is not None
             and not player.has_ability(NightWatchman)
             and not info.behaves_evil(state, pid)
-            and not player.character.lies_about_self
+            and not player.lies_about_self
             for pid, player in enumerate(state.players)
         )
 
@@ -2578,8 +2584,16 @@ class PitHag(Minion):
         # must speculatively create a parallel world where there are arbitrary
         # deaths from the start of the night, and and filter out the incorrect
         # choices later.
-        if state.day == state.puzzle.max_night:
+        if (
             # Next night is not coming.
+            state.day == state.puzzle.max_night
+            # Can't make demon because they're all in play
+            or not any (
+                info.IsInPlay(character)(state, me).not_true()
+                for character in state.puzzle.script
+                if PitHag._can_register_as_demon(character)
+            )
+        ):
             yield state; return
         assert not hasattr(state, 'pithag_preventing_kills'), 'Todo: 2 PitHags'
         arbitrary_death_state = state.fork()
@@ -2589,28 +2603,15 @@ class PitHag(Minion):
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         pithag = state.players[me]
-        if state.night == 1 or pithag.is_dead and not pithag.vigormortised:
+        if state.night == 1 or (pithag.is_dead and not pithag.vigormortised):
             yield state; return
         if self.is_droisoned(state, me):
             # Cover both cases where would have failed or not
             state.math_misregistration(me, info.STBool.FALSE_MAYBE)
             yield state; return
 
-        characters = [
-            character for character in state.puzzle.script
-            if info.IsInPlay(character)(state, me).not_true()
-        ]
-        def _can_register_as_demon(character):
-            return (issubclass(character, Demon)
-                    or (isinstance(character.misregister_categories, tuple)
-                        and Demon in character.misregister_categories))
-        if getattr(state, 'pithag_preventing_kills', None) == me:
-            # In this world we already speculated this is an arbitrary death
-            # night, i.e., PitHag must create demon.
-            characters = [c for c in characters if _can_register_as_demon(c)]
-            if not characters:
-                return
-        for target in state.player_ids:
+        candidate_characters = PitHag._get_valid_changes(state, me)
+        for target, characters in enumerate(candidate_characters):
             for char_t in characters:
                 new_state = state.fork()
                 new_state.log(f'PitHag changes {state.players[target].name}'
@@ -2618,14 +2619,54 @@ class PitHag(Minion):
                 new_pithag = new_state.players[me].get_ability(PitHag)
                 new_pithag.target_history.append((target, char_t))
                 for substate in new_state.change_character(target, char_t):
-                    if _can_register_as_demon(char_t):
+                    if PitHag._can_register_as_demon(char_t):
                         yield from PitHag._arbitrary_deaths(substate, me)
                     else:
                         yield substate
-        # No change world
-        self.target_history.append((None, None))
-        state.log('PitHag picks in-play character')
-        yield state
+        # No-change world
+        if getattr(state, 'pithag_preventing_kills', None) != me:
+            self.target_history.append((None, None))
+            state.log('PitHag picks in-play character')
+            yield state
+
+    @staticmethod
+    def _get_valid_changes(
+        state: State,
+        me: PlayerID,
+    ) -> list[list[type[Character]]]:
+        """
+        Selects which characters each player can be changed into, with the
+        following logic/optimisations:
+        1. In speculative arbitrary death nights, it was already pre-ordained
+           at the start of the night that a Demon will be made tonight.
+        2. Only investigate changing good players if they report the same
+           change the following day or have a reason not to.
+        """
+        characters = [
+            character for character in state.puzzle.script
+            if info.IsInPlay(character)(state, me).not_true()
+        ]
+        if getattr(state, 'pithag_preventing_kills', None) == me:
+            # PitHag must create demon to match speculative arbitrary kill night
+            characters = list(filter(PitHag._can_register_as_demon, characters))
+        lying_characters = [c for c in characters if c.lies_about_self]
+        ret = []
+        for player in state.players:
+            if (
+                info.behaves_evil(state, player.id)
+                or player.lies_about_self
+            ):
+                ret.append(characters)
+                continue
+            player_chars = set(lying_characters)
+            claim_change = state.get_night_info(
+                info.CharacterChange, player.id, state.night
+            )
+            if claim_change is not None:
+                player_chars.add(claim_change.character)
+            ret.append(player_chars)
+        return ret
+
 
     @staticmethod
     def _arbitrary_deaths(state: State, me: PlayerID) -> StateGen:
@@ -2689,6 +2730,16 @@ class PitHag(Minion):
             yield from PitHag._kill_all_remaining_deaths(state, me)
         else:
             yield state
+
+    @staticmethod
+    def _can_register_as_demon(character: type[Character]):
+        return (
+            issubclass(character, Demon)
+            or (
+                isinstance(character.misregister_categories, tuple)
+                and Demon in character.misregister_categories
+            )
+        )
 
     def _world_str(self, state: State) -> str:
         return (
