@@ -413,6 +413,17 @@ def behaves_evil(state: State, player_id: PlayerID) -> bool:
         )
     )
 
+def resurrection_possible(script: Sequence[type[Character]]) -> bool:
+    """Is player resurrection possible in this puzzle."""
+    return any(
+        character in (
+            characters.Professor,
+            characters.AlHadikhia,
+            characters.Shabaloth
+        )
+        for character in script
+    )
+
 def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
     """For printing human-readable str representations of Info."""
 

@@ -22,6 +22,9 @@ except ModuleNotFoundError:
     MULTIPROCESSING_AVAILABLE = False
 
 
+# Option to print out each legal starting config as it's generated
+_PRINT_CONFIGS = os.environ.get('CONFIGS', False)
+
 ConfigGen: TypeAlias = Iterator['StartingConfiguration']
 
 @dataclass
@@ -38,13 +41,17 @@ class StartingConfiguration:
     speculative_ceremad_positions: tuple[PlayerID, ...]
     debug_key: tuple[int, ...]
 
-    def get_characters(self, puzzle: Puzzle):
-        # TODO: once speculation funcs have been factored out into one place,
-        # this can just be computed once there
-        chars = [p.claim for p in puzzle.players]
-        for liar, position in zip(self.liar_characters, self.liar_positions):
-            chars[position] = liar
-        return chars
+    def __str__(self):
+        liars = ' '.join([
+            f'{pos}:{char.__name__}'
+            for pos, char in zip(self.liar_positions, self.liar_characters)
+        ])
+        return (
+            f'Conf({self.debug_key}, {liars}, '
+            f'spec_evil={self.speculative_evil_positions}, '
+            f'spec_mad={self.speculative_ceremad_positions}, '
+            f'spec_good={self.speculative_good_positions})'
+        )
 
 def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
     """Generate all possible initial configurations of player roles."""
@@ -100,7 +107,9 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
                 speculative_good_positions=(),
                 debug_key=(dbg_idx,),
             )
-            in_play = config.get_characters(puzzle)
+            in_play = [p.claim for p in puzzle.players]
+            for liar, position in zip(liars, liar_pos):
+                in_play[position] = liar
             if _check_token_counts(puzzle, in_play):
                 facts = _facts_for_speculation(puzzle, in_play)
                 for subconf in _speculate_evil_good_evil(puzzle, config, facts):
@@ -361,12 +370,11 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
     world = puzzle.state_template.fork(config.debug_key)
     for liar, position in zip(config.liar_characters, config.liar_positions):
         world.players[position].character = liar()
-        world.players[position].is_evil = issubclass(
-            liar, (characters.Minion, characters.Demon)
+    for player in world.players:
+        player.is_evil = isinstance(
+            player.character, (characters.Minion, characters.Demon)
         )
-        world.players[position].ever_behaved_evil = info.behaves_evil(
-            world, position
-        )
+        player.ever_behaved_evil = info.behaves_evil(world, player.id)
     for position in config.speculative_evil_positions:
         world.players[position].speculative_evil = True
     for position in config.speculative_good_positions:
@@ -375,6 +383,9 @@ def _world_check(puzzle: Puzzle, config: StartingConfiguration) -> StateGen:
         world.players[position].speculative_ceremad = True
     if not world.begin_game(puzzle.allow_duplicate_tokens_in_bag):
         return
+
+    if _PRINT_CONFIGS:
+        print(str(config))
 
     # Chains together a big ol' stack of generators corresponding to each
     # possible action of each player, forming a pipeline through which

@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
-from dataclasses import dataclass, field, InitVar
+from dataclasses import dataclass, field, fields, is_dataclass, InitVar
 import enum
 import inspect
+import itertools as it
 import os
 from typing import Callable, TypeAlias
 
@@ -51,14 +52,6 @@ class CompromiseConfig:
 
     The default values in this class are the ones that incur no compromise.
     """
-    # Reduce evil night kill choices that are pointless because there's no way
-    # for the required death to happen. This will miss solitions where a player
-    # is resurrected the same night they die so never appear dead, or the
-    # targetted player is not generally safe but would survive for a more
-    # difficult to predict reason.
-    # This setting is not universally implemented, but enabling it gives
-    # character implementations the option to take a more efficient path.
-    evil_only_target_players_who_die_or_are_safe: bool = False
     # Cap the number of speculative good liars considered. Reducing this count
     # will miss worlds where a greater number of players who start good are
     # lying because they become evil by the end.
@@ -127,7 +120,7 @@ class Player:
         the specified ability, does not consider droisoning, which
         should be handled by the ability implementation.
         """
-        return self.character.get_ability(character_t) is not None
+        return self.get_ability(character_t) is not None
 
     def get_ability_that_acts_like(
         self,
@@ -421,7 +414,7 @@ class State:
         )
         self.log(
             f'[{self.current_phase.name} {round_} '
-            f'{type(ability).__name__}] for {player.name} (the '
+            f'{self.currently_acting_character.__name__}] for {player.name} (the '
             f'{type(player.character).__name__}{claim})'
         )
 
@@ -753,7 +746,6 @@ class Puzzle:
                 self.hidden_good
             )
             collection.append(character)
-        self._validate_inputs()
 
         self.max_day = max(
             max(
@@ -852,10 +844,7 @@ class Puzzle:
         ]
         self.state_template = State(self, self.players)
 
-        for character, _ in self.external_info_registry:
-            assert character in self.script, (
-                f"Consider adding {character.__name__} to Puzzle.also_on_script"
-            )
+        self._validate_inputs()
 
         # Annoyingly, the pickle module doesn't store modified class attributes,
         # so when a puzzle is sent between processes, such classes (like the
@@ -892,7 +881,7 @@ class Puzzle:
             + characters.INACTIVE_CHARACTERS
         )
         for character in used_characters:
-            if not any(issubclass(character, reg) for reg in registered_characters):
+            if not any(issubclass(character, r) for r in registered_characters):
                 raise ValueError(
                     f'Character {character.__name__} has not been placed in the'
                     ' night order. Did you forget?'
@@ -902,6 +891,31 @@ class Puzzle:
                 raise ValueError(f"{character.__name__} can't be in hidden?")
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
+
+        # Ensure characters referenced by player information are on the script
+        def extract_mentions(x, mentions):
+            if isinstance(x, type):
+                if (issubclass(x, characters.Character)
+                        and x not in characters.ALL_CATEGORIES):
+                    mentions.add(x)
+                return
+            elif is_dataclass(x):
+                for f in fields(x):
+                    extract_mentions(getattr(x, f.name), mentions)
+            elif isinstance(x, tuple):
+                for element in x:
+                    extract_mentions(element, mentions)
+
+        mentions = set()
+        for info_lookup in (
+            self._night_info + self._day_info + (self.external_info_registry,)
+        ):
+            for x in info_lookup.items():
+                extract_mentions(x, mentions)
+        for character in mentions:
+            assert character in self.script, (
+                f'{character.__name__} mentioned by players but not on script.'
+            )
 
     def __str__(self) -> str:
         ret = ['Puzzle(\n  \033[0;4mPlayers\033[0m']
@@ -997,7 +1011,7 @@ def summarise_fork_profiling():
     #                                                                                                                └────────────────────┘
     if not _PROFILING:
         return
-    wide = os.environ.get('WIDE', False)
+    wide = _PROFILING.lower() == 'wide'
     max_round = 0
     matrix = defaultdict(lambda: defaultdict(list))  # Actually a ragged 3D tensor :)
     for (fname, _, round), count in _PROFILING_FORK_LOCATIONS.items():

@@ -522,10 +522,15 @@ class Acrobat(Townsfolk):
 
 
 @dataclass
-class Alsaahir(Townsfolk):
-    """Not yet implemented"""
-    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+class AlHadikhia(Demon):
+    # TODO
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        raise NotImplementedError('AlHadikhia')
 
+@dataclass
+class Alsaahir(Townsfolk):
+    # TODO
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
 
 @dataclass
 class Artist(Townsfolk):
@@ -1280,21 +1285,51 @@ class GenericDemon(Demon):
         ):
             yield state; return
 
-        sunk_a_kill = False
-        for target in state.player_ids:
-            dead_target = state.players[target].is_dead
-            if dead_target:
-                if sunk_a_kill:
-                    continue  # Dedupe kill sinking forks
-                sunk_a_kill = True
+        for target in self._get_targets(state, me):
             new_state = state.fork()
             if self.is_droisoned(state, me):
-                if not dead_target:
+                if not state.players[target].is_dead:
                     new_state.math_misregistration(me)
                 yield new_state
                 continue
             target_char = new_state.players[target].character
             yield from target_char.attacked_at_night(new_state, target, me)
+
+    def _get_targets(self, state: State, me: PlayerID) -> list[PlayerID]:
+        if not info.resurrection_possible(state.puzzle.script):
+            # If ressurections are not possible, I believe it is safe to perform
+            # an optimisation where demons don't bother trying to kill players
+            # that don't die tonight and don't have a reason to survive attacks.
+            # (Plus one kill-sink world.)
+            # TODO: When the Goon is implemented, also always consider them a
+            # possible target.
+            targets = set(
+                death.player
+                for death in state.puzzle.night_deaths.get(state.night, [])
+                if isinstance(death, events.NightDeath)
+                and not state.players[death.player].is_dead
+            )
+            # Add both a dead target and a safe target for Mathematician number
+            dead_target, safe_target = None, None
+            for player in state.players:
+                if player.is_dead:
+                    dead_target = player.id
+                elif player.character.safe_from_attacker(state, player.id, me):
+                    safe_target = player.id
+            if dead_target is not None:
+                targets.add(dead_target)
+            if safe_target is not None:
+                targets.add(safe_target)
+            return sorted(list(targets))
+
+        targets, sunk_a_kill = [], False
+        for player in state.players:
+            if player.is_dead:
+                if sunk_a_kill:
+                    continue
+                sunk_a_kill = True
+            targets.append(player.id)
+        return targets
 
 @dataclass
 class FangGu(GenericDemon):
@@ -1318,8 +1353,16 @@ class FangGu(GenericDemon):
         ):
             yield state; return
 
+        targets = set(self._get_targets(state, me))
+        # FangGu should additionally consider targetting Outsiders
+        targets = sorted(list(targets.union(set(
+            player.id for player in state.players
+            if info.IsCategory(player.id, Outsider)(state, me).not_false()
+            and not player.is_dead
+        ))))
+
         sunk_a_kill = False
-        for target in state.player_ids:
+        for target in targets:
             target_player = state.players[target]
 
             # 1. The kill sink world
@@ -2111,6 +2154,11 @@ class Mayor(Townsfolk):
     If you die at night, another player might die instead.
     """
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+    # This 'implementation' makes no special considerations for the Mayor power.
+    # We (almost) needn't bother simulating Mayor bounces, since these worlds
+    # are indistinguishable from the demon targeting the killed player directly.
+    # The caveat is that this won't tick up the Mathematician number correctly.
+    # If this ever becomes a problem, we can implement it :)
 
 @dataclass
 class Monk(Townsfolk):
@@ -2418,19 +2466,17 @@ class Philosopher(Townsfolk):
 
     active_ability: Character | None = None
     drunk_target: PlayerID | None = None
+    # Records if the PHilo made a character choice while droisoned
     droisoned_philo_choice: bool = False
+    # To record the Philo-SnakeCharmer charm rule (which is basically a Jinx)
+    self_droison: bool = False
 
     @dataclass
     class Choice(info.NotInfo):
         character: type[Character]
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
-        if info.behaves_evil(state, me):
-            # raise NotImplementedError('Evil Philosopher')
-            print('TMP ', end='')
-
-        philo = state.players[me]
-
+        # If already made a philo-pick, just execute the chosen ability.
         if self.active_ability is not None:
             if self.droisoned_philo_choice:
                 # If waking to an ability you don't have, increment Math
@@ -2442,33 +2488,55 @@ class Philosopher(Townsfolk):
                     state.math_misregistration(me)
             yield from self.active_ability.run_night(state, me)
             return
-        if philo.is_dead:
-            yield state; return  # I miss GOTOs, and I'm not ashamed to say it.
 
-        choice = state.get_night_info(Philosopher, me, state.night)
-        if choice is None:
+        if state.players[me].is_dead:
             yield state; return
-        new_character = choice.character(first_night=state.night)
+
+        if not info.behaves_evil(state, me):
+            # Good
+            choice = state.get_night_info(Philosopher, me, state.night)
+            if choice is None:
+                yield state; return
+            yield from self._choose_ability(state, me, choice.character)
+        else:
+            # Evil
+            for char_t in state.puzzle.script:
+                if (
+                    issubclass(char_t, (Townsfolk, Outsider))
+                    and not char_t is Philosopher
+                ):
+                    new_state = state.fork()
+                    new_state.log(f'Evil-like Philo chooses {char_t.__name__}')
+                    new_philo = new_state.players[me].get_ability(Philosopher)
+                    yield from new_philo._choose_ability(new_state, me, char_t)
+            yield state  # No Choice world
+
+    def _choose_ability(
+        self,
+        state: State,
+        me: PlayerID,
+        character_t: type[Character],
+    ) -> StateGen:
+        new_character = character_t(first_night=state.night)
         if self.is_droisoned(state, me):
             # If Philo is is droisoned when they make their choice, they become
             # a Drunk-like player who thinks they have an ability thereafter.
-            self.active_ability = Drunklike(
-                drunklike_character=new_character
-            )
+            self.active_ability = Drunklike(drunklike_character=new_character)
             self.drunk_target = None
             self.droisoned_philo_choice = True
             state.math_misregistration(me)
             yield state; return
 
         self.active_ability = new_character
-        self.lies_about_self = choice.character.lies_about_self  # Philo-Mutant...?
+        self.lies_about_self = (
+            character_t.lies_about_self  # Philo-Mutant...?
+            # and not info.behaves_evil(state, me)  # Is this necessary?
+        )
 
         for substate in self.active_ability.run_setup(state, me):
             drunk_targets = [
-                player for player in state.player_ids
-                if info.IsCharacter(
-                    player, choice.character
-                )(substate, me).not_false()
+                pid for pid in state.player_ids
+                if info.IsCharacter(pid, character_t)(substate, me).not_false()
             ]
             if not drunk_targets:
                 drunk_targets.append(None)
@@ -2505,6 +2573,9 @@ class Philosopher(Townsfolk):
         yield from self.active_ability.end_day(state, me)
 
     def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.self_droison:
+            state.players[me].droison_count += 1
+            return
         if self.active_ability is None:
             return
         if self.drunk_target is not None:
@@ -2512,6 +2583,9 @@ class Philosopher(Townsfolk):
         self.active_ability.maybe_activate_effects(state, me)
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.self_droison:
+            state.players[me].undroison(state, me)
+            return
         if self.active_ability is None:
             return
         if self.drunk_target is not None:
@@ -2929,6 +3003,12 @@ class Princess(Townsfolk):
         yield state
 
 @dataclass
+class Professor(Townsfolk):
+    # TODO
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        raise NotImplementedError('Professor')
+
+@dataclass
 class Progidy(Townsfolk):
     """
     HOMEBREW: NQT
@@ -2984,7 +3064,6 @@ class Progidy(Townsfolk):
 
     def _world_str(self, state: State) -> str:
         return f"{'Solar' if self.is_solar else 'Lunar'}Prodigy"
-
 
 @dataclass
 class Pukka(Demon):
@@ -3397,7 +3476,10 @@ class ScarletWoman(Minion):
             if isinstance(dying_player.character, Demon):
                 possible_demons.add(type(dying_player.character))
             # Recluse could have registered as any Demon on the script
-            if dying_player.has_ability(Recluse):
+            if (
+                (recluse := dying_player.get_ability(Recluse))
+                and not recluse.is_droisoned(state, dying_player.id)
+            ):
                 possible_demons.update(state.puzzle.demons)
             possible_demons.discard(Recluse)  # This ruling feels best to me.
 
@@ -3540,8 +3622,6 @@ class SnakeCharmer(Townsfolk):
         choice = state.get_night_info(SnakeCharmer, me, state.night)
         if choice is None:
             yield state; return
-        if not isinstance(choice, SnakeCharmer.Choice): # Why is this here?
-            return
 
         is_demon = info.IsCategory(choice.player, Demon)(state, me)
         if is_demon.is_false():
@@ -3588,6 +3668,7 @@ class SnakeCharmer(Townsfolk):
         i_am_evil = state.players[me].is_evil
         target_is_evil = state.players[target].is_evil
         demon_character = type(state.players[target].character)
+        my_character = type(state.players[me].character)  # E.g., might be Philo
 
         states = core.apply_all(
             [state], lambda s: s.change_alignment(target, i_am_evil))
@@ -3596,10 +3677,10 @@ class SnakeCharmer(Townsfolk):
         states = core.apply_all(
             states, lambda s: s.change_character(me, demon_character))
         states = core.apply_all(
-            states, lambda s: s.change_character(target, SnakeCharmer))
+            states, lambda s: s.change_character(target, my_character))
 
         for substate in states:
-            new_sc = substate.players[target].get_ability(SnakeCharmer)
+            new_sc = substate.players[target].get_ability(my_character)
             new_sc.self_droison = True
             new_sc.maybe_activate_effects(substate, target)
             yield substate
@@ -3667,6 +3748,11 @@ class Saint(Outsider):
         if droisoned or not died:
             yield from super().executed(state, me, died)
 
+@dataclass
+class Shabaloth(GenericDemon):
+    # TODO
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        raise NotImplementedError('Shabaloth')
 
 @dataclass
 class Slayer(Townsfolk):
