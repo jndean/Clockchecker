@@ -393,11 +393,11 @@ def tf_candidates_in_direction(
 
 def behaves_evil(state: State, player_id: PlayerID) -> bool:
     """
-    Characters have the lies_about_self ClassVar which determines if they lie
-    about their own role and info. However, some good characters also lie about
-    other character's info. E.g. the lunatic is good but may lie about receiving
-    a Nightwatchman ping, whilst the drunk lies about their character and info
-    but would truthfully report a Nightwatchman ping.
+    Characters have the lies_about_character_and_info ClassVar which determines
+    if they lie about their own role and info. However, some good characters
+    also lie about other character's info. E.g. the Lunatic is good but may lie
+    about receiving a Nightwatchman ping, whilst the Drunk lies about their
+    character and info but would truthfully report a Nightwatchman ping.
     """
     if player_id == 0 and state.puzzle.player_zero_is_you:
         return False  # You can't lie to yourself, Josef

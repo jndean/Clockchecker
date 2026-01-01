@@ -984,7 +984,7 @@ class TestBoffin(unittest.TestCase):
 
     def test_boffin_philo_golem(self):
         # The Leviathan has the Boffin[Philosopher[Golem]] ability, meaning
-        # they can punch You and the real Golem cannot.
+        # they can punch You and the real Golem can not.
         You, B, C, D,= range(4)
         puzzle = Puzzle(
             players=[
@@ -2378,8 +2378,8 @@ class TestCerenovus(unittest.TestCase):
         )
 
     def test_mad_player_claiming_mad_previous_day(self):
-        # Check the player mad on final day can claim madness on previous days
-        You, B, C, D = range(4)
+        # Check the player mad on final day (D) can claim madness on previous days
+        You, B, C, D, E = range(5)
         puzzle = Puzzle(
             players=[
                 Player('You', claim=Artist, day_info={
@@ -2403,18 +2403,21 @@ class TestCerenovus(unittest.TestCase):
                         Cerenovus.Mad(Knight),
                     ],
                 }),
+                Player('E', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
             ],
             day_events={},
             night_deaths={},
             hidden_characters=[Leviathan, Cerenovus],
             hidden_self=[],
             also_on_script=[Knight],
-            category_counts=(2, 0, 1, 1),
+            category_counts=(3, 0, 1, 1),
         )
         assert_solutions(
             self,
             puzzle,
-            solutions=((Artist, Leviathan, Cerenovus, Knight),),
+            solutions=((Artist, Leviathan, Cerenovus, Knight, Empath),),
             info_condition=(
                 PlayerAttrEq(D, 'ceremad', 1)
                 & CharAttrEq(C, 'target', D)
@@ -2758,8 +2761,42 @@ class TestPhilosopher(unittest.TestCase):
         )
 
     def test_ceremad_philo_drunks_tf_silently(self):
-        pass
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, Cerenovus)
+                        & IsCharacter(D, Philosopher)
+                        & IsCharacter(E, Dreamer)
+                    ),
+                }),
+                Player('B', claim=Saint),
+                Player('C', claim=Saint),
+                Player('D', claim=Empath, night_info={
+                    1: Empath.Ping(0),
+                }),
+                Player('E', claim=Dreamer, night_info={
+                    1: Dreamer.Ping(You, Empath, Cerenovus),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Cerenovus],
+            hidden_self=[],
+            also_on_script=[Philosopher],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Leviathan, Cerenovus, Philosopher, Dreamer),),
+            solution_endchars=((Artist, Leviathan, Cerenovus, Philosopher, Dreamer),),
+        )
+
 # Test:
+# Test Evil Courtier
 # Test SnakeCharmer. Also, test demon claims to have been charmed.
 #   Maybe a philo snakecharmer too
 # Ravenkeeper killed by pukka

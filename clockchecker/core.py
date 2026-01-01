@@ -167,12 +167,33 @@ class Player:
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)
 
-    @property
-    def lies_about_self(self):
+    def lies_about_character(self, state: State) -> bool:
+        """Player can lie about what character they are."""
         return (
-            self.character.lies_about_self
+            info.behaves_evil(state, self.id)
+            or self.character.lies_about_character_and_info
             or getattr(self, 'speculative_ceremad', False)
         )
+
+    def lies_about_info(self, state: State) -> bool:
+        """Player can lie about they learn/do with *their own* ability."""
+        return (
+            info.behaves_evil(state, self.id)
+            or self.character.lies_about_character_and_info
+            or (
+                getattr(self, 'speculative_ceremad', False)
+                # Can only lie about ping if lying about character when mad
+                and not isinstance(self.character, self.claim)
+            )
+        )
+
+    def change_claim_if_claimed_change_tonight(self, state: State) -> None:
+        """If player claims to change character tonight, update claim now."""
+        claimed_change = state.get_night_info(
+            info.CharacterChange, self.id, state.night
+        )
+        if claimed_change is not None:
+            self.claim = claimed_change.character
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
@@ -266,7 +287,7 @@ class State:
                     info.behaves_evil(self, player.id)
                     or (
                         # E.g. The Mutant may double claim but not the Drunk
-                        player.lies_about_self
+                        player.character.lies_about_character_and_info
                         and not player.character.draws_wrong_token()
                     )
                 ):
@@ -371,9 +392,9 @@ class State:
             if (
                 ping is not None and
                 player.id not in self.players_still_to_act
-                and not info.behaves_evil(self, player.id)
-                and not player.lies_about_self
+                and not player.lies_about_info(self)
             ):
+                self.log(f'REJECT: {player.name} claiming {character_t.__name__}')
                 return
 
         states = self.run_all_players_with_currently_acting_character()
@@ -474,8 +495,7 @@ class State:
         for player in self.players:
             if not (
                 isinstance(player.character, player.claim)
-                or info.behaves_evil(self, player.id)
-                or player.lies_about_self
+                or player.lies_about_character(self)
             ):
                 return
         self.current_phase = Phase.NIGHT
@@ -528,14 +548,10 @@ class State:
 
         # Check good players are what they claim to be. Update claim if changed.
         for player in self.players:
-            if None is not (claim := self.get_night_info(
-                info.CharacterChange, player.id, self.night
-            )):
-                player.claim = claim.character
-            if not (
-                isinstance(player.character, player.claim)
-                or info.behaves_evil(self, player.id)
-                or player.lies_about_self
+            player.change_claim_if_claimed_change_tonight(self)
+            if (
+                not isinstance(player.character, player.claim)
+                and not player.lies_about_character(self)
             ):
                 return
 
@@ -686,7 +702,7 @@ class State:
         for player in self.players:
             rhs = player._world_str(self)
             colour = 0
-            if player.lies_about_self or info.behaves_evil(self, player.id):
+            if player.lies_about_character(self):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
@@ -887,7 +903,7 @@ class Puzzle:
                     ' night order. Did you forget?'
                 )
         for character in self.hidden_good:
-            if not character.lies_about_self:
+            if not character.lies_about_character_and_info:
                 raise ValueError(f"{character.__name__} can't be in hidden?")
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"

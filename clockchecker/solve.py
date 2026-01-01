@@ -599,6 +599,7 @@ def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
 def solve_and_print(puzzle: Puzzle, num_processes=None) -> None:
     # Convenience function, because I often find myself wanting to quickly
     # insert a loop like this in the middle of a test.
+    print(puzzle)
     for solution in solve(puzzle, num_processes=num_processes):
         print(solution)
 
