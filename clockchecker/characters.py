@@ -496,6 +496,9 @@ class Acrobat(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         player: PlayerID
+    
+        def display(self, names: list[str]) -> str:
+            return f'Chose {names[self.player]}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Die on droisoned player choice"""
@@ -542,6 +545,9 @@ class Artist(Townsfolk):
         statement: info.Info
         def __call__(self, state: State, src: PlayerID):
             return self.statement(state, src)
+        
+        def display(self, names: list[str]) -> str:
+            return self.statement.display(names)
 
 @dataclass
 class Atheist(Townsfolk):
@@ -584,6 +590,9 @@ class Balloonist(Townsfolk):
     @dataclass
     class Ping(info.NotInfo):
         player: PlayerID
+
+        def display(self, names: list[str]) -> str:
+            return f'Balloonist saw {names[self.player]}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """
@@ -746,6 +755,11 @@ class Cerenovus(Minion):
                     for player in state.players
                 )
             )
+            
+        def display(self, names: list[str]) -> str:
+            if self.character is not None:
+                return f'Made Mad as {self.character.__name__}'
+            return 'Made Mad'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         cerenovus = state.players[me]
@@ -869,6 +883,12 @@ class Chambermaid(Townsfolk):
             )
             return info.STBool(valid_choices and wake_count == self.count)
 
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{self.count} of {names[self.player1]} and '
+                f'{names[self.player2]} woke'
+            )
+
 @dataclass
 class Chef(Townsfolk):
     """
@@ -884,6 +904,9 @@ class Chef(Townsfolk):
             evils = [info.IsEvil(i % N)(state, src) for i in range(N + 1)]
             evil_pairs = [a & b for a, b in zip(evils[:-1], evils[1:])]
             return info.ExactlyN(self.count, evil_pairs)(state, src)
+
+        def display(self, names: list[str]) -> str:
+            return f'{self.count} evil pairs'
 
 @dataclass
 class Clockmaker(Townsfolk):
@@ -933,6 +956,9 @@ class Clockmaker(Townsfolk):
 
             return correct_distance & ~too_close
 
+        def display(self, names: list[str]) -> str:
+            return f'Clockmaker {self.steps}'
+
 @dataclass
 class Courtier(Townsfolk):
     """
@@ -948,6 +974,9 @@ class Courtier(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         character: type[Character]
+        
+        def display(self, names: list[str]) -> str:
+            return f'Drank with {self.character.__name__}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if info.behaves_evil(state, me):
@@ -1016,6 +1045,12 @@ class Dreamer(Townsfolk):
             return (
                 info.IsCharacter(self.player, self.character1)(state, src) |
                 info.IsCharacter(self.player, self.character2)(state, src)
+            )
+        
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player]} is '
+                f'{self.character1.__name__} or {self.character2.__name__}'
             )
 
 @dataclass
@@ -1140,6 +1175,9 @@ class Empath(Townsfolk):
                 evil_neighbours.append(info.IsEvil(right))
             return info.ExactlyN(N=self.count, args=evil_neighbours)(state, src)
 
+        def display(self, names: list[str]) -> str:
+            return f'{self.count} evil neighbours'
+
 @dataclass
 class Exorcist(Townsfolk):
     """
@@ -1153,6 +1191,9 @@ class Exorcist(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         player: PlayerID
+    
+        def display(self, names: list[str]) -> str:
+            return f'Exorcised {names[self.player]}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if info.behaves_evil(state, me):
@@ -1216,6 +1257,9 @@ class EvilTwin(Minion):
         def __call__(self, state: State, src: PlayerID) -> bool:
             eviltwin = state.players[self.eviltwin].get_ability(EvilTwin)
             return eviltwin is not None and eviltwin.twin == src
+        
+        def display(self, names: list[str]) -> str:
+            return f'{names[self.eviltwin]} is the EvilTwin'
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         eviltwin = state.players[me].get_ability(EvilTwin)
@@ -1400,6 +1444,9 @@ class Flowergirl(Townsfolk):
             flowergirl = state.players[self.player]
             flowergirl.demon_voted_on_day = (demon_voted, state.day)
             yield state
+        
+        def display(self, names: list[str]) -> str:
+            return f"Voters: {', '.join([names[v] for v in self.voters])}"
 
     @dataclass
     class Ping(info.Info):
@@ -1411,6 +1458,9 @@ class Flowergirl(Townsfolk):
                 "Flowergirl Ping without recording votes the previous day."
             )
             return info.STBool(self.demon_voted) == demon_voted
+
+        def display(self, names: list[str]) -> str:
+            return 'Demon voted' if self.demon_voted else 'Demon did not vote'
 
 @dataclass
 class FortuneTeller(Townsfolk):
@@ -1439,6 +1489,12 @@ class FortuneTeller(Townsfolk):
                     state.exclude_player_from_math_tonight(me)
             claimed_result = info.STBool(self.demon)
             return real_result == claimed_result
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} | {names[self.player2]}'
+                f' -> {"yes" if self.demon else "no"}'  
+             )
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # Simulate all worlds where the red herring is chosen, plus just one
@@ -1482,6 +1538,9 @@ class Gambler(Townsfolk):
     class Gamble(info.NotInfo):
         player: PlayerID
         character: type[Character]
+            
+        def display(self, names: list[str]) -> str:
+            return f'Gambled {names[self.player]} as {self.character.__name__}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Die on error, fork on MAYBE, ignore vortox."""
@@ -1589,6 +1648,11 @@ class Gossip(Townsfolk):
             # Evaluate the gossip now during the day, act on it later at night
             gossip.prev_gossip = (self.statement(state, self.player), state.day)
             yield state
+        
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player]} gossiped {self.statement.display(names)}'
+            )
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: On True gossip, create a world for every kill."""
@@ -1843,6 +1907,12 @@ class Investigator(Townsfolk):
                 info.IsCharacter(self.player1, self.character)(state, src) |
                 info.IsCharacter(self.player2, self.character)(state, src)
             )
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} or {names[self.player2]}'
+                f' is the {self.character.__name__}'
+            )
 
 @dataclass
 class Juggler(Townsfolk):
@@ -1864,6 +1934,12 @@ class Juggler(Townsfolk):
                 for player, character in self.juggle.items()
             )
             yield state
+        
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} juggled {', '.join([
+                f'{names[player]}={character.__name__}'
+                for player, character in self.juggle.items()
+            ])}"
 
     @dataclass
     class Ping(info.Info):
@@ -1880,6 +1956,9 @@ class Juggler(Townsfolk):
             )
             juggler_player.woke()
             return info.ExactlyN(N=self.count, args=correct_juggles)(state, me)
+            
+        def display(self, names: list[str]) -> str:
+            return f"Juggled {self.count} correctly"
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         juggler = state.players[me]
@@ -1929,6 +2008,9 @@ class Klutz(Outsider):
             elif klutz_ability.is_droisoned(state, self.player):
                 state.math_misregistration(self.player, is_good)
                 yield state
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} Klutz-picks {names[self.choice]}"
 
 @dataclass
 class Knight(Townsfolk):
@@ -1946,6 +2028,12 @@ class Knight(Townsfolk):
             return ~(
                 info.IsCategory(self.player1, Demon)(state, src) |
                 info.IsCategory(self.player2, Demon)(state, src)
+            )
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} and {names[self.player2]}'
+                f' are not the Demon'
             )
 
 @dataclass
@@ -1998,6 +2086,12 @@ class Librarian(Townsfolk):
                     info.IsCharacter(self.player1, self.character)(state, src) |
                     info.IsCharacter(self.player2, self.character)(state, src)
                 )
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} or {names[self.player2]}'
+                f' is the {self.character.__name__}'
+            )
 
 @dataclass
 class LordOfTyphon(GenericDemon):
@@ -2103,6 +2197,9 @@ class Mathematician(Townsfolk):
         def __call__(self, state: State, src: PlayerID) -> STBool:
             lo, hi = state._math_misregistration_bounds
             return info.STBool(lo <= self.count <= hi)
+            
+        def display(self, names: list[str]) -> str:
+            return f"Math {self.count}"
 
 @dataclass
 class Mayor(Townsfolk):
@@ -2126,6 +2223,9 @@ class Monk(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         player: PlayerID
+    
+        def display(self, names: list[str]) -> str:
+            return f'Protected {names[self.player]}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if info.behaves_evil(state, me):
@@ -2223,6 +2323,9 @@ class NightWatchman(Townsfolk):
     class Choice(info.NotInfo):
         """The Choice as reported by the NightWatchman."""
         player: PlayerID
+            
+        def display(self, names: list[str]) -> str:
+            return f"Chose {names[self.player]}"
 
     @dataclass
     class Ping(info.ExternalInfo):
@@ -2238,6 +2341,9 @@ class NightWatchman(Townsfolk):
                 or ability.is_droisoned(state, nwm.id)
                 or (choice is None and nwm_truthful)
             )
+            
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} is the NightWatchman"
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         nightwatchman = state.players[me]
@@ -2332,6 +2438,12 @@ class Noble(Townsfolk):
                 info.IsEvil(self.player2),
                 info.IsEvil(self.player3),
             ))(state, src)
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'One of {names[self.player1]}, {names[self.player2]} and '
+                f'{names[self.player3]} is evil'
+            )
 
 @dataclass
 class NoDashii(GenericDemon):
@@ -2406,6 +2518,9 @@ class Oracle(Townsfolk):
                     for player in state.player_ids
                 ]
             )(state, src)
+            
+        def display(self, names: list[str]) -> str:
+            return f"{self.count} dead evils"
 
 @dataclass
 class Philosopher(Townsfolk):
@@ -2423,6 +2538,9 @@ class Philosopher(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         character: type[Character]
+            
+        def display(self, names: list[str]) -> str:
+            return f"Chose {self.character.name} ability"
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if info.behaves_evil(state, me):
@@ -2742,13 +2860,12 @@ class PitHag(Minion):
         )
 
     def _world_str(self, state: State) -> str:
-        return (
-            f'{type(self).__name__} (Changed {", ".join(
-                f'{state.players[p].name} into {c.__name__}'
-                if p is not None else 'None'
-                for p, c in self.target_history
-            )})'
-        )
+        history_strs = [
+            f'{state.players[p].name} into {c.__name__}'
+            if p is not None else 'None'
+            for p, c in self.target_history
+        ]
+        return f"{type(self).__name__} (Changed {', '.join(history_strs)})"
 
 @dataclass
 class Po(GenericDemon):
@@ -2876,12 +2993,16 @@ class PoppyGrower(Townsfolk):
 
     @dataclass
     class InPlay(info.ExternalInfo):
+        """A player who was evil can claim they know a PoppyGrower was play."""
         def __call__(self, state: State, src: PlayerID) -> bool:
             for player in state.players:
                 pg = player.get_ability(PoppyGrower)
                 if not (pg is None or pg.is_droisoned(state, player.id)):
                     return True
             return False
+            
+        def display(self, names: list[str]) -> str:
+            return "A PoppyGrower was in play"
 
 @dataclass
 class Princess(Townsfolk):
@@ -2950,6 +3071,9 @@ class Progidy(Townsfolk):
                 return chose_evil == shown_evil
             else:
                 return chose_evil ^ shown_evil
+
+        def display(self, names: list[str]) -> str:
+            return f"Chose {names[self.chose]}, shown {names[self.shown]}"
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         if state.current_phase is not core.Phase.SETUP:
@@ -3072,6 +3196,12 @@ class Puzzlemaster(Outsider):
             if self.guess == puzzlemaster.puzzle_drunk:
                 return correct_demon
             return ~correct_demon
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'Guessed {names[self.guess]}, told '
+                f'{names[self.demon]} is the Demon'
+            )
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         """Override Reason: Choose puzzle_drunk."""
@@ -3145,6 +3275,9 @@ class Ravenkeeper(Townsfolk):
                 state.math_misregistration(src, result)
                 return result ^ info.STBool.FALSE_MAYBE
             return result
+            
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} is the {self.character.__name__}"
 
     def apply_death(
         self,
@@ -3294,6 +3427,9 @@ class Sage(Townsfolk):
                 state.math_misregistration(src, result)
                 return result ^ info.STBool.FALSE_MAYBE
             return result
+            
+        def display(self, names: list[str]) -> str:
+            return f'{names[self.player1]} or {names[self.player2]} is the Demon'
 
     def apply_death(
         self,
@@ -3341,6 +3477,11 @@ class Savant(Townsfolk):
             if state.vortox:
                 return a | b  # This is post-processed in Savant.run_day()
             return a ^ b
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'Either ({self.a.display(names)}) or ({self.b.display(names)})'
+            )
 
     def run_day(self, state: State, me: PlayerID) -> StateGen:
         """ Override Reason: Novel Vortox effect on Savant, see Savant.Ping."""
@@ -3470,6 +3611,12 @@ class Seamstress(Townsfolk):
             if self.same:
                 return ~enemies
             return enemies
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} and {names[self.player2]} are'
+                f'{"" if self.same else " not"} the same alignment'
+            )
 
 @dataclass
 class Shugenja(Townsfolk):
@@ -3513,6 +3660,11 @@ class Shugenja(Townsfolk):
             )
             st_says = fwd_says <= bkwd_says
             return info.STBool((truth, is_maybe, st_says))
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'Closest evil is {"" if self.clockwise else "anti-"}clockwise'
+            )
 
 @dataclass
 class SnakeCharmer(Townsfolk):
@@ -3528,6 +3680,9 @@ class SnakeCharmer(Townsfolk):
     @dataclass
     class Choice(info.NotInfo):
         player: PlayerID
+    
+        def display(self, names: list[str]) -> str:
+            return f'Chose {names[self.player]}'
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         if state.players[me].is_dead:
@@ -3648,6 +3803,9 @@ class Steward(Townsfolk):
         player: PlayerID
         def __call__(self, state: State, src: PlayerID) -> STBool:
             return ~info.IsEvil(self.player)(state, src)
+            
+        def display(self, names: list[str]) -> str:
+            return f'{names[self.player]} is good'
 
 @dataclass
 class Saint(Outsider):
@@ -3716,6 +3874,12 @@ class Slayer(Townsfolk):
                 )
             elif not self.died and should_die.not_true():
                 yield state
+        
+        def display(self, names: list[str]) -> str:
+            return (
+                f"{names[self.player]} shot {names[self.target]}"
+                f"{' ' if self.died else ' with no effect'}"
+            )
 
 @dataclass
 class Spy(Minion):
@@ -3825,6 +3989,9 @@ class Undertaker(Townsfolk):
             ):
                 return info.IsCharacter(self.player, self.character)(state, src)
             return info.STBool.FALSE
+            
+        def display(self, names: list[str]) -> str:
+            return f'{names[self.player]} is the {self.character.__name__}'
 
 @dataclass
 class VillageIdiot(Townsfolk):
@@ -3843,6 +4010,11 @@ class VillageIdiot(Townsfolk):
         def __call__(self, state: State, src: PlayerID) -> STBool:
             registers_evil = info.IsEvil(self.player)(state, src)
             return registers_evil == info.STBool(self.is_evil)
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player]} is {"evil" if self.is_evil else "good"}'
+            )
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         # If there is more than one Village Idiot, choose one to be the drunk VI
@@ -3883,6 +4055,12 @@ class Washerwoman(Townsfolk):
                 info.IsCharacter(self.player1, self.character)(state, src) |
                 info.IsCharacter(self.player2, self.character)(state, src)
             )
+            
+        def display(self, names: list[str]) -> str:
+            return (
+                f'{names[self.player1]} or {names[self.player2]} '
+                f'is the {self.character.__name__}'
+            )
 
 @dataclass
 class Widow(Minion):
@@ -3898,6 +4076,9 @@ class Widow(Minion):
     class InPlay(info.ExternalInfo):
         def __call__(self, state: State, src: PlayerID) -> bool:
             return True
+            
+        def display(self, names: list[str]) -> str:
+            return 'A Widow is in play'
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
         if state.current_phase is not core.Phase.SETUP and self.target is None:

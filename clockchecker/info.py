@@ -131,6 +131,9 @@ class Info(ABC):
             "when erroneously using logical operators 'and', 'or' or 'not', "
             "instead of &, | or ~. Therefore this is disallowed."
         )
+    
+    def display(self, names: list[str]) -> str:
+        return "<?>"  # Default for unimplemented display
 
 @dataclass
 class InfoOp(Info):
@@ -166,6 +169,19 @@ class InfoOp(Info):
             "'and', 'or' or 'not' instead of &, | or ~. Therefore this is "
             "disallowed."
         )
+    
+    def display(self, names: list[str]) -> str:
+        match self.op:
+            case 'or':
+                return f"({self.a.display(names)}) or ({self.b.display(names)})"
+            case 'and':
+                return f"({self.a.display(names)}) and ({self.b.display(names)})"
+            case 'xor':
+                return f"({self.a.display(names)}) xor ({self.b.display(names)})"
+            case 'eq':
+                return f"({self.a.display(names)}) == ({self.b.display(names)})"
+            case 'invert':
+                return f"not ({self.a.display(names)})"
 
 class NotInfo:
     def __call__(self, *args, **kwargs):
@@ -173,6 +189,9 @@ class NotInfo:
             f"Looks like you're trying to treat a {type(self)} as Info, when "
             'it has in fact been explicitly marked as NotInfo :)'
         )
+    
+    def display(self, names: list[str]) -> str:
+        return "<?>"  # Default for unimplemented display
 
 class ExternalInfo(ABC):
     """
@@ -182,6 +201,9 @@ class ExternalInfo(ABC):
     @abstractmethod
     def __call__(self, state: State, src: PlayerID) -> bool:
         raise NotImplementedError("Override this method when inheriting.")
+
+    def display(self, names: list[str]) -> str:
+        return "<?>"  # Default for unimplemented display
 
 # ------------------- Info Objects -------------------- #
 
@@ -204,12 +226,18 @@ class IsEvil(Info):
 
         return STBool(player.is_evil)
 
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} evil"
+
 @dataclass
 class IsDroisoned(Info):
     player: PlayerID
     # by: int = None  # Unimplemented
     def __call__(self, state: State, src: PlayerID) -> STBool:
         return STBool(state.players[self.player].droison_count > 0)
+
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} droisoned"
 
 @dataclass
 class IsAlive(Info):
@@ -222,6 +250,9 @@ class IsAlive(Info):
         if zombuul is not None and zombuul.registering_dead:
             return STBool.FALSE_LYING
         return STBool.TRUE
+
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} alive"
 
 @dataclass
 class IsCharacter(Info):
@@ -237,6 +268,9 @@ class IsCharacter(Info):
         )
         # TODO: Legion logic will go here too.
         return STBool((truth, is_maybe, truth))
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} is {self.character.__name__}"
 
 @dataclass
 class IsCategory(Info):
@@ -252,6 +286,9 @@ class IsCategory(Info):
         )
         # TODO: Legion logic will go here too.
         return STBool((truth, is_maybe, truth))
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} is {self.category.__name__}"
 
 @dataclass
 class CharAttrEq(Info):
@@ -263,6 +300,9 @@ class CharAttrEq(Info):
         val = getattr(state.players[self.player].character, self.attr, missing)
         return STBool(val is not missing and val == self.value)
 
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]}.character.{self.attr} == {self.value}"
+
 @dataclass
 class PlayerAttrEq(Info):
     player: PlayerID
@@ -272,6 +312,9 @@ class PlayerAttrEq(Info):
         missing = []  # A unique object for pointer comparison using `is`
         val = getattr(state.players[self.player], self.attr, missing)
         return STBool(val is not missing and val == self.value)
+
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]}.{self.attr} == {self.value}"
 
 @dataclass
 class ExactlyN(Info):
@@ -292,7 +335,9 @@ class ExactlyN(Info):
             if num_maybes else False
         )
         return STBool((truth, is_maybe, st_says))
-
+    
+    def display(self, names: list[str]) -> str:
+        return f"{self.N} of {[arg.display(names) for arg in self.args]} are true"
 
 @dataclass
 class IsInPlay(Info):
@@ -306,12 +351,18 @@ class IsInPlay(Info):
             if result is STBool.TRUE:
                 return STBool.TRUE  # Early exit on TRUE
         return result
+    
+    def display(self, names: list[str]) -> str:
+        return f"{self.character.__name__} in play"
 
 @dataclass
 class CustomInfo(Info):
     method: Callable[[State], STBool]
     def __call__(self, state: State, src: PlayerID) -> STBool:
         return self.method(state)
+    
+    def display(self, names: list[str]) -> str:
+        return "CustomInfo(¯\\_(ツ)_/¯)"
 
 @dataclass
 class CharacterChange(NotInfo):
@@ -326,6 +377,9 @@ class CharacterChange(NotInfo):
         before all player's claims are checked.
     """
     character: type[Character]
+
+    def display(self, names: list[str]) -> str:
+        return f"Becomes {self.character.__name__}"
 
 
 # ------------------- Some helper utilities -------------------- #
@@ -499,6 +553,9 @@ class DrunkBetweenTownsfolk(Info):
             )
             result |= found_drunk & tf_neighbours
         return result
+    
+    def display(self, names: list[str]) -> str:
+        return 'The Drunk sits between Townsfolk'
 
 @dataclass
 class LongestRowOfTownsfolk(Info):
@@ -512,7 +569,7 @@ class LongestRowOfTownsfolk(Info):
             for player in range(len(state.players))
         ]
         assert not any(x.is_maybe() for x in townsfolk), (
-            "Puzzle 15 has no misregistration, so ommit that logic for now."
+            'Puzzle 15 has no misregistration, so ommit that logic for now.'
         )
         longest, prev_not_tf = 0, -1
         for player, is_tf in enumerate(townsfolk * 2):  # Wrap circle
@@ -524,6 +581,15 @@ class LongestRowOfTownsfolk(Info):
             return STBool(longest == self.length)
         else:
             return STBool(self.minimum <= longest <= self.maximum)
+    
+    def display(self, names: list[str]) -> str:
+        if self.length is not None:
+            return f'Longest row of Townsfolk is {self.length}'
+        else:
+            return (
+                'Longest row of Townsfolk is between '
+                f'{self.minimum} and {self.maximum}'
+            )
 
 
 @dataclass
@@ -543,6 +609,9 @@ class WidowPoisoned(Info):
             )
             for player in state.players
         ))
+    
+    def display(self, names: list[str]) -> str:
+        return f'{names[self.player]} is Widow-poisoned'
 
 
 @dataclass
@@ -562,3 +631,9 @@ class CharacterTypesAmongPlayers(Info):
             )
             count += any(x.not_false() for x in is_type)
         return STBool(count == self.count)
+    
+    def display(self, names: list[str]) -> str:
+        return (
+            f'{self.count} character types amongst '
+            f'{",".join(names[p] for p in self.players)}'
+        )
