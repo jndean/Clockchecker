@@ -3621,7 +3621,8 @@ def puzzle_emerald_snv():
             Player('Theo', claim=Savant, day_info={
                 1: Savant.Ping(
                     IsCategory(Karen, Outsider) ^ IsCategory(Sam, Outsider),
-                    IsInPlay(Lunatic),  # TODO: Don't support Cerenovus
+                    # IsInPlay(Cerenovus),  # Must be witch, so don't bother
+                    IsEvil(You)
                 ),
                 2: Savant.Ping(
                     IsInPlay(Vigormortis),
@@ -3647,7 +3648,6 @@ def puzzle_emerald_snv():
         night_deaths={2: Tesso, 3: Theo, 4: Alanna},
         hidden_characters=[NoDashii, Vortox, FangGu, Vigormortis, Witch, Mutant],
         hidden_self=[],
-        deduplicate_initial_characters=True,
     )
     solutions = (
         (Klutz, Clockmaker, Witch, NoDashii, Oracle, Artist, Juggler, Savant,

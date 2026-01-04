@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Iterable, Mapping
 from collections import Counter, defaultdict
 from copy import copy, deepcopy
-from dataclasses import dataclass, field, InitVar
+from dataclasses import dataclass, field, fields, is_dataclass, InitVar
 import enum
 import inspect
+import itertools as it
 import os
 from typing import Callable, TypeAlias
 
@@ -51,14 +52,6 @@ class CompromiseConfig:
 
     The default values in this class are the ones that incur no compromise.
     """
-    # Reduce evil night kill choices that are pointless because there's no way
-    # for the required death to happen. This will miss solitions where a player
-    # is resurrected the same night they die so never appear dead, or the
-    # targetted player is not generally safe but would survive for a more
-    # difficult to predict reason.
-    # This setting is not universally implemented, but enabling it gives
-    # character implementations the option to take a more efficient path.
-    evil_only_target_players_who_die_or_are_safe: bool = False
     # Cap the number of speculative good liars considered. Reducing this count
     # will miss worlds where a greater number of players who start good are
     # lying because they become evil by the end.
@@ -127,7 +120,7 @@ class Player:
         the specified ability, does not consider droisoning, which
         should be handled by the ability implementation.
         """
-        return self.character.get_ability(character_t) is not None
+        return self.get_ability(character_t) is not None
 
     def get_ability_that_acts_like(
         self,
@@ -174,12 +167,33 @@ class Player:
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)
 
-    @property
-    def lies_about_self(self):
+    def lies_about_character(self, state: State) -> bool:
+        """Player can lie about what character they are."""
         return (
-            self.character.lies_about_self
+            info.behaves_evil(state, self.id)
+            or self.character.lies_about_character_and_info
             or getattr(self, 'speculative_ceremad', False)
         )
+
+    def lies_about_info(self, state: State) -> bool:
+        """Player can lie about they learn/do with *their own* ability."""
+        return (
+            info.behaves_evil(state, self.id)
+            or self.character.lies_about_character_and_info
+            or (
+                getattr(self, 'speculative_ceremad', False)
+                # Can only lie about ping if lying about character when mad
+                and not isinstance(self.character, self.claim)
+            )
+        )
+
+    def change_claim_if_claimed_change_tonight(self, state: State) -> None:
+        """If player claims to change character tonight, update claim now."""
+        claimed_change = state.get_night_info(
+            info.CharacterChange, self.id, state.night
+        )
+        if claimed_change is not None:
+            self.claim = claimed_change.character
 
     def _world_str(self, state: State) -> str:
         """For printing nice output representations of worlds"""
@@ -273,7 +287,7 @@ class State:
                     info.behaves_evil(self, player.id)
                     or (
                         # E.g. The Mutant may double claim but not the Drunk
-                        player.lies_about_self
+                        player.character.lies_about_character_and_info
                         and not player.character.draws_wrong_token()
                     )
                 ):
@@ -378,9 +392,9 @@ class State:
             if (
                 ping is not None and
                 player.id not in self.players_still_to_act
-                and not info.behaves_evil(self, player.id)
-                and not player.lies_about_self
+                and not player.lies_about_info(self)
             ):
+                self.log(f'REJECT: {player.name} claiming {character_t.__name__}')
                 return
 
         states = self.run_all_players_with_currently_acting_character()
@@ -421,7 +435,7 @@ class State:
         )
         self.log(
             f'[{self.current_phase.name} {round_} '
-            f'{type(ability).__name__}] for {player.name} (the '
+            f'{self.currently_acting_character.__name__}] for {player.name} (the '
             f'{type(player.character).__name__}{claim})'
         )
 
@@ -481,8 +495,7 @@ class State:
         for player in self.players:
             if not (
                 isinstance(player.character, player.claim)
-                or info.behaves_evil(self, player.id)
-                or player.lies_about_self
+                or player.lies_about_character(self)
             ):
                 return
         self.current_phase = Phase.NIGHT
@@ -535,14 +548,10 @@ class State:
 
         # Check good players are what they claim to be. Update claim if changed.
         for player in self.players:
-            if None is not (claim := self.get_night_info(
-                info.CharacterChange, player.id, self.night
-            )):
-                player.claim = claim.character
-            if not (
-                isinstance(player.character, player.claim)
-                or info.behaves_evil(self, player.id)
-                or player.lies_about_self
+            player.change_claim_if_claimed_change_tonight(self)
+            if (
+                not isinstance(player.character, player.claim)
+                and not player.lies_about_character(self)
             ):
                 return
 
@@ -693,7 +702,7 @@ class State:
         for player in self.players:
             rhs = player._world_str(self)
             colour = 0
-            if player.lies_about_self or info.behaves_evil(self, player.id):
+            if player.lies_about_character(self):
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'
@@ -753,7 +762,6 @@ class Puzzle:
                 self.hidden_good
             )
             collection.append(character)
-        self._validate_inputs()
 
         self.max_day = max(
             max(
@@ -852,10 +860,7 @@ class Puzzle:
         ]
         self.state_template = State(self, self.players)
 
-        for character, _ in self.external_info_registry:
-            assert character in self.script, (
-                f"Consider adding {character.__name__} to Puzzle.also_on_script"
-            )
+        self._validate_inputs()
 
         # Annoyingly, the pickle module doesn't store modified class attributes,
         # so when a puzzle is sent between processes, such classes (like the
@@ -892,16 +897,41 @@ class Puzzle:
             + characters.INACTIVE_CHARACTERS
         )
         for character in used_characters:
-            if not any(issubclass(character, reg) for reg in registered_characters):
+            if not any(issubclass(character, r) for r in registered_characters):
                 raise ValueError(
                     f'Character {character.__name__} has not been placed in the'
                     ' night order. Did you forget?'
                 )
         for character in self.hidden_good:
-            if not character.lies_about_self:
+            if not character.lies_about_character_and_info:
                 raise ValueError(f"{character.__name__} can't be in hidden?")
 
         assert 1 not in self.night_deaths, "Can there be deaths on night 1?"
+
+        # Ensure characters referenced by player information are on the script
+        def extract_mentions(x, mentions):
+            if isinstance(x, type):
+                if (issubclass(x, characters.Character)
+                        and x not in characters.ALL_CATEGORIES):
+                    mentions.add(x)
+                return
+            elif is_dataclass(x):
+                for f in fields(x):
+                    extract_mentions(getattr(x, f.name), mentions)
+            elif isinstance(x, tuple):
+                for element in x:
+                    extract_mentions(element, mentions)
+
+        mentions = set()
+        for info_lookup in (
+            self._night_info + self._day_info + (self.external_info_registry,)
+        ):
+            for x in info_lookup.items():
+                extract_mentions(x, mentions)
+        for character in mentions:
+            assert character in self.script, (
+                f'{character.__name__} mentioned by players but not on script.'
+            )
 
     def __str__(self) -> str:
         ret = ['Puzzle(\n  \033[0;4mPlayers\033[0m']
@@ -997,7 +1027,7 @@ def summarise_fork_profiling():
     #                                                                                                                └────────────────────┘
     if not _PROFILING:
         return
-    wide = os.environ.get('WIDE', False)
+    wide = _PROFILING.lower() == 'wide'
     max_round = 0
     matrix = defaultdict(lambda: defaultdict(list))  # Actually a ragged 3D tensor :)
     for (fname, _, round), count in _PROFILING_FORK_LOCATIONS.items():
