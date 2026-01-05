@@ -3140,6 +3140,93 @@ def puzzle_josef_yes_but_dont():
     return PuzzleDef(puzzle, solutions)
 
 
+def puzzle_nikhilvyas27():
+    # nikhilvyas27: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
+    
+    You, Holly, Emily, Clara, Flora, Xavi, Val, Nick = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Val, Goblin),
+            }),
+            Player('Holly', claim=Investigator, night_info={
+                1: Investigator.Ping(Val, Nick, Goblin)
+            }),
+            Player('Emily', claim=Goblin),
+            Player('Clara', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Xavi, Drunk)
+            }),
+            Player('Flora', claim=NoDashii, night_info={
+                1: CharacterChange(SnakeCharmer),
+            }),
+            Player('Xavi', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+            }),
+            Player('Val', claim=Chef, night_info={
+                1: Chef.Ping(0)
+            }),
+            Player('Nick', claim=Recluse),
+        ],
+        day_events={1: Execution(Val)},
+        night_deaths={2: Clara},
+        hidden_characters=[Goblin, Drunk, Imp, NoDashii],
+        also_on_script=[SnakeCharmer],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Drunk, Investigator, SnakeCharmer, Ravenkeeper, NoDashii, Empath, Chef, Goblin),
+        (Undertaker, Drunk, SnakeCharmer, Ravenkeeper, NoDashii, Empath, Chef, Goblin),
+    )
+    solution_endchars = (
+        (Drunk, Investigator, NoDashii, Ravenkeeper, SnakeCharmer, Empath, Chef, Goblin),
+        (Undertaker, Drunk, NoDashii, Ravenkeeper, SnakeCharmer, Empath, Chef, Goblin),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
+
+def puzzle_nikhilvyas28():
+    # nikhilvyas28: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
+    
+    You, Quinn, Ugo, Ian, Viraj, Paige, Dan, Zoey = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Chef, night_info={
+                1: Chef.Ping(2)
+            }),
+            Player('Matthew', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Dan, Imp)
+            }),
+            Player('Jasmine', claim=Imp, night_info={
+                1: CharacterChange(SnakeCharmer),
+            }),
+            Player('Reggie', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Ian, Zoey, demon=False),
+                2: FortuneTeller.Ping(You, Quinn, demon=False),
+            }),
+            Player('Matthew', claim=Washerwoman, night_info={
+                1: Washerwoman.Ping(You, Dan, Undertaker)
+            }),
+            Player('Oscar', claim=Librarian, night_info={
+                1: Librarian.Ping(None)
+            }),
+            Player('Steve', claim=Undertaker, night_info={
+                2: Undertaker.Ping(You, Chef),
+                3: Undertaker.Ping(Ian, FortuneTeller),
+            }),
+            Player('Tom', claim=Recluse),  
+        ],
+        day_events={1: Execution(You), 2: Execution(Ian)},
+        night_deaths={2: Paige, 3: Quinn},
+        hidden_characters=[Goblin, Drunk, Imp, NoDashii],
+        also_on_script=[SnakeCharmer],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Chef, Goblin, NoDashii, FortuneTeller, Washerwoman, Librarian,
+            Undertaker, Recluse),
+    )
+    return PuzzleDef(puzzle, solutions)
+
 def puzzle_ali_adversarial1():
     # A puzzle made by a hater.
     You, Edd, Riley, Gina, Adam, Katharine, Chris, Josef = range(8)

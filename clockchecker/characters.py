@@ -2157,6 +2157,8 @@ class Librarian(Townsfolk):
                 )
             
         def display(self, names: list[str]) -> str:
+            if self.player1 is None:
+                return "No Outsiders"
             return (
                 f'{names[self.player1]} or {names[self.player2]}'
                 f' is the {self.character.__name__}'

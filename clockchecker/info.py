@@ -337,7 +337,10 @@ class ExactlyN(Info):
         return STBool((truth, is_maybe, st_says))
     
     def display(self, names: list[str]) -> str:
-        return f"{self.N} of {[arg.display(names) for arg in self.args]} are true"
+        return (
+            f'{self.N} of [{', '.join(arg.display(names) for arg in self.args)}'
+            '] are True'
+        )
 
 @dataclass
 class IsInPlay(Info):
@@ -646,5 +649,5 @@ class CharacterTypesAmongPlayers(Info):
     def display(self, names: list[str]) -> str:
         return (
             f'{self.count} character types amongst '
-            f'{",".join(names[p] for p in self.players)}'
+            f'{", ".join(names[p] for p in self.players)}'
         )

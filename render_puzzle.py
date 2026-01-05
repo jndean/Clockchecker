@@ -25,9 +25,9 @@ BMR_CHARACTERS = {
 SNV_CHARACTERS = {
     "Clockmaker", "Dreamer", "SnakeCharmer", "Mathematician", "Flowergirl",
     "TownCrier", "Oracle", "Savant", "Artist", "Philosopher",
-    "Sage", "Mutant", "Sweetgum", "Klutz", "EvilTwin",
+    "Sage", "Mutant", "Sweetheart", "Klutz", "EvilTwin",
     "Witch", "Cerenovus", "PitHag", "FangGu", "Vortox",
-    "NoDashii", "Lleech", "Juggler", "Seamstress",
+    "NoDashii", "Lleech", "Vigormortis", "Juggler", "Seamstress",
 }
 
 def get_character_script(name: str) -> str:
@@ -202,15 +202,19 @@ def render_puzzle(puzzle: Puzzle) -> str:
     events_section = f'<div class="events-box">{"".join(event_html)}</div>' if event_html else ""
 
     html = f"""
-    <div class="puzzle-window">
-        {events_section}
-        {"".join(player_html)}
-    </div>
-    
-    <div class="hidden-roles-container">
-        <div class="hidden-roles-title">Potential hidden roles :</div>
-        <div class="hidden-roles-list">
-            {"".join(hidden_html_items)}
+    <div class="puzzle-app-container">
+        <div class="puzzle-scaler">
+            <div class="puzzle-window">
+                {events_section}
+                {"".join(player_html)}
+            </div>
+            
+            <div class="hidden-roles-container">
+                <div class="hidden-roles-title">Potential hidden roles:</div>
+                <div class="hidden-roles-list">
+                    {"".join(hidden_html_items)}
+                </div>
+            </div>
         </div>
     </div>
     """
@@ -234,6 +238,9 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             --accent: #1abc9c;
             --text-white: #ffffff;
             --border: #2e4053;
+            --puzzle-target-width: 750px;
+            --puzzle-internal-width: 1000px;
+            --puzzle-scale: calc(var(--puzzle-target-width) / var(--puzzle-internal-width));
         }}
         body {{
             background-color: var(--bg-dark);
@@ -244,7 +251,17 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            padding: 40px;
+            padding: 20px;
+        }}
+        .puzzle-app-container {{
+            width: var(--puzzle-target-width);
+            /* Scaling factor affects the displayed height, so we use a wrapper hack or just let it flow */
+            overflow: visible;
+        }}
+        .puzzle-scaler {{
+            width: var(--puzzle-internal-width);
+            transform: scale(var(--puzzle-scale));
+            transform-origin: top left;
         }}
         .puzzle-window {{
             position: relative;
@@ -322,7 +339,7 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             pointer-events: none;
         }}
         .player-info-content {{
-            font-size: 13px;
+            font-size: 14px;
             color: var(--text-white);
             line-height: 1.4;
             background: rgba(0, 0, 0, 0.45);
@@ -397,6 +414,8 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             gap: 30px;
             background: rgba(46, 64, 83, 0.3);
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: fit-content;
+            margin: 20px auto 0 auto;
         }}
         .hidden-roles-title {{
             font-size: 16px;
