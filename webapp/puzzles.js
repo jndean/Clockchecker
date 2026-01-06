@@ -522,6 +522,56 @@ puzzle = Puzzle(
     hidden_self=[Drunk],
 )`
 }, {
+name: 'NQT11',
+claims: ['Clockmaker', 'Philosopher', 'Dreamer', 'Butler', 'Seamstress', 'Sage', 'SnakeCharmer', 'Artist'],
+hidden: ['Vortox', 'Cerenovus', 'PitHag', 'Mutant'],
+value:
+`# NQT11: False Is the New Black
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1g9k8ny/weekly_puzzle_11_false_is_the_new_black/
+# Notes: Guest puzzle by u/Allison314
+You, Sula, Sarah, Tom, Matthew, Anna, Aoife, Hannah = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(2)
+        }),
+        Player('Sula', claim=Philosopher, night_info={
+            2: [
+                Philosopher.Choice(SnakeCharmer),
+                SnakeCharmer.Choice(Sarah),
+            ],
+        }),
+        Player('Sarah', claim=Dreamer, night_info={
+            1: Dreamer.Ping(Matthew, Cerenovus, Seamstress),
+            2: Dreamer.Ping(Aoife, Vortox, Mutant),
+            3: Dreamer.Ping(You, Vortox, Mutant),
+        }),
+        Player('Tom', claim=Butler),  # Substitution, no effect on solve
+        Player('Matthew', claim=Seamstress,
+            night_info={
+                1: Seamstress.Ping(Aoife, Tom, same=True),
+                2: CharacterChange(Artist),
+            },
+            day_info={2: Artist.Ping(IsCharacter(You, Clockmaker))},
+        ),
+        Player('Anna', claim=Sage, night_info={
+            2: Sage.Ping(Matthew, Hannah),
+        }),
+        Player('Aoife', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Tom),
+            2: SnakeCharmer.Choice(Hannah),
+            3: SnakeCharmer.Choice(Matthew),
+        }),
+        Player('Hannah', claim=Artist, day_info={
+            1: Artist.Ping(IsEvil(You)),  # Just something that can't be true
+        }),
+    ],
+    day_events={1: Execution(You), 2: Execution(Sula)},
+    night_deaths={2: Anna, 3: Tom},
+    hidden_characters=[Vortox, Cerenovus, PitHag, Mutant],
+    hidden_self=[],
+)`
+}, {
 name: 'NQT12a',
 claims: ['Dreamer', 'Clockmaker', 'Empath', 'Slayer', 'Courtier', 'Mayor'],
 hidden: ['Vortox', 'Spy', 'ScarletWoman', 'Lunatic'],
@@ -2793,9 +2843,8 @@ name: 'NQT61',
 claims: ['Savant', 'Seamstress', 'Mathematician', 'Sweetheart', 'Juggler', 'Oracle', 'Dreamer', 'SnakeCharmer'],
 hidden: ['FangGu', 'Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
-`# Other: NQT61
-# TODO: URL not available yet
-
+`# NQT61: Thus With a Kiss I Die
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1p42jqa/weekly_puzzle_61_thus_with_a_kiss_i_die/
 You, Matthew, Fraser, Steph, Josh, Anna, Tim, Oscar = range(8)
 puzzle = Puzzle(
     players=[
@@ -2845,7 +2894,6 @@ puzzle = Puzzle(
         Player('Oscar', claim=SnakeCharmer, night_info={
             1: SnakeCharmer.Choice(Fraser),
         }),
-        
     ],
     day_events={
         1: [
@@ -2910,6 +2958,87 @@ puzzle = Puzzle(
     hidden_characters=[Imp, Spy, ScarletWoman],
     hidden_self=[],
     deduplicate_initial_characters=True,
+)`
+}, {
+name: 'nikhilvyas27',
+claims: ['Undertaker', 'Investigator', 'Goblin', 'Ravenkeeper', 'NoDashii', 'Empath', 'Chef', 'Recluse'],
+hidden: ['Goblin', 'Drunk', 'Imp', 'NoDashii'],
+value:
+`# Other: nikhilvyas27
+# nikhilvyas27: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
+
+You, Holly, Emily, Clara, Flora, Xavi, Val, Nick = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Undertaker, night_info={
+            2: Undertaker.Ping(Val, Goblin),
+        }),
+        Player('Holly', claim=Investigator, night_info={
+            1: Investigator.Ping(Val, Nick, Goblin)
+        }),
+        Player('Emily', claim=Goblin),
+        Player('Clara', claim=Ravenkeeper, night_info={
+            2: Ravenkeeper.Ping(Xavi, Drunk)
+        }),
+        Player('Flora', claim=NoDashii, night_info={
+            1: CharacterChange(SnakeCharmer),
+        }),
+        Player('Xavi', claim=Empath, night_info={
+            1: Empath.Ping(0),
+            2: Empath.Ping(1),
+        }),
+        Player('Val', claim=Chef, night_info={
+            1: Chef.Ping(0)
+        }),
+        Player('Nick', claim=Recluse),
+    ],
+    day_events={1: Execution(Val)},
+    night_deaths={2: Clara},
+    hidden_characters=[Goblin, Drunk, Imp, NoDashii],
+    also_on_script=[SnakeCharmer],
+    hidden_self=[Drunk],
+)`
+}, {
+name: 'nikhilvyas28',
+claims: ['Chef', 'Ravenkeeper', 'Imp', 'FortuneTeller', 'Washerwoman', 'Librarian', 'Undertaker', 'Recluse'],
+hidden: ['Goblin', 'Drunk', 'Imp', 'NoDashii'],
+value:
+`# Other: nikhilvyas28
+# nikhilvyas28: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
+
+You, Quinn, Ugo, Ian, Viraj, Paige, Dan, Zoey = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Chef, night_info={
+            1: Chef.Ping(2)
+        }),
+        Player('Matthew', claim=Ravenkeeper, night_info={
+            3: Ravenkeeper.Ping(Dan, Imp)
+        }),
+        Player('Jasmine', claim=Imp, night_info={
+            1: CharacterChange(SnakeCharmer),
+        }),
+        Player('Reggie', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(Ian, Zoey, demon=False),
+            2: FortuneTeller.Ping(You, Quinn, demon=False),
+        }),
+        Player('Matthew', claim=Washerwoman, night_info={
+            1: Washerwoman.Ping(You, Dan, Undertaker)
+        }),
+        Player('Oscar', claim=Librarian, night_info={
+            1: Librarian.Ping(None)
+        }),
+        Player('Steve', claim=Undertaker, night_info={
+            2: Undertaker.Ping(You, Chef),
+            3: Undertaker.Ping(Ian, FortuneTeller),
+        }),
+        Player('Tom', claim=Recluse),  
+    ],
+    day_events={1: Execution(You), 2: Execution(Ian)},
+    night_deaths={2: Paige, 3: Quinn},
+    hidden_characters=[Goblin, Drunk, Imp, NoDashii],
+    also_on_script=[SnakeCharmer],
+    hidden_self=[Drunk],
 )`
 }, {
 name: 'ali_adversarial1',
@@ -3391,7 +3520,8 @@ puzzle = Puzzle(
         Player('Theo', claim=Savant, day_info={
             1: Savant.Ping(
                 IsCategory(Karen, Outsider) ^ IsCategory(Sam, Outsider),
-                IsInPlay(Lunatic),  # TODO: Don't support Cerenovus
+                # IsInPlay(Cerenovus),  # Must be witch, so don't bother
+                IsEvil(You)
             ),
             2: Savant.Ping(
                 IsInPlay(Vigormortis),
@@ -3417,7 +3547,6 @@ puzzle = Puzzle(
     night_deaths={2: Tesso, 3: Theo, 4: Alanna},
     hidden_characters=[NoDashii, Vortox, FangGu, Vigormortis, Witch, Mutant],
     hidden_self=[],
-    deduplicate_initial_characters=True,
 )`
 }, {
 name: 'emerald_tb',

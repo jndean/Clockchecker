@@ -6,6 +6,7 @@
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <script src="./mini-coi.js"></script> <!-- Hack to allow cross-origin :) -->
     <meta charset="UTF-8">
@@ -16,7 +17,8 @@
 
     <!-- CodeMirror -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
@@ -28,8 +30,10 @@
     <script type="module" src="https://pyscript.net/releases/2025.5.1/core.js"></script>
 
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Mono&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
 
     <script type="py" worker src="main" config="pyscript-config.toml"></script>
@@ -50,7 +54,13 @@
                 <div class="app-title-container">
                     <h1 class="app-title">Clockchecker Interactive</h1>
                     <button id="infoButton" title="About this App">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-info"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="feather feather-info">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -59,16 +69,37 @@
                     <div class="panel input-panel">
                         <div class="share-button-container">
                             <div id="shareSuccessMsg" class="share-success-msg" style="display: none;"></div>
-                            <button id="shareButton" class="history-button" title="Share a link to this puzzle&#10;(including current output)"><img class="link-image" src="link.png"></button>
+                            <button id="shareButton" class="history-button"
+                                title="Share a link to this puzzle&#10;(including current output)"><img
+                                    class="link-image" src="link.png"></button>
                         </div>
                         <div class="history-buttons-container">
                             <button id="undoInputButton" class="history-button" title="Undo (Ctrl+Z)">←</button>
                             <button id="redoInputButton" class="history-button" title="Redo (Ctrl+Y)">→</button>
                         </div>
-                        <textarea id="inputText" placeholder="Enter text here..."></textarea> </div>
-                    <div class="panel output-panel">
-                        <div id="outputText" class="output-content-area" placeholder="Solutions will appear here..."></div>
-                        <div id="outputInfoBar">Solutions: 0 | Time taken: --</div>
+                        <textarea id="inputText" placeholder="Enter text here..."></textarea>
+                    </div>
+                    <div class="right-column-container">
+                        <div id="renderPanel" class="panel render-panel">
+                            <!-- Scrollable visualization container -->
+                            <div id="renderDisplay" class="render-display">
+                                <div class="render-loading">
+                                    <div class="spinner"></div>
+                                    <span>Initialising python interpreter</span>
+                                </div>
+                            </div>
+
+                            <!-- Fixed error toast -->
+                            <div id="renderErrorToast" class="error-toast" style="display: none;">
+                                <span id="renderErrorText"></span>
+                                <button class="close-toast-btn" id="closeToastBtn">&times;</button>
+                            </div>
+                        </div>
+                        <div class="panel output-panel">
+                            <div id="outputText" class="output-content-area"
+                                placeholder="Solutions will appear here..."></div>
+                            <div id="outputInfoBar">Solutions: 0 | Time taken: --</div>
+                        </div>
                     </div>
                 </div>
 
@@ -76,9 +107,13 @@
                     <button id="pythonLoadingMessage" class="python-loading-message">
                         <span>Initialising Python, please wait</span>
                         &nbsp;&nbsp;
-                        <svg class="animate-spin h-5 w-5 text-white" style="display: inline-block;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <svg class="animate-spin h-5 w-5 text-white" style="display: inline-block;"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                            </circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
                         </svg>
                     </button>
                     <div id="takingTooLongPopup">Taking too long?</div>
@@ -86,9 +121,13 @@
                         <span>Solve (Ctrl + Enter)</span>
                     </button>
                     <button id="stopButton" class="stop-button" style="display: none;">
-                        <svg id="stopButtonSpinner" class="animate-spin h-5 w-5 text-white" style="display: none;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <svg id="stopButtonSpinner" class="animate-spin h-5 w-5 text-white" style="display: none;"
+                            xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                            </circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
                         </svg>
                         <span id="stopButtonText">Stop</span>
                     </button>
@@ -105,36 +144,48 @@
                 <button id="closeInfoModal" class="modal-button close-dialog">&times;</button>
             </div>
             <p>
-            <strong><span style="color: #7fa5f3">Clockchecker</span></strong> is a solver of <span style="color: plum">Blood on the Clocktower's</span> puzzles, 
-            specifically the kind posted by reddit user u/Not_Quite_Vertical.
-            An archive of their puzzles is <a href="https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html" target="_blank"><u>here</u></a>.
-            The project page for clockchecker is <a href="https://github.com/jndean/clockchecker" target="_blank"><u>here</u></a>.
-            <br><br>
-            <strong><span style="color: #7fa5f3">Clockchecker Interactive</span></strong> (i.e., this webpage) is a statically-hosted web GUI for <span style="color: #7fa5f3">clockchecker</span>.
-            It was vibe-coded using Gemini+Canvas, because I am not a front-end guy. The <span style="color: #7fa5f3">clockchecker</span> solver runs using PyScript, which is the full(ish)
-            CPython interpreter compiled into WASM bytecode that runs in your browser. It uses a single thread, so it is not particularly fast (I've found it to be around <b>20x slower</b> than running natively on a 16-core CPU).
-            But it does work, which I think is pretty neat. ✨
+                <strong><span style="color: #7fa5f3">Clockchecker</span></strong> is a solver of <span
+                    style="color: plum">Blood on the Clocktower's</span> puzzles,
+                specifically the kind posted by reddit user u/Not_Quite_Vertical.
+                An archive of their puzzles is <a
+                    href="https://notquitetangible.blogspot.com/2024/11/clocktower-puzzle-archive.html"
+                    target="_blank"><u>here</u></a>.
+                The project page for clockchecker is <a href="https://github.com/jndean/clockchecker"
+                    target="_blank"><u>here</u></a>.
+                <br><br>
+                <strong><span style="color: #7fa5f3">Clockchecker Interactive</span></strong> (i.e., this webpage) is a
+                statically-hosted web GUI for <span style="color: #7fa5f3">clockchecker</span>.
+                It was vibe-coded using Gemini+Canvas, because I am not a front-end guy. The <span
+                    style="color: #7fa5f3">clockchecker</span> solver runs using PyScript, which is the full(ish)
+                CPython interpreter compiled into WASM bytecode that runs in your browser. It uses a single thread, so
+                it is not particularly fast (I've found it to be around <b>20x slower</b> than running natively on a
+                16-core CPU).
+                But it does work, which I think is pretty neat. ✨
             </p>
         </div>
     </div>
 
     <div id="longTransformInfoDialogOverlay" class="modal-overlay">
         <div id="longTransformInfoDialogContent" class="modal-content">
-             <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-4">
                 <h3>Why is it slow?</h3>
                 <button id="closeLongTransformInfoDialog" class="modal-button close-dialog">&times;</button>
             </div>
             <p>
-                <span style="color: #7fa5f3">Clockchecker</span> is a hobby project. To try to keep it fun, it is written in Python, and the design decisions lean
-                towards conceptual simplicity rather than efficiency. This helps keep the sprawling complexity of 
+                <span style="color: #7fa5f3">Clockchecker</span> is a hobby project. To try to keep it fun, it is
+                written in Python, and the design decisions lean
+                towards conceptual simplicity rather than efficiency. This helps keep the sprawling complexity of
                 <span style="color: plum">Blood on the Clocktower's</span> character
-                interactions managable, but it does mean it's not as fast as it could be. Additionally, 
+                interactions managable, but it does mean it's not as fast as it could be. Additionally,
                 <span style="color: #7fa5f3">Clockchecker Interactive</span>
-                (this web front-end) runs the solver in a single thread, in a Python interpreter, in a WASM runtime, in your browser...
+                (this web front-end) runs the solver in a single thread, in a Python interpreter, in a WASM runtime, in
+                your browser...
             </p>
             <p>
-                If you would like to run the solver faster (e.g. <span style="color: #059669; font-weight: bold;">~20x faster</span> if you have a 16-core CPU), you can
-                download the <span style="color: #7fa5f3">clockchecker</span> source from <a href="https://github.com/jndean/clockchecker" target="_blank"><u>github</u></a>
+                If you would like to run the solver faster (e.g. <span style="color: #059669; font-weight: bold;">~20x
+                    faster</span> if you have a 16-core CPU), you can
+                download the <span style="color: #7fa5f3">clockchecker</span> source from <a
+                    href="https://github.com/jndean/clockchecker" target="_blank"><u>github</u></a>
                 and run it natively, no installation required.
             </p>
         </div>
@@ -147,14 +198,14 @@
             <button id="messageBoxOkButton">OK</button>
         </div>
     </div>
-    
+
     <script src="puzzles.js"></script>
     <script src="characters.js"></script>
 
     <script>
-        const inputTextElement = document.getElementById('inputText'); 
+        const inputTextElement = document.getElementById('inputText');
         const outputText = document.getElementById('outputText');
-        const outputInfoBar = document.getElementById('outputInfoBar'); 
+        const outputInfoBar = document.getElementById('outputInfoBar');
         const applyButton = document.getElementById('applyButton');
         const stopButton = document.getElementById('stopButton');
         const stopButtonText = document.getElementById('stopButtonText');
@@ -163,9 +214,12 @@
         const messageBoxText = document.getElementById('messageBoxText');
         const messageBoxOkButton = document.getElementById('messageBoxOkButton');
         const undoInputButton = document.getElementById('undoInputButton');
-        const redoInputButton = document.getElementById('redoInputButton'); 
-        const shareButton = document.getElementById('shareButton'); 
-        const shareSuccessMsg = document.getElementById('shareSuccessMsg'); 
+        const redoInputButton = document.getElementById('redoInputButton');
+        const shareButton = document.getElementById('shareButton');
+        const shareSuccessMsg = document.getElementById('shareSuccessMsg');
+        const renderPanel = document.getElementById('renderPanel');
+        const renderErrorToast = document.getElementById('renderErrorToast');
+        const renderErrorText = document.getElementById('renderErrorText');
 
         const puzzleSamplesTrayWrapper = document.getElementById('puzzleSamplesTrayWrapper');
         const puzzleSamplesTray = document.getElementById('puzzleSamplesTray');
@@ -184,14 +238,14 @@
         const closeLongTransformInfoDialogButton = document.getElementById('closeLongTransformInfoDialog');
         let takingTooLongTimerId = null;
 
-        const currentTransform = 'reverseText'; 
-        const SIMULATED_DELAY_MS_PER_CHUNK = 5; 
-        
+        const currentTransform = 'reverseText';
+        const SIMULATED_DELAY_MS_PER_CHUNK = 5;
+
         let inputHistory = [];
         let currentHistoryIndex = -1;
         const MAX_HISTORY_SIZE = 20;
         let debounceTimer = null;
-        const DEBOUNCE_DELAY = 300; 
+        const DEBOUNCE_DELAY = 300;
         let codeMirrorEditor;
 
 
@@ -224,17 +278,17 @@
             "Outsider",
         ];
 
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             try {
                 const blueTokens = Townsfolk.concat(Outsiders);
                 const purpleTokens = InfoTokens.concat(['Puzzle', 'Player']);
 
-                CodeMirror.defineMode("python-custom-overlay", function(config, parserConfig) {
-                    let pythonMode = CodeMirror.getMode(config, "python"); 
+                CodeMirror.defineMode("python-custom-overlay", function (config, parserConfig) {
+                    let pythonMode = CodeMirror.getMode(config, "python");
                     return CodeMirror.overlayMode(pythonMode, {
-                        token: function(stream, state) {
+                        token: function (stream, state) {
                             if (stream.match("#", true, false)) {
-                                while (stream.next() != null) {};
+                                while (stream.next() != null) { };
                                 return null;
                             }
                             for (let token of blueTokens) {
@@ -260,7 +314,7 @@
                             // Advance stream if no custom token is matched to avoid infinite loops
                             while (stream.next() != null) {
                                 let matched = false;
-                                if (stream.match("#", true, false)) {while (stream.next() != null) {}; return null;};
+                                if (stream.match("#", true, false)) { while (stream.next() != null) { }; return null; };
                                 for (let token of blueTokens) if (stream.match(token, false, true)) matched = true;
                                 for (let token of Evils) if (stream.match(token, false, true)) matched = true;
                                 for (let token of purpleTokens) if (stream.match(token, false, true)) matched = true;
@@ -271,30 +325,30 @@
                         }
                     });
                 });
-                
-                
+
+
                 codeMirrorEditor = CodeMirror.fromTextArea(inputTextElement, {
                     mode: "python-custom-overlay", // Use the new overlay mode
                     theme: "material-darker",
-                    lineNumbers: true, 
+                    lineNumbers: true,
                     autoCloseBrackets: true,
                     matchBrackets: true,
-                    indentUnit: 4, 
+                    indentUnit: 4,
                     smartIndent: true,
                     readOnly: false,
                     lineComment: true,
                 });
                 globalThis.codeMirrorEditor = codeMirrorEditor;
-                
+
                 codeMirrorEditor.on("change", (editor, changeObj) => {
-                    if (changeObj.origin !== "setValue") { 
-                        clearTimeout(debounceTimer);
-                        debounceTimer = setTimeout(() => {
-                            saveInputState(editor.getValue(), true);
-                        }, DEBOUNCE_DELAY);
-                    }
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        saveInputState(editor.getValue(), true);
+                        update_render();
+                    }, DEBOUNCE_DELAY);
                 });
-                
+                update_render(); // Initial render
+
                 // Set starting puzzle
                 var url = new URL(window.location);
                 let puzzle_payload = url.searchParams.get('puzzle');
@@ -319,9 +373,9 @@
             }
         });
 
-        
+
         function saveInputState(newState, isUserInput = false) {
-            if (!isUserInput) clearTimeout(debounceTimer); 
+            if (!isUserInput) clearTimeout(debounceTimer);
 
             if (currentHistoryIndex >= 0 && inputHistory[currentHistoryIndex] !== undefined && newState === inputHistory[currentHistoryIndex]) {
                 updateUndoRedoButtonStates();
@@ -334,8 +388,8 @@
 
             inputHistory.push(newState);
 
-            if (inputHistory.length > MAX_HISTORY_SIZE) { 
-                inputHistory.shift(); 
+            if (inputHistory.length > MAX_HISTORY_SIZE) {
+                inputHistory.shift();
             }
             currentHistoryIndex = inputHistory.length - 1;
             updateUndoRedoButtonStates();
@@ -376,9 +430,9 @@
 
 
         function populateLongSamplesTray() {
-            puzzleSamplesTray.innerHTML = ''; 
+            puzzleSamplesTray.innerHTML = '';
             const mainLabel = document.createElement('h3');
-            mainLabel.textContent = 'Puzzles'; 
+            mainLabel.textContent = 'Puzzles';
             mainLabel.className = 'samples-tray-label';
             puzzleSamplesTray.appendChild(mainLabel);
 
@@ -393,9 +447,8 @@
                     const sampleCard = make_puzzle_card(sample);
                     sampleCard.addEventListener('click', () => {
                         if (codeMirrorEditor) {
-                            saveInputState(codeMirrorEditor.getValue()); 
-                            codeMirrorEditor.setValue(sample.value); 
-                            saveInputState(codeMirrorEditor.getValue()); 
+                            saveInputState(codeMirrorEditor.getValue());
+                            codeMirrorEditor.setValue(sample.value);
                         }
                         puzzleSamplesTrayWrapper.classList.remove('visible');
                         characterSamplesTrayWrapper.classList.remove('visible');
@@ -445,14 +498,14 @@
                         if (codeMirrorEditor) {
                             const doc = codeMirrorEditor.getDoc();
                             const cursor = doc.getCursor();
-                            
+
                             const currentLineContent = doc.getLine(cursor.line);
                             const baseIndentMatch = currentLineContent.match(/^(\s*)/);
                             const baseIndent = baseIndentMatch ? baseIndentMatch[0] : "";
-                            
+
                             const sampleValueToInsert = sample.value;
                             const sampleLines = sampleValueToInsert.split('\n');
-                            
+
                             let textToInsert = "";
 
                             if (sampleLines.length > 0) {
@@ -463,7 +516,7 @@
                             } else {
                                 textToInsert = sampleValueToInsert;
                             }
-                            
+
                             doc.replaceRange(textToInsert, cursor);
                             // codeMirrorEditor.focus();
                         }
@@ -473,11 +526,11 @@
                 characterSamplesTray.appendChild(categoryDiv);
             }
         }
-        
+
         undoInputButton.addEventListener('click', () => {
             codeMirrorEditor.undo();
         });
-        
+
         redoInputButton.addEventListener('click', () => {
             codeMirrorEditor.redo();
         });
@@ -496,15 +549,15 @@
                 shareSuccessMsg.style.opacity = '1';
                 setTimeout(() => {
                     shareSuccessMsg.style.transition = '0.4s ease-out';
-                    shareSuccessMsg.style.opacity = '0'; 
+                    shareSuccessMsg.style.opacity = '0';
                     setTimeout(() => {
                         shareSuccessMsg.style.display = 'none';
                     }, 500);
                 }, 1000);
             }
-            navigator.clipboard.writeText(payload).then(function() {
+            navigator.clipboard.writeText(payload).then(function () {
                 pulseMessage('✅ URL copied to clipboard.');
-            }, function(err) {
+            }, function (err) {
                 pulseMessage(`❌ Link generation failed...`);
             });
         });
@@ -518,9 +571,9 @@
                 return;
             }
             puzzleSamplesTimeout = setTimeout(
-                () => {puzzleSamplesTray.style.display = 'none';},
+                () => { puzzleSamplesTray.style.display = 'none'; },
                 700,
-            ); 
+            );
         }
 
         characterSamplesTimeout = null;
@@ -531,9 +584,9 @@
                 return;
             }
             characterSamplesTimeout = setTimeout(
-                () => {characterSamplesTray.style.display = 'none';},
+                () => { characterSamplesTray.style.display = 'none'; },
                 700,
-            ); 
+            );
         }
 
         toggleLongSamplesTrayButton.addEventListener('click', () => {
@@ -545,7 +598,7 @@
             showHideCharacterTrayContent();
         });
 
-        
+
         function updateOutputStats() {
             let time = '0';
             if (solve_start_time !== null) {
@@ -572,7 +625,7 @@
 
 
         takingTooLongPopup.addEventListener('click', () => {
-            clearTimeout(takingTooLongTimerId); 
+            clearTimeout(takingTooLongTimerId);
             longTransformInfoDialogOverlay.classList.add('show');
         });
 
@@ -581,7 +634,7 @@
         });
 
         globalThis.stopRequested = false;
-        
+
         worlds_found = 0;
         solve_start_time = null;
         solve_end_time = null;
@@ -595,7 +648,8 @@
             time_ticker_interval = setInterval(
                 () => {
                     solve_end_time = new Date().getTime();
-                    updateOutputStats()},
+                    updateOutputStats()
+                },
                 100,
             )
             applyButton.style.display = 'none';
@@ -605,13 +659,13 @@
             stopButtonText.innerText = 'Stop';
             console.log('GUI_startProcessing')
 
-            clearTimeout(takingTooLongTimerId); 
-            takingTooLongPopup.style.display = 'none'; 
+            clearTimeout(takingTooLongTimerId);
+            takingTooLongPopup.style.display = 'none';
             takingTooLongTimerId = setTimeout(() => {
                 if (stopButton.style.display === 'flex') {
                     takingTooLongPopup.style.display = 'block';
                 }
-            }, 10000); 
+            }, 10000);
         }
 
         function GUI_worldFound(world) {
@@ -619,7 +673,7 @@
             outputText.scrollTop = outputText.scrollHeight;
             worlds_found += 1;
             solve_end_time = new Date().getTime();
-            updateOutputStats(); 
+            updateOutputStats();
         }
 
         function GUI_returnError(message) {
@@ -628,17 +682,85 @@
         }
 
         function GUI_finishedProcessing() {
-            clearTimeout(takingTooLongTimerId); 
-            takingTooLongPopup.style.display = 'none'; 
+            clearTimeout(takingTooLongTimerId);
+            takingTooLongPopup.style.display = 'none';
             applyButton.style.display = 'flex';
             stopButton.style.display = 'none';
             stopButtonSpinner.style.display = 'none';
             clearInterval(time_ticker_interval);
             solve_end_time = new Date().getTime();
-            updateOutputStats(); 
+            updateOutputStats();
         }
 
-    
+        async function update_render() {
+            if (!window.render_puzzle_api) return;
+
+            try {
+                const rawResult = await window.render_puzzle_api(codeMirrorEditor.getValue());
+                if (!rawResult) return;
+
+                const res = rawResult.to_js ? rawResult.to_js() : rawResult;
+                const isMap = res instanceof Map;
+
+                const success = isMap ? res.get('success') : res.success;
+
+                const display = document.getElementById('renderDisplay');
+                const toast = document.getElementById('renderErrorToast');
+                const text = document.getElementById('renderErrorText');
+
+                if (success) {
+                    const newHtml = isMap ? res.get('html') : res.html;
+                    if (display.innerHTML !== newHtml) {
+                        display.innerHTML = newHtml;
+                    }
+                    toast.style.display = 'none';
+                } else {
+                    const error = isMap ? res.get('error') : res.error;
+                    if (error) {
+                        const errorLines = String(error).trim().split('\n');
+
+                        let displayError = "Render failed";
+                        let lineNo = "";
+
+                        // Look for the line number (python style: 'line X') - choose the last one mentioned
+                        // This identifies the error in the user's puzzle definition, not the boiler-plate
+                        for (let i = errorLines.length - 1; i >= 0; i--) {
+                            const match = errorLines[i].match(/line (\d+)/);
+                            if (match) {
+                                lineNo = " (Line " + match[1] + ")";
+                                break;
+                            }
+                        }
+
+                        // Filter for the actual message (last non-noise line)
+                        const filteredLines = errorLines
+                            .filter(l => l.trim().length > 0)
+                            .filter(l => !l.includes('File "') && !l.includes('line '));
+
+                        if (filteredLines.length > 0) {
+                            displayError = filteredLines[filteredLines.length - 1];
+                            if (displayError.includes(': ')) {
+                                displayError = displayError.split(': ').slice(1).join(': ');
+                            }
+                        }
+
+                        text.innerText = "Render failed: " + displayError + lineNo;
+                        toast.style.display = 'flex'; // Use flex now for alignment
+                    }
+                }
+            } catch (e) {
+                console.error("Critical error in update_render:", e);
+            }
+        }
+
+        window.update_render = update_render;
+
+        // Handle toast dismissal
+        document.getElementById('closeToastBtn').addEventListener('click', () => {
+            document.getElementById('renderErrorToast').style.display = 'none';
+        });
+
+
         stopButton.addEventListener('click', () => {
             if (globalThis.stopRequested) return;
             globalThis.stopRequested = true;
@@ -647,7 +769,7 @@
             console.log("Stop requested by user.");
         });
 
-        function share(include_output=true) {
+        function share(include_output = true) {
             let url = new URL(window.location);
             let puzzle = LZString.compressToEncodedURIComponent(
                 codeMirrorEditor.getValue()
@@ -661,33 +783,34 @@
             }
             return ret;
         }
-        
+
         document.addEventListener('keydown', (event) => {
             const isInputFocused = codeMirrorEditor && codeMirrorEditor.hasFocus();
 
             if (isInputFocused) {
-                 if (event.ctrlKey && event.key === 'Enter' && applyButton.style.display !== 'none') {
+                if (event.ctrlKey && event.key === 'Enter' && applyButton.style.display !== 'none') {
                     event.preventDefault();
                     applyTransformation();
-                } else if (event.ctrlKey && (event.key === 'z' || event.key === 'Z')) { 
+                } else if (event.ctrlKey && (event.key === 'z' || event.key === 'Z')) {
                     event.preventDefault();
                     undoInputButton.click();
-                } else if (event.ctrlKey && (event.key === 'y' || event.key === 'Y')) { 
+                } else if (event.ctrlKey && (event.key === 'y' || event.key === 'Y')) {
                     event.preventDefault();
                     redoInputButton.click();
                     codeMirrorEditor.redo();
-                } else if (event.ctrlKey && event.key === '/') { 
+                } else if (event.ctrlKey && event.key === '/') {
                     codeMirrorEditor.toggleComment();
                 }
             }
         });
-        
+
         // --- Initialization ---
-        populateLongSamplesTray(); 
+        populateLongSamplesTray();
         populateShortSamplesTray();
         updateOutputStats();
         // Focus is handled by CodeMirror after initialization in DOMContentLoaded
 
     </script>
 </body>
+
 </html>
