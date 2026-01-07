@@ -85,7 +85,7 @@
                             <div id="renderDisplay" class="render-display">
                                 <div class="render-loading">
                                     <div class="spinner"></div>
-                                    <span>Initialising python interpreter</span>
+                                    <span>Initialising puzzle renderer</span>
                                 </div>
                             </div>
 
@@ -808,6 +808,20 @@
         populateLongSamplesTray();
         populateShortSamplesTray();
         updateOutputStats();
+
+        // Responsive scaling for puzzle visualization
+        const renderDisplay = document.getElementById('renderDisplay');
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const width = entry.contentRect.width;
+                // Cap at 750px as per requirement
+                const targetWidth = Math.min(width, 750);
+                document.documentElement.style.setProperty('--puzzle-target-width', targetWidth + 'px');
+            }
+        });
+        if (renderDisplay) {
+            resizeObserver.observe(renderDisplay);
+        }
         // Focus is handled by CodeMirror after initialization in DOMContentLoaded
 
     </script>

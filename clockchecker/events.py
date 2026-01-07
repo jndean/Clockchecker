@@ -213,5 +213,5 @@ class Doomsayer:
                     state, self.died, src=None  # Calling player is not killer?
                 )
     
-    def display(self, names: list[str]) -> str:
-        return f"{names[self.player]} calls Doomsayer and {names[self.died]} dies"
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} calls Doomsayer and {names[self.died]} dies"

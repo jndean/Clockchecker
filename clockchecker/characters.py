@@ -2078,8 +2078,8 @@ class Klutz(Outsider):
                 state.math_misregistration(self.player, is_good)
                 yield state
     
-    def display(self, names: list[str]) -> str:
-        return f"{names[self.player]} Klutz-picks {names[self.choice]}"
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} Klutz-picks {names[self.choice]}"
 
 @dataclass
 class Knight(Townsfolk):
@@ -2624,7 +2624,7 @@ class Philosopher(Townsfolk):
         character: type[Character]
             
         def display(self, names: list[str]) -> str:
-            return f"Chose {self.character.name} ability"
+            return f"Chose {self.character.__name__} ability"
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
         # If already made a philo-pick, just execute the chosen ability.

@@ -245,6 +245,7 @@ body {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
     overflow: hidden;
     min-height: 0;
+    min-width: 0;
 }
 
 .right-column-container {
@@ -253,6 +254,7 @@ body {
     flex-direction: column;
     gap: 1rem;
     min-height: 0;
+    min-width: 0;
     position: relative;
     /* For absolute mapping of toast */
 }
@@ -442,6 +444,13 @@ body {
 
 
 
+.render-display {
+    flex: 1;
+    overflow: auto;
+    width: 100%;
+    min-width: 0;
+}
+
 .output-panel {
     display: flex;
     flex-direction: column;
@@ -457,7 +466,7 @@ body {
     background-color: #1a202c;
     /* Slightly darker than page background #1f2937 */
     position: relative;
-    overflow: hidden;
+    overflow: auto;
     /* Panel itself doesn't scroll, child does */
 }
 
@@ -801,14 +810,16 @@ body {
     --viz-text-white: #ffffff;
     --viz-border: #2e4053;
     --puzzle-target-width: 750px;
+    /* Default max, updated via JS */
     --puzzle-internal-width: 1000px;
     --puzzle-scale: calc(var(--puzzle-target-width) / var(--puzzle-internal-width));
 }
 
 .puzzle-app-container {
     width: var(--puzzle-target-width);
-    overflow: visible;
+    height: calc(var(--puzzle-scale) * var(--puzzle-internal-height, 1000px));
     margin: 0 auto;
+    overflow: hidden;
 }
 
 .puzzle-scaler {
@@ -822,9 +833,6 @@ body {
     width: 1000px;
     height: 900px;
     background: transparent;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     user-select: none;
 }
 
