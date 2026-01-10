@@ -58,9 +58,10 @@ def render_puzzle(puzzle: Puzzle) -> str:
     names = {i: p.name for i, p in enumerate(puzzle.players)}
     names = [p.name for p in puzzle.players]
     
-    player_html = []
-    token_radius = max(20, n_players * 3.1)
-    info_radius = token_radius + 9.5
+    cx = 500; cy = 500
+    token_radius = n_players * 32
+    info_radius_x = token_radius + 90
+    info_radius_y = token_radius + 137
     
     player_deaths = {}
     max_night_val = max(list(puzzle.night_deaths.keys()) + list(puzzle.day_events.keys()) + [0])
@@ -85,34 +86,59 @@ def render_puzzle(puzzle: Puzzle) -> str:
                     if ev.player not in player_deaths:
                         player_deaths[ev.player] = {"text": f"Died D{n}", "type": "nature"}
 
+    # Bounds tracking
+    min_x = cx; max_x = cx; min_y = cy; max_y = cy
+
+    def update_bounds(x, y, w=0, h=0, tx=0, ty=0):
+        nonlocal min_x, max_x, min_y, max_y
+        # x, y are un-shifted positions. tx, ty are percentage translations as decimals (-0.5 etc)
+        left = x + (tx * w)
+        right = left + w
+        top = y + (ty * h)
+        bottom = top + h
+        min_x = min(min_x, left)
+        max_x = max(max_x, right)
+        min_y = min(min_y, top)
+        max_y = max(max_y, bottom)
+
+    # 1. Events box
+    event_html_items = []
+    for n in range(1, max_night_val + 1):
+        if n in puzzle.night_deaths:
+            deaths = puzzle.night_deaths[n]
+            if not isinstance(deaths, list): deaths = [deaths]
+            for d in deaths:
+                d_str = d.display(names) if hasattr(d, 'display') else f"{names[d]} dies"
+                event_html_items.append(f"<div><strong class='event-label'>N{n}:</strong> {d_str}</div>")
+        if n in puzzle.day_events:
+            evs = puzzle.day_events[n]
+            if not isinstance(evs, list): evs = [evs]
+            for ev in evs:
+                ev_str = ev.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
+                event_html_items.append(f"<div><strong class='event-label'>D{n}:</strong> {ev_str}</div>")
+    
+    if event_html_items:
+        h_est = len(event_html_items) * 19 + 40
+        update_bounds(cx, cy, 250, h_est, -0.5, -0.5)
+
+    # 2. Player info data
+    players_data = []
     for i, player in enumerate(puzzle.players):
         angle_deg = (i * 360 / n_players) - 90
         angle_rad = math.radians(angle_deg)
         cos_a = math.cos(angle_rad)
         sin_a = math.sin(angle_rad)
         
-        token_left = 50 + token_radius * cos_a
-        token_top = 50 + token_radius * sin_a
-        info_left = 50 + info_radius * cos_a
-        info_top = 50 + info_radius * sin_a
+        # Positions
+        t_x = cx + token_radius * cos_a
+        t_y = cy + token_radius * sin_a
+        i_x = cx + info_radius_x * cos_a
+        i_y = cy + info_radius_y * sin_a
         
-        is_evil = player.is_evil or issubclass(player.claim, (characters.Minion, characters.Demon))
-        color_class = "townsfolk"
-        if issubclass(player.claim, characters.Demon):
-            color_class = "demon"
-        elif issubclass(player.claim, characters.Minion):
-            color_class = "minion"
-        elif issubclass(player.claim, characters.Outsider):
-            color_class = "outsider"
-            
-        death_info = player_deaths.get(i)
-        dead_class = "dead" if death_info else ""
-        death_type_class = death_info["type"] if death_info else ""
-        death_label = death_info["text"] if death_info else ""
-        
-        icon_url = get_icon_url(player.claim, is_evil)
-        print('Generated icon URL:', icon_url)
-        
+        # Token bounds
+        update_bounds(t_x, t_y, 130, 200, -0.5, -0.5) # Token + label roughly 200 high
+
+        # Info lines
         player_info_lines = []
         for (night, char), item in puzzle._night_info[i].items():
             info_str = item.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
@@ -122,33 +148,87 @@ def render_puzzle(puzzle: Puzzle) -> str:
             player_info_lines.append(f"<strong>D{day}:</strong> {info_str}")
         info_html = "<br>".join(player_info_lines)
         
-        tx = "0"; ty = "0"; info_text_align = "center"
-        if cos_a > 0.4: 
-            tx = "0%"
-            info_text_align = "left"
-            ty = "-50%"
-            info_max_width = "180px"
-        elif cos_a < -0.4: 
-            # Left side: anchor to right edge so it stays close to token
-            tx = "-100%"
-            info_text_align = "right"
-            ty = "-50%"
-            info_max_width = "180px"
-        else: 
-            tx = "-50%"
-            info_text_align = "center"
-            if sin_a < 0: ty = "-100%"
-            else: ty = "0%"
-            info_max_width = "350px"
+        if info_html:
+            tx_p = 0; info_text_align = "center"; accent_style = ""; info_max_width = 350
+            if cos_a > 0.4: # Right
+                tx_p = 0; info_text_align = "left"; info_max_width = 180
+                accent_style = "border-left: 3px solid var(--viz-accent);"
+            elif cos_a < -0.4: # Left
+                tx_p = -1; info_text_align = "right"; info_max_width = 180
+                accent_style = "border-right: 3px solid var(--viz-accent); border-left: none;"
+            else: # Top/Bottom
+                tx_p = -0.5; info_text_align = "center"; info_max_width = 350
+                accent_style = "border-left: 3px solid var(--viz-accent); border-right: 3px solid var(--viz-accent);"
 
-        info_box_html = f"""
-            <div class="player-info-outer" style="left: {info_left}%; top: {info_top}%; transform: translate({tx}, {ty}); text-align: {info_text_align};">
-                <div class="player-info-content" style="max-width: {info_max_width};">{info_html}</div>
+            h_est = len(player_info_lines) * 20 + 30
+            update_bounds(i_x, i_y, info_max_width, h_est, tx_p, -0.5) # ty is -0.5 with -14px nudge, close enough
+            
+            players_data.append({
+                "index": i, "player": player, "tx_p": tx_p, "t_x": t_x, "t_y": t_y, "i_x": i_x, "i_y": i_y,
+                "info_html": info_html, "info_text_align": info_text_align, "info_max_width": info_max_width, "accent_style": accent_style
+            })
+        else:
+            players_data.append({
+                "index": i, "player": player, "t_x": t_x, "t_y": t_y, "i_x": i_x, "i_y": i_y, "info_html": ""
+            })
+
+    # Final Bounds calculation with padding
+    pad_x = 30
+    pad_top = 60
+    pad_bot = 10
+    
+    # Symmetric Horizontal Centering
+    # Calculate furthest distance from center cx to any edge
+    dist_x = max(cx - min_x, max_x - cx)
+    actual_min_x = cx - dist_x - pad_x
+    actual_max_x = cx + dist_x + pad_x
+    
+    # Vertical bounds (non-symmetric)
+    actual_min_y = min_y - pad_top
+    actual_max_y = max_y + pad_bot
+    
+    actual_width = actual_max_x - actual_min_x
+    internal_width = max(1000, actual_width)
+    internal_height = actual_max_y - actual_min_y
+    
+    # Center the content horizontally within internal_width if it's wider than the content
+    shift_x = actual_min_x - (internal_width - actual_width) / 2
+    shift_y = actual_min_y
+    
+    # Render loop
+    player_html_list = []
+    for d in players_data:
+        i = d["index"]; player = d["player"]
+        
+        # Token CSS
+        is_evil = player.is_evil or issubclass(player.claim, (characters.Minion, characters.Demon))
+        color_class = "townsfolk"
+        if issubclass(player.claim, characters.Demon): color_class = "demon"
+        elif issubclass(player.claim, characters.Minion): color_class = "minion"
+        elif issubclass(player.claim, characters.Outsider): color_class = "outsider"
+            
+        death_info = player_deaths.get(i)
+        dead_class = "dead" if death_info else ""
+        death_type_class = death_info["type"] if death_info else ""
+        death_label = death_info["text"] if death_info else ""
+        icon_url = get_icon_url(player.claim, is_evil)
+
+        token_left = d["t_x"] - shift_x
+        token_top = d["t_y"] - shift_y
+        
+        info_html = ""
+        if d["info_html"]:
+            info_left = d["i_x"] - shift_x
+            info_top = d["i_y"] - shift_y
+            tx = f"{d['tx_p'] * 100}%"
+            info_html = f"""
+            <div class="player-info-outer" style="left: {info_left}px; top: {info_top}px; transform: translate({tx}, calc(-50% - 14px)); text-align: {d['info_text_align']};">
+                <div class="player-info-content" style="max-width: {d['info_max_width']}px; {d['accent_style']}">{d['info_html']}</div>
             </div>
-            """ if info_html else ""
+            """
 
-        player_html.append(f"""
-            <div class="player-token-container" style="left: {token_left}%; top: {token_top}%;">
+        player_html_list.append(f"""
+            <div class="player-token-container" style="left: {token_left}px; top: {token_top}px;">
                 <div class="player-token {color_class} {dead_class} {death_type_class}" data-death="{death_label}">
                     <div class="token-icon-wrap">
                         <img src="{icon_url}" class="role-icon">
@@ -157,130 +237,49 @@ def render_puzzle(puzzle: Puzzle) -> str:
                 </div>
                 <div class="player-name-label">{player.name}</div>
             </div>
-            {info_box_html}
+            {info_html}
         """)
-    
-    def render_role_list(roles: list[type[characters.Character]]) -> str:
-        unique_roles = []
-        for r in roles:
-            if r not in unique_roles:
-                unique_roles.append(r)
-        
-        items = []
-        for role in unique_roles:
-            is_evil = issubclass(role, (characters.Minion, characters.Demon))
-            icon = get_icon_url(role, is_evil)
-            items.append(f"""
-                <div class="hidden-role-token">
-                    <div class="token-icon-wrap" style="width: 55px; height: 55px; border: 2px solid var(--accent); position: relative;">
-                        <img src="{icon}" class="role-icon" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.3);">
-                    </div>
-                    <div class="hidden-role-name">{role.__name__}</div>
-                </div>
-            """)
-        return "".join(items)
 
+    # Events Box
+    events_section = ""
+    if event_html_items:
+        e_left = cx - shift_x
+        e_top = cy - shift_y
+        events_section = f'<div class="events-box" style="left: {e_left}px; top: {e_top}px;">{"".join(event_html_items)}</div>'
+
+    # Hidden Roles
+    unique_hidden = []
     all_hidden = puzzle.demons + puzzle.minions + puzzle.hidden_good + puzzle.hidden_self
-    if hasattr(puzzle, 'also_on_script') and puzzle.also_on_script:
-        all_hidden += puzzle.also_on_script
-        
-    hidden_roles_html = render_role_list(all_hidden)
-    
-    event_html = []
-    for n in range(1, max_night_val + 1):
-        # Night n deaths
-        if n in puzzle.night_deaths:
-            deaths = puzzle.night_deaths[n]
-            if not isinstance(deaths, list):
-                deaths = [deaths]
-            for d in deaths:
-                if hasattr(d, 'display'):
-                    d_str = d.display(names)
-                else:
-                    # Fallback for raw PlayerIDs
-                    d_str = f"{names[d]} dies"
-                event_html.append(f"<div><strong class='event-label'>N{n}:</strong> {d_str}</div>")
-        
-        # Day n events
-        if n in puzzle.day_events:
-            evs = puzzle.day_events[n]
-            if not isinstance(evs, list):
-                evs = [evs]
-            for ev in evs:
-                ev_str = ev.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
-                event_html.append(f"<div><strong class='event-label'>D{n}:</strong> {ev_str}</div>")
-    
-    # Calculate vertical bounds to remove wasted space
-    y_bounds = []
-    
-    # 1. Events box (center)
-    if event_html:
-        h_est = len(event_html) * 19 + 40 # slightly more conservative estimate
-        y_bounds.append(450 - h_est/2)
-        y_bounds.append(450 + h_est/2)
-
-    # 2. Each player and their info boxes
-    # We need to re-loop or store the data. Let's re-calculate since it's cheap.
-    for i, player in enumerate(puzzle.players):
-        angle_deg = (i * 360 / n_players) - 90
-        angle_rad = math.radians(angle_deg)
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        
-        token_top_px = (50 + token_radius * sin_a) * 9.0 # 900 / 100
-        y_bounds.append(token_top_px - 85) # Top of token (130/2 + buffer)
-        y_bounds.append(token_top_px + 85 + 40) # Bottom of label
-
-        player_info_lines_count = len(puzzle._night_info[i]) + len(puzzle._day_info[i])
-        if player_info_lines_count > 0:
-            h_est = player_info_lines_count * 20 + 30
-            info_top_px = (50 + info_radius * sin_a) * 9.0
+    for h in all_hidden:
+        if h not in unique_hidden: unique_hidden.append(h)
             
-            # Simple version of the logic in the main loop
-            if cos_a > 0.4 or cos_a < -0.4:
-                # ty = "-50%"
-                y_bounds.append(info_top_px - h_est/2)
-                y_bounds.append(info_top_px + h_est/2)
-            else:
-                if sin_a < 0: # ty = "-100%"
-                    y_bounds.append(info_top_px - h_est)
-                    y_bounds.append(info_top_px)
-                else: # ty = "0%"
-                    y_bounds.append(info_top_px)
-                    y_bounds.append(info_top_px + h_est)
-
-    if not y_bounds:
-        y_bounds = [300, 600] # Fallback
-        
-    min_y = min(y_bounds)
-    max_y = max(y_bounds)
-    
-    # Add a bit of padding
-    min_y -= 20
-    max_y += 20
-    
-    # Restrict to something sensible
-    min_y = max(-200, min_y)
-    max_y = min(1100, max_y)
-    
-    total_height = max(200, max_y - min_y)
-
-    events_section = f'<div class="events-box">{"".join(event_html)}</div>' if event_html else ""
+    hidden_html_items = []
+    for role in unique_hidden:
+        h_is_evil = issubclass(role, (characters.Minion, characters.Demon))
+        h_icon = get_icon_url(role, h_is_evil)
+        hidden_html_items.append(f"""
+            <div class="hidden-role-token">
+                <div class="token-icon-wrap" style="width: 55px; height: 55px; border: 2px solid var(--accent); position: relative;">
+                    <img src="{h_icon}" class="role-icon" style="width: 100%; height: 100%; object-fit: contain; transform: scale(1.3);">
+                </div>
+                <div class="hidden-role-name">{role.__name__}</div>
+            </div>
+        """)
 
     html = f"""
-    <div class="puzzle-app-container" style="--puzzle-internal-height: {total_height + 150}px;">
+    <div class="puzzle-app-container" style="--puzzle-internal-width: {internal_width}px; --puzzle-internal-height: {internal_height + 110}px;">
         <div class="puzzle-scaler">
-            <div class="puzzle-window" style="height: {total_height}px;">
-                <div style="transform: translateY({-min_y}px); width: 1000px; height: 900px; position: relative;">
+            <div class="puzzle-window" style="width: {internal_width}px; height: {internal_height}px;">
+                <div style="width: {internal_width}px; height: {internal_height}px; position: relative;">
                     {events_section}
-                    {"".join(player_html)}
+                    {"".join(player_html_list)}
                 </div>
             </div>
             
-            <div class="hidden-roles-container" style="margin: 20px auto 0 auto;">
+            <div class="hidden-roles-container">
                 <div class="hidden-roles-title">Potential hidden roles:</div>
                 <div class="hidden-roles-list">
-                    {hidden_roles_html}
+                    {"".join(hidden_html_items)}
                 </div>
             </div>
         </div>
@@ -306,8 +305,9 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             --accent: #1abc9c;
             --text-white: #ffffff;
             --border: #2e4053;
-            --puzzle-target-width: 750px;
+            --puzzle-target-width: 100%;
             --puzzle-internal-width: 1000px;
+            --puzzle-internal-height: 1000px;
             --puzzle-scale: calc(var(--puzzle-target-width) / var(--puzzle-internal-width));
         }}
         body {{
@@ -323,7 +323,7 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
         }}
         .puzzle-app-container {{
             width: var(--puzzle-target-width);
-            height: calc(var(--puzzle-scale) * var(--puzzle-internal-height, 1000px));
+            height: calc(var(--puzzle-scale) * var(--puzzle-internal-height));
             overflow: hidden;
         }}
         .puzzle-scaler {{
@@ -386,7 +386,7 @@ def make_standalone_page(puzzles: Puzzle | list[Puzzle]) ->str:
             text-shadow: 0 0 2px white;
             text-align: center;
             position: absolute;
-            bottom: 12%;
+            bottom: 10%;
             z-index: 8;
             width: 100%;
         }}

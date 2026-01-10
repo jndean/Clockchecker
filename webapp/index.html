@@ -66,7 +66,7 @@
             </div>
             <div class="main-content">
                 <div class="panels-container">
-                    <div class="panel input-panel">
+                    <div id="inputPanel" class="panel input-panel">
                         <div class="share-button-container">
                             <div id="shareSuccessMsg" class="share-success-msg" style="display: none;"></div>
                             <button id="shareButton" class="history-button"
@@ -79,6 +79,9 @@
                         </div>
                         <textarea id="inputText" placeholder="Enter text here..."></textarea>
                     </div>
+
+                    <div id="vResizer" class="resizer v-resizer"></div>
+
                     <div class="right-column-container">
                         <div id="renderPanel" class="panel render-panel">
                             <!-- Scrollable visualization container -->
@@ -95,7 +98,10 @@
                                 <button class="close-toast-btn" id="closeToastBtn">&times;</button>
                             </div>
                         </div>
-                        <div class="panel output-panel">
+
+                        <div id="hResizer" class="resizer h-resizer"></div>
+
+                        <div id="outputPanel" class="panel output-panel">
                             <div id="outputText" class="output-content-area"
                                 placeholder="Solutions will appear here..."></div>
                             <div id="outputInfoBar">Solutions: 0 | Time taken: --</div>
@@ -712,6 +718,7 @@
                     const newHtml = isMap ? res.get('html') : res.html;
                     if (display.innerHTML !== newHtml) {
                         display.innerHTML = newHtml;
+                        setTimeout(updatePuzzleScaling, 0);
                     }
                     toast.style.display = 'none';
                 } else {
@@ -811,19 +818,120 @@
 
         // Responsive scaling for puzzle visualization
         const renderDisplay = document.getElementById('renderDisplay');
+        const updatePuzzleScaling = () => {
+            if (!renderDisplay) return;
+            const container = renderDisplay.querySelector('.puzzle-app-container');
+            if (!container) return;
+
+            const style = getComputedStyle(container);
+            const internalWidth = parseFloat(style.getPropertyValue('--puzzle-internal-width')) || 1000;
+            const internalHeight = parseFloat(style.getPropertyValue('--puzzle-internal-height')) || 1000;
+
+            const rect = renderDisplay.getBoundingClientRect();
+            const availW = rect.width;
+            const availH = rect.height;
+
+            const scaleW = availW / internalWidth;
+            const scaleH = (availH - 20) / internalHeight; // 20px buffer
+
+            const scale = Math.min(scaleW, scaleH);
+            const targetWidth = internalWidth * scale;
+
+            document.documentElement.style.setProperty('--puzzle-scale', scale);
+            document.documentElement.style.setProperty('--puzzle-target-width', targetWidth + 'px');
+            document.documentElement.style.setProperty('--puzzle-internal-width', internalWidth + 'px');
+        };
+        window.updatePuzzleScaling = updatePuzzleScaling;
+
         const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
-                const width = entry.contentRect.width;
-                // Cap at 750px as per requirement
-                const targetWidth = Math.min(width, 750);
-                document.documentElement.style.setProperty('--puzzle-target-width', targetWidth + 'px');
-            }
+            updatePuzzleScaling();
         });
         if (renderDisplay) {
             resizeObserver.observe(renderDisplay);
         }
         // Focus is handled by CodeMirror after initialization in DOMContentLoaded
 
+        // Panel Resizing Logic
+        const vResizer = document.getElementById('vResizer');
+        const hResizer = document.getElementById('hResizer');
+        const inputPanel = document.getElementById('inputPanel');
+        // renderPanel is already declared above
+        const outputPanel = document.getElementById('outputPanel');
+        const rightColumn = document.querySelector('.right-column-container');
+        const panelsContainer = document.querySelector('.panels-container');
+
+        let isResizingV = false;
+        let isResizingH = false;
+
+        const updateVResizerHandle = () => {
+            if (!vResizer || !renderPanel || !rightColumn) return;
+            // rightColumn.offsetTop should be 0 if they align at top, but better to be explicit
+            const localHandleTop = rightColumn.offsetTop + renderPanel.offsetTop + (renderPanel.offsetHeight / 2) - 15;
+            vResizer.style.setProperty('--handle-top', `${localHandleTop}px`);
+        };
+
+        if (vResizer && hResizer && inputPanel && renderPanel && outputPanel && rightColumn && panelsContainer) {
+            vResizer.addEventListener('mousedown', (e) => {
+                isResizingV = true;
+                document.body.classList.add('resizing', 'resizing-v');
+                vResizer.classList.add('dragging');
+                e.preventDefault();
+            });
+
+            hResizer.addEventListener('mousedown', (e) => {
+                isResizingH = true;
+                document.body.classList.add('resizing', 'resizing-h');
+                hResizer.classList.add('dragging');
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizingV && !isResizingH) return;
+
+                requestAnimationFrame(() => {
+                    if (isResizingV) {
+                        const containerRect = panelsContainer.getBoundingClientRect();
+                        const newWidth = e.clientX - containerRect.left;
+
+                        // Constraints
+                        if (newWidth > 200 && newWidth < containerRect.width - 400) {
+                            inputPanel.style.flex = 'none';
+                            inputPanel.style.width = `${newWidth}px`;
+                        }
+                    }
+
+                    if (isResizingH) {
+                        const columnRect = rightColumn.getBoundingClientRect();
+                        const newHeight = e.clientY - columnRect.top;
+
+                        // Constraints
+                        if (newHeight > 150 && newHeight < columnRect.height - 100) {
+                            renderPanel.style.flex = 'none';
+                            renderPanel.style.height = `${newHeight}px`;
+                            outputPanel.style.flex = '1';
+                        }
+                        updateVResizerHandle();
+                    }
+                });
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizingV || isResizingH) {
+                    isResizingV = false;
+                    isResizingH = false;
+                    document.body.classList.remove('resizing', 'resizing-v', 'resizing-h');
+                    vResizer.classList.remove('dragging');
+                    hResizer.classList.remove('dragging');
+                }
+            });
+
+            window.addEventListener('resize', updateVResizerHandle);
+            setTimeout(updateVResizerHandle, 100);
+
+            // Hook into try toggles
+            document.getElementById('toggleLongSamplesTrayButton')?.addEventListener('click', () => setTimeout(updateVResizerHandle, 300));
+            document.getElementById('toggleShortSamplesTrayButton')?.addEventListener('click', () => setTimeout(updateVResizerHandle, 300));
+        }
     </script>
 </body>
 
