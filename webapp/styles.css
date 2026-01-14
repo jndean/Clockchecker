@@ -212,9 +212,24 @@ body {
     justify-content: center;
 }
 
-#infoButton:hover {
+#infoButton:hover,
+#helpButton:hover {
     color: #e5e7eb;
     background-color: #4b5563;
+}
+
+#helpButton {
+    position: absolute;
+    left: 1rem;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 
@@ -554,14 +569,11 @@ body {
 
 .output-content-area {
     background-color: #1a202c;
-    font-family: monospace;
-    font-size: large;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.9rem;
     overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
     position: relative;
     flex-grow: 1;
-    padding: 0.75rem;
     color: #e5e7eb;
     border-top-left-radius: 0.5rem;
     border-top-right-radius: 0.5rem;
@@ -570,12 +582,56 @@ body {
     min-height: 0;
 }
 
+.solution-row {
+    background-color: #00000066;
+    border-radius: 0.6rem;
+    margin: 1rem;
+    padding: 1rem;
+    border-left: 3px solid var(--viz-accent);
+    border-right: 3px solid var(--viz-accent);
+    white-space: pre-wrap;
+    animation: solutionFadeIn 0.3s ease-out forwards;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.solution-row:hover {
+    background-color: #ffffff11;
+    transform: scale(1.02);
+}
+
+.solution-row.selected {
+    background-color: #ffffff22;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+.error-row {
+    border-radius: 0.6rem;
+    margin-bottom: 0.75rem;
+    padding: 1.25rem;
+    white-space: pre-wrap;
+    animation: solutionFadeIn 0.3s ease-out forwards;
+    color: #b33
+}
+
+@keyframes solutionFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .output-content-area:empty::before {
     content: attr(placeholder);
     color: #6b7280;
     position: absolute;
-    left: 0.75rem;
-    top: 0.75rem;
+    left: 1rem;
+    top: 1rem;
     pointer-events: none;
 }
 
@@ -611,6 +667,7 @@ body {
     cursor: pointer;
     display: none;
     white-space: nowrap;
+    z-index: 100;
 }
 
 #takingTooLongPopup:hover {
@@ -860,6 +917,7 @@ body {
 .token-icon-wrap {
     width: 80%;
     height: 80%;
+    top: -3%;
     border-radius: 50%;
     overflow: hidden;
     position: relative;
@@ -896,6 +954,34 @@ body {
     font-weight: 500;
     color: var(--viz-accent);
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.player-name-label.evil {
+    color: #ef4444;
+}
+
+.player-name-label.lying-evil {
+    color: #ef4444;
+}
+
+.player-name-label.lying-good {
+    color: #3b78ff;
+}
+
+.player-info-content .info-line.lying-evil {
+    text-decoration: line-through;
+    text-decoration-color: #ef4444;
+    text-decoration-thickness: 2px;
+    color: #ef4444;
+    opacity: 0.8;
+}
+
+.player-info-content .info-line.lying-good {
+    text-decoration: line-through;
+    text-decoration-color: #3b78ff;
+    text-decoration-thickness: 2px;
+    color: #3b78ff;
+    opacity: 0.8;
 }
 
 .player-info-outer {
@@ -961,7 +1047,7 @@ body {
     content: attr(data-death);
     position: absolute;
     z-index: 6;
-    top: 5px;
+    top: -2px;
     left: 0;
     right: 0;
     color: white;

@@ -22,13 +22,13 @@ def _stream_solve_to_output(puzzle, solve_override):
         world_gen = solve(puzzle) if solve_override is None else solve_override()
         for world in world_gen:
             world_count += 1
-            window.GUI_worldFound(format_world(world))
+            window.GUI_worldFound(format_world(world), render_puzzle(world))
             if window.stopRequested:
                 raise InterruptedError()
         if world_count == 0:
             window.GUI_returnError('No Solutions Found\n')
     except InterruptedError:
-        window.GUI_returnError('\n======= Solve Stopped By User =======\n')
+        window.GUI_returnError('======= Solve Stopped By User =======')
     except Exception as e:
         err_msg = '\nError while solving:\n' + traceback.format_exc()
         window.GUI_returnError(err_msg)

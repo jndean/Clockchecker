@@ -2906,6 +2906,109 @@ puzzle = Puzzle(
     hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
+}, {
+name: 'NQT63',
+claims: ['Washerwoman', 'Butler', 'FortuneTeller', 'Undertaker', 'Recluse', 'Saint', 'Investigator', 'Empath', 'Ravenkeeper'],
+hidden: ['Imp', 'ScarletWoman', 'Spy', 'Baron', 'Poisoner', 'Drunk'],
+value:
+`# NQT63: The Limiting Factor
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1q79oja/weekly_puzzle_63_the_limiting_factor/
+You, Matt, Fraser, Steph, Tom, Anna, Olivia, Josh, Dan = range(9)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Washerwoman, night_info={
+            1: Washerwoman.Ping(Matt, Josh, Empath)
+        }),
+        Player('Matt', claim=Butler),
+        Player('Fraser', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(Matt, Steph, demon=False),
+        }),
+        Player('Steph', claim=Undertaker, night_info={
+            2: Undertaker.Ping(Fraser, Poisoner),
+            3: Undertaker.Ping(You, Washerwoman),
+            4: Undertaker.Ping(Olivia, Investigator),
+        }),
+        Player('Tom', claim=Recluse),
+        Player('Anna', claim=Saint),
+        Player('Olivia', claim=Investigator, night_info={
+            1: Investigator.Ping(Steph, Josh, Baron),
+        }),
+        Player('Josh', claim=Empath, night_info={
+            1: Empath.Ping(0),
+            2: Empath.Ping(0),
+            3: Empath.Ping(0),
+            3: Empath.Ping(2),
+        }),
+        Player('Dan', claim=Ravenkeeper, night_info={
+            4: Ravenkeeper.Ping(Steph, Undertaker)
+        }),
+    ],
+    day_events={
+        1: Execution(Fraser),
+        2: Execution(You),
+        3: Execution(Olivia),
+    },
+    night_deaths={2: Matt, 3: Anna, 4: Dan},
+    hidden_characters=[Imp, ScarletWoman, Spy, Baron, Poisoner, Drunk],
+    hidden_self=[Drunk],
+)`
+}, {
+name: 'NQT64',
+claims: ['Seamstress', 'Sage', 'SnakeCharmer', 'Artist', 'Mathematician', 'Juggler', 'Clockmaker', 'Oracle'],
+hidden: ['Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+value:
+`# Other: NQT64
+# TODO: URL not available
+You, Olivia, Fraser, Tim, Sarah, Hannah, Aoife, Josh = range(8)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Seamstress, night_info={
+            1: Seamstress.Ping(Sarah, Aoife, same=True),
+        }),
+        Player('Olivia', claim=Sage, night_info={
+            3: Sage.Ping(Tim, Josh),
+        }),
+        Player('Fraser', claim=SnakeCharmer, night_info={
+            1: SnakeCharmer.Choice(Josh),
+            2: SnakeCharmer.Choice(Hannah),
+        }),
+        Player('Tim', claim=Artist, day_info={
+            3: Artist.Ping(IsCategory(Aoife, Demon))
+        }),
+        Player('Sarah', claim=Mathematician, night_info={
+            1: Mathematician.Ping(0),
+        }),
+        Player('Hannah', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    You: Vortox,
+                    Olivia: Vortox,
+                    Tim: NoDashii,
+                    Sarah: NoDashii,
+                    Aoife: Vigormortis,
+                })
+            },
+            night_info={2: Juggler.Ping(0)}
+        ),
+        Player('Aoife', claim=Clockmaker, night_info={
+            1: Clockmaker.Ping(4)
+        }),
+        Player('Josh', claim=Oracle, night_info={
+            2: Oracle.Ping(1),
+            3: Oracle.Ping(1),
+        }),
+    ],
+    day_events={
+        1: Execution(You),
+        2: [
+            Dies(player=Hannah, after_nominating=True),
+            Execution(Fraser),
+        ],
+    },
+    night_deaths={2: Sarah, 3: Olivia},
+    hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    hidden_self=[],
+)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',

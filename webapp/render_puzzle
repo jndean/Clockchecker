@@ -5,7 +5,7 @@ import math
 from typing import Mapping
 import sys
 
-from clockchecker.core import Puzzle, Player
+from clockchecker.core import Puzzle, Player, State
 from clockchecker import characters, info, events
 
 # Mapping of character class names to their script folders on the official assets site
@@ -40,20 +40,27 @@ def get_character_script(name: str) -> str:
     return "carousel"
 
 def get_icon_url(character_type: type, is_evil: bool) -> str:
-    
     name = character_type.__name__.lower()
-    alignment = "e" if is_evil or issubclass(character_type, (characters.Minion, characters.Demon)) else "g"
-    # How to get script-tool url:
-    # script = get_character_script(name)
-    # asset_name = name.lower().replace(" ", "").replace("_", "")
-    # return f"https://script.bloodontheclocktower.com/src/assets/icons/{script}/{asset_name}_{alignment}.webp"
+    # If is_evil is explicitly True, always use 'e' icon.
+    # Otherwise, check the character type if it's naturally evil.
+    is_naturally_evil = issubclass(character_type, (characters.Minion, characters.Demon))
+    alignment = "e" if (is_evil or is_naturally_evil) else "g"
     return f'icons/{name}_{alignment}.webp'
 
-def render_puzzle(puzzle: Puzzle) -> str:
+def render_puzzle(puzzle_or_state: Puzzle | State) -> str:
     """
-    Produces a standalone HTML visualization of a Puzzle object.
-    Final spacing and background consistency fix.
+    Produces a standalone HTML visualization of a Puzzle or State object.
+    When a State is passed, true character and alignment info is used.
     """
+    if isinstance(puzzle_or_state, State):
+        state = puzzle_or_state
+        puzzle = state.puzzle
+        is_state = True
+    else:
+        puzzle = puzzle_or_state
+        state = None
+        is_state = False
+
     n_players = len(puzzle.players)
     names = {i: p.name for i, p in enumerate(puzzle.players)}
     names = [p.name for p in puzzle.players]
@@ -138,15 +145,60 @@ def render_puzzle(puzzle: Puzzle) -> str:
         # Token bounds
         update_bounds(t_x, t_y, 130, 200, -0.5, -0.5) # Token + label roughly 200 high
 
+        # Determine alignment and role for calculations
+        if is_state:
+            actual_char = type(state.players[i].character)
+            is_evil = state.players[i].is_evil
+        else:
+            is_evil = player.is_evil or issubclass(player.claim, (characters.Minion, characters.Demon))
+
         # Info lines
         player_info_lines = []
+        
+        # 1. Personal Night Info
         for (night, char), item in puzzle._night_info[i].items():
             info_str = item.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
-            player_info_lines.append(f"<strong>N{night}:</strong> {info_str}")
+            is_lying = state.players[i].lies_about_info(state) if is_state else False
+            player_info_lines.append({
+                "night": night, "day": None, "char": char, 
+                "html": f"<strong>N{night}:</strong> {info_str}",
+                "is_lying": is_lying
+            })
+            
+        # 2. Daily Info
         for (day, char), item in puzzle._day_info[i].items():
             info_str = item.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
-            player_info_lines.append(f"<strong>D{day}:</strong> {info_str}")
-        info_html = "<br>".join(player_info_lines)
+            is_lying = state.players[i].lies_about_info(state) if is_state else False
+            player_info_lines.append({
+                "night": None, "day": day, "char": char,
+                "html": f"<strong>D{day}:</strong> {info_str}",
+                "is_lying": is_lying
+            })
+            
+        # 3. External info from registry
+        for (char, night), items in puzzle.external_info_registry.items():
+            for item, pid in items:
+                if pid == i:
+                    info_str = item.display(names).replace('\n', '<br>').replace('  ', '&nbsp;&nbsp;')
+                    is_lying = info.behaves_evil(state, i) if is_state else False
+                    player_info_lines.append({
+                        "night": night, "day": None, "char": char,
+                        "html": f"<strong>N{night}:</strong> {info_str}",
+                        "is_lying": is_lying
+                    })
+        
+        # Sort lines by night/day
+        player_info_lines.sort(key=lambda x: (x["night"] or 0, x["day"] or 0))
+        
+        # Format HTML with per-line classes
+        formatted_info_html_items = []
+        for line in player_info_lines:
+            lying_line_class = ""
+            if line["is_lying"]:
+                lying_line_class = "lying-evil" if is_evil else "lying-good"
+            formatted_info_html_items.append(f'<div class="info-line {lying_line_class}">{line["html"]}</div>')
+        
+        info_html = "".join(formatted_info_html_items)
         
         if info_html:
             tx_p = 0; info_text_align = "center"; accent_style = ""; info_max_width = 350
@@ -165,11 +217,13 @@ def render_puzzle(puzzle: Puzzle) -> str:
             
             players_data.append({
                 "index": i, "player": player, "tx_p": tx_p, "t_x": t_x, "t_y": t_y, "i_x": i_x, "i_y": i_y,
-                "info_html": info_html, "info_text_align": info_text_align, "info_max_width": info_max_width, "accent_style": accent_style
+                "info_html": info_html, "info_text_align": info_text_align, "info_max_width": info_max_width, "accent_style": accent_style,
+                "is_evil": is_evil
             })
         else:
             players_data.append({
-                "index": i, "player": player, "t_x": t_x, "t_y": t_y, "i_x": i_x, "i_y": i_y, "info_html": ""
+                "index": i, "player": player, "t_x": t_x, "t_y": t_y, "i_x": i_x, "i_y": i_y, "info_html": "",
+                "is_evil": is_evil
             })
 
     # Final Bounds calculation with padding
@@ -201,21 +255,45 @@ def render_puzzle(puzzle: Puzzle) -> str:
         i = d["index"]; player = d["player"]
         
         # Token CSS
-        is_evil = player.is_evil or issubclass(player.claim, (characters.Minion, characters.Demon))
-        color_class = "townsfolk"
-        if issubclass(player.claim, characters.Demon): color_class = "demon"
-        elif issubclass(player.claim, characters.Minion): color_class = "minion"
-        elif issubclass(player.claim, characters.Outsider): color_class = "outsider"
+        if is_state:
+            actual_char = type(state.players[i].character)
+            is_evil = state.players[i].is_evil
+            role_name_display = actual_char.__name__
+            icon_url = get_icon_url(actual_char, is_evil)
             
+            is_lying = state.players[i].lies_about_info(state)
+
+            color_class = "townsfolk"
+            if issubclass(actual_char, characters.Demon): color_class = "demon"
+            elif issubclass(actual_char, characters.Minion): color_class = "minion"
+            elif issubclass(actual_char, characters.Outsider): color_class = "outsider"
+        else:
+            is_evil = player.is_evil or issubclass(player.claim, (characters.Minion, characters.Demon))
+            role_name_display = player.claim.__name__
+            icon_url = get_icon_url(player.claim, is_evil)
+            
+            is_lying = False
+
+            color_class = "townsfolk"
+            if issubclass(player.claim, characters.Demon): color_class = "demon"
+            elif issubclass(player.claim, characters.Minion): color_class = "minion"
+            elif issubclass(player.claim, characters.Outsider): color_class = "outsider"
+
+        evil_class = "evil" if is_evil else ""
+        # Handle lying-good class for player name
+        if not is_evil and is_lying:
+            evil_class += " lying-good"
+        elif is_evil and is_lying:
+            evil_class += " lying-evil"
+
         death_info = player_deaths.get(i)
         dead_class = "dead" if death_info else ""
         death_type_class = death_info["type"] if death_info else ""
         death_label = death_info["text"] if death_info else ""
-        icon_url = get_icon_url(player.claim, is_evil)
 
         token_left = d["t_x"] - shift_x
         token_top = d["t_y"] - shift_y
-        
+
         info_html = ""
         if d["info_html"]:
             info_left = d["i_x"] - shift_x
@@ -223,9 +301,10 @@ def render_puzzle(puzzle: Puzzle) -> str:
             tx = f"{d['tx_p'] * 100}%"
             info_html = f"""
             <div class="player-info-outer" style="left: {info_left}px; top: {info_top}px; transform: translate({tx}, calc(-50% - 14px)); text-align: {d['info_text_align']};">
-                <div class="player-info-content" style="max-width: {d['info_max_width']}px; {d['accent_style']}">{d['info_html']}</div>
+                <div class="player-info-content" style="max-width: {d['info_max_width']}px; {d['accent_style']}">{d["info_html"]}</div>
             </div>
             """
+
 
         player_html_list.append(f"""
             <div class="player-token-container" style="left: {token_left}px; top: {token_top}px;">
@@ -233,9 +312,9 @@ def render_puzzle(puzzle: Puzzle) -> str:
                     <div class="token-icon-wrap">
                         <img src="{icon_url}" class="role-icon">
                     </div>
-                    <div class="role-name">{player.claim.__name__}</div>
+                    <div class="role-name">{role_name_display}</div>
                 </div>
-                <div class="player-name-label">{player.name}</div>
+                <div class="player-name-label {evil_class}">{player.name}</div>
             </div>
             {info_html}
         """)

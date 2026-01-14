@@ -164,7 +164,7 @@ class Dies(Event):
 
     def display(self, names: list[str]) -> str:
         if self.after_nominating:
-            return f"{names[self.player]} dies after nominating {names[self.after_nominating]}"
+            return f"{names[self.player]} dies after nominating"
         elif self.after_nominated_by is not None:
             return f"{names[self.player]} dies when nominated by {names[self.after_nominated_by]}"
         else:
