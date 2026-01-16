@@ -6,3 +6,4 @@
 "./clockchecker/info" = "clockchecker/info.py"
 "./clockchecker/events" = "clockchecker/events.py"
 "./clockchecker/solve" = "clockchecker/solve.py"
+"./render_puzzle" = "render_puzzle.py"

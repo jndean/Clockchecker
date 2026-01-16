@@ -40,6 +40,10 @@ class Event(ABC):
 
     def deaths(self, state: State) -> Iterable[PlayerID]:
         return ()
+    
+    def display(self, names: list[str]) -> str:
+        """A nice human readable string used in visualising the puzzle."""
+        raise NotImplementedError(f"{self.__class__}.display()")
 
 
 @dataclass
@@ -55,6 +59,9 @@ class Execution(Event):
     def __call__(self, state: State) -> StateGen:
         character = state.players[self.player].character
         yield from character.executed(state, self.player, self.died)
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} is executed {'' if self.died else 'and does not die'}"
 
 
 @dataclass
@@ -80,6 +87,10 @@ class ExecutionByST(Execution):
             "ExecutionByST.after_nominating should be a PlayerID."
         )
 
+    def display(self, names: list[str]) -> str:
+        if self.after_nominating is not None:
+            return f"{names[self.player]} is executed after nominating {names[self.after_nominating]} {'' if self.died else 'and does not die'}"
+        raise NotImplementedError("ExecutionByST.display() not implemented for after_nominating=None")
 
 @dataclass
 class UneventfulNomination(Event):
@@ -120,6 +131,9 @@ class UneventfulNomination(Event):
             raise NotImplementedError("Riot.uneventful_nomination D3")
         yield from states
 
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.nominator]} nominates {names[self.player]} with no effect"
+
 @dataclass
 class Dies(Event):
     """
@@ -148,6 +162,14 @@ class Dies(Event):
             "Dies.after_nominating should be a bool."
         )
 
+    def display(self, names: list[str]) -> str:
+        if self.after_nominating:
+            return f"{names[self.player]} dies after nominating"
+        elif self.after_nominated_by is not None:
+            return f"{names[self.player]} dies when nominated by {names[self.after_nominated_by]}"
+        else:
+            return f"{names[self.player]} dies spontaneously"
+
 class NightEvent:
     """
     Doesn't extend the Event interface, because deaths are not publically
@@ -155,13 +177,23 @@ class NightEvent:
     """
     pass
 
+    def display(self, names: list[str]) -> str:
+        """A nice human readable string used in visualising the puzzle."""
+        raise NotImplementedError(f"{self.__class__}.display()")
+
 @dataclass
 class NightDeath(NightEvent):
     player: PlayerID
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} dies"
 
 @dataclass
 class NightResurrection(NightEvent):
     player: PlayerID
+    
+    def display(self, names: list[str]) -> str:
+        return f"{names[self.player]} resurrected"
 
 
 class Doomsayer:
@@ -180,3 +212,6 @@ class Doomsayer:
                 yield from state.players[self.died].character.killed(
                     state, self.died, src=None  # Calling player is not killer?
                 )
+    
+        def display(self, names: list[str]) -> str:
+            return f"{names[self.player]} calls Doomsayer and {names[self.died]} dies"

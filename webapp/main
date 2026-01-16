@@ -4,6 +4,7 @@ from pyscript import window, document, display
 from pyscript.ffi import create_proxy
 
 from clockchecker import *
+from render_puzzle import render_puzzle
 
 
 global_env = {}
@@ -21,13 +22,13 @@ def _stream_solve_to_output(puzzle, solve_override):
         world_gen = solve(puzzle) if solve_override is None else solve_override()
         for world in world_gen:
             world_count += 1
-            window.GUI_worldFound(format_world(world))
+            window.GUI_worldFound(format_world(world), render_puzzle(world))
             if window.stopRequested:
                 raise InterruptedError()
         if world_count == 0:
             window.GUI_returnError('No Solutions Found\n')
     except InterruptedError:
-        window.GUI_returnError('\n======= Solve Stopped By User =======\n')
+        window.GUI_returnError('======= Solve Stopped By User =======')
     except Exception as e:
         err_msg = '\nError while solving:\n' + traceback.format_exc()
         window.GUI_returnError(err_msg)
@@ -73,13 +74,36 @@ def format_world(world: State) -> str:
     world = world.replace('\033[0m', '</span>')
     return world
 
+
+def render_puzzle_api(puzzle_str):
+    try:
+        env = global_env.copy()
+        exec(puzzle_str, env)
+        if 'puzzle' not in env:
+            return {"success": False, "error": "No 'puzzle' variable defined in input."}
+        
+        puzzle_obj = env['puzzle']
+        if isinstance(puzzle_obj, tuple):
+            puzzle_obj = puzzle_obj[0]
+            
+        html = render_puzzle(puzzle_obj)
+        return {"success": True, "html": html}
+    except Exception as e:
+        return {"success": False, "error": traceback.format_exc()}
+
 global_env['_stream_solve_to_output'] = _stream_solve_to_output
 
 apply_proxy = create_proxy(apply_button_handler)
 keydown_proxy = create_proxy(keydown_handler)
+render_proxy = create_proxy(render_puzzle_api)
+
 apply_btn.addEventListener("click", apply_proxy)
 document.addEventListener("keydown", keydown_proxy)
+window.render_puzzle_api = render_proxy
 
 # Only display solving button once python worker is initialised
 document.getElementById("pythonLoadingMessage").remove()
 apply_btn.style.display = 'flex'
+
+# Trigger initial render
+window.update_render()
