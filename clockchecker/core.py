@@ -167,16 +167,25 @@ class Player:
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)
 
-    def lies_about_character(self, state: State) -> bool:
+    def lies_about_character(self, state: State, ignore_own_ability: bool = False) -> bool:
         """Player can lie about what character they are."""
+        if self.id == 0 and state.puzzle.player_zero_is_you:
+            return self.character.draws_wrong_token()
+
         return (
             info.behaves_evil(state, self.id)
-            or self.character.lies_about_character_and_info
+            or (
+                self.character.lies_about_character_and_info
+                and not ignore_own_ability
+            )
             or getattr(self, 'speculative_ceremad', False)
         )
 
     def lies_about_info(self, state: State) -> bool:
         """Player can lie about they learn/do with *their own* ability."""
+        if self.id == 0 and state.puzzle.player_zero_is_you:
+            return self.character.draws_wrong_token()
+
         return (
             info.behaves_evil(state, self.id)
             or self.character.lies_about_character_and_info
@@ -279,8 +288,10 @@ class State:
         self._math_misregisterers = set()
         self.vortox = False  # The vortox will set this during setup
 
+
         if not allow_duplicate_tokens_in_bag:
-            # Reject good double claims
+            # Reject good double claims, e.g. Drunk can't think
+            # they're an in-play role.
             good_claims = set()
             for player in self.players:
                 if (
@@ -615,6 +626,7 @@ class State:
         next_night = self.night if self.night is not None else self.day + 1
         player.character = character(first_night=next_night)
         self.update_character_callbacks()
+        player.change_claim_if_claimed_change_tonight(self)
 
         for substate in player.character.run_setup(self, player_id):
             if not substate.check_game_over():
@@ -702,7 +714,7 @@ class State:
         for player in self.players:
             rhs = player._world_str(self)
             colour = 0
-            if player.lies_about_character(self):
+            if player.lies_about_character(self) or player.is_evil:
                 colour = '31' if player.is_evil else '34'
             ret.append(
                 f'\033[{colour};1m{player.name: >{pad}}: {rhs}\033[0m'

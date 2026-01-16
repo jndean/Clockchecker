@@ -2,6 +2,8 @@
 
  - EASY: Check vigormortis unpoisoned rule (see note in \_activate_effects_impl)
 
+ - EASY: Create a method that selects "The Demon" based on living precedence rules etc, returns generator of demkns. use tbis in Scarlwt woman. Boffin should use this. 
+
  - EASY: Could add a puzzle flag: disallow_killing_dead_players, which NQT adds as a rule in #46. Potentially this could be added just as a world rejection inside the 'attacked_at_night' default method.
 
 - Easy: Make wrapper characters (Philosopher, Hermit, Drunklike) passthrough global_end_night method, e.g. for Widow.

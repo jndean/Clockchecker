@@ -91,6 +91,7 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
     dbg_idx = 0
     for demons, minions, hidden_good, spec_evil, spec_mad in liar_combinations:
         liars = demons + minions + hidden_good + spec_evil + spec_mad
+
         l, e, m = len(liars), len(spec_evil), len(spec_mad)
         if e + m > puzzle.compromises.max_speculation:
             continue

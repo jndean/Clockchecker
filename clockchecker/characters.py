@@ -1148,6 +1148,15 @@ class Drunk(Drunklike, Outsider):
         self.drunklike_character = drunk.claim()
         yield from super().run_setup(state, me)
 
+    def end_night(self, state: State, me: PlayerID) -> StateGen:
+        player = state.players[me]
+        player.change_claim_if_claimed_change_tonight(state)
+        if (
+            issubclass(player.claim, Townsfolk)
+            or player.lies_about_character(state, ignore_own_ability=True)
+        ):
+            yield state
+
 @dataclass
 class Empath(Townsfolk):
     """
@@ -1435,6 +1444,7 @@ class FangGu(GenericDemon):
             # 4. The world where the Fang Gu jumps.
             jump_state = state.fork()
             jump_state.fanggu_already_jumped = True
+            jump_state.log(f'FangGu jumps to {state.players[target].name}')
             if (
                 is_outsider.is_maybe()
                 and not isinstance(target_player.character, Outsider)
@@ -2202,21 +2212,33 @@ class Monk(Townsfolk):
         player: PlayerID
 
     def run_night(self, state: State, me: PlayerID) -> StateGen:
+        if state.night == 1:
+            yield state; return
+
         monk = state.players[me]
         if monk.lies_about_info(state):
-            raise NotImplementedError("Todo: Evil/Lying Monk")
+            if monk.is_dead:
+                yield state; return
+            targets = [p for p in state.player_ids if p is not me]
+        else:
+            choice = state.get_night_info(Monk, me, state.night)
+            if choice is None:
+                yield state; return
+            if monk.is_dead:
+                return
+            if choice.player == me:
+                return  # Can't pick yourself
+            targets = [choice.player]
 
-        choice = state.get_night_info(Monk, me, state.night)
-        if choice is None:
-            yield state; return
-        if monk.is_dead:
-            return
-
-        self.maybe_deactivate_effects(state, me)
-        self.target = choice.player
-        self.target_history.append(choice.player)
-        self.maybe_activate_effects(state, me)
-        yield state
+        for target in targets:
+            new_state = state if len(targets) == 1 else state.fork()
+            new_monk = new_state.players[me].get_ability(Monk)
+            new_monk.maybe_deactivate_effects(new_state, me)
+            new_monk.target = target
+            new_monk.target_history.append(target)
+            new_monk.maybe_activate_effects(new_state, me)
+            new_state.log(f'Monk protects {state.players[target].name}')
+            yield new_state
 
     def end_night(self, state: State, me: PlayerID) -> StateGen:
         self.maybe_deactivate_effects(state, me)
@@ -2280,11 +2302,9 @@ class Mutant(Outsider):
         for substate in super().apply_death(state, me, src):
             # Good dead Mutants claim Mutant
             mutant = substate.players[me]
-            if mutant.claim is Mutant or (
-                # Can't call `lie_about_character()` because that would check
-                # `Mutant.lies_about_character_and_info` and always return True
-                info.behaves_evil(substate, me)
-                or getattr(mutant, 'speculative_ceremad', False)
+            mutant.change_claim_if_claimed_change_tonight(state)
+            if mutant.claim is Mutant or mutant.lies_about_character(
+                    state, ignore_own_ability=True
             ):
                 yield substate
 
@@ -2725,7 +2745,6 @@ class PitHag(Minion):
                 new_pithag.target_history.append((target, char_t))
                 for substate in new_state.change_character(target, char_t):
                     target_p = substate.players[target]
-                    target_p.change_claim_if_claimed_change_tonight(substate)
                     if PitHag._can_register_as_demon(char_t):
                         yield from PitHag._arbitrary_deaths(substate, me)
                     else:

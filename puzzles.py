@@ -3140,6 +3140,48 @@ def puzzle_josef_yes_but_dont():
     return PuzzleDef(puzzle, solutions)
 
 
+def puzzle_josef_lunatic():
+    # Test puzzle, have you really been Fang Gu jumped or is that
+    # your Lunacy talking?
+    You, B, C, D, E, F = range(6)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Imp, night_info={
+                 3: CharacterChange(FangGu),
+            }),
+            Player('B', claim=Empath, night_info={
+                1: Empath.Ping(1),
+            }),
+            Player('C', claim=Soldier),
+            Player('D', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, B, demon=True),
+                2: FortuneTeller.Ping(C, D, demon=False),
+                3: FortuneTeller.Ping(E, F, demon=False),
+            }),
+            Player('E', claim=Klutz, day_info={
+                2: Klutz.Choice(F),
+            }),
+            Player('F', claim=Dreamer, night_info={
+                1: Dreamer.Ping(B, Klutz, FangGu),
+                2: Dreamer.Ping(E, Klutz, FangGu),
+                3: Dreamer.Ping(D, FortuneTeller, Imp),
+            }),
+        ],
+        day_events={
+            2: Execution(C),
+        },
+        night_deaths={2: E, 3: B},
+        hidden_characters=[FangGu, Imp, Boffin, Spy, Lunatic],
+        hidden_self=[Lunatic],
+    )
+    solutions = (
+        (Lunatic, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
+    )
+    solutions_endchars = (
+        (FangGu, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
+    )
+    return PuzzleDef(puzzle, solutions, solutions_endchars)
+
 def puzzle_ali_adversarial1():
     # A puzzle made by a hater.
     You, Edd, Riley, Gina, Adam, Katharine, Chris, Josef = range(8)
