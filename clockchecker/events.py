@@ -159,7 +159,7 @@ class Dies(Event):
     def __post_init__(self):
         # Common error to put a PlayerID here.
         assert isinstance(self.after_nominating, bool), (
-            "Dies.after_nominating should be a bool."
+            f"Dies.after_nominating should be a bool, not {type(self.after_nominating)}"
         )
 
     def display(self, names: list[str]) -> str:

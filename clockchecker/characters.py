@@ -253,7 +253,7 @@ class Character:
         src: PlayerID | None = None,
     ) -> StateGen:
         """Trigger consequences of a confirmed death."""
-        for substate in state.pre_death_in_town(me):
+        for substate in state.trigger_callback(core.Callbacks.PRE_DEATH, me):
             player = substate.players[me]
             player.is_dead = True
             player.character.maybe_deactivate_effects(substate, me, Reason.DEATH)
@@ -360,32 +360,26 @@ class Character:
         # It is the responsibility of the ExternalInfo to account for Vortox.
         return external_info(state, me)
 
-    def get_ability(
-        self,
-        character_t: type[Character],
-    ) -> Character | None:
+    def walk_ability_tree(self) -> Iterator[Character]:
         """
         Recursive ability finder handling characters that wrap other characters,
         so that you can query the
         Psychopath[holding LilMonsta[with Boffin[Philo[Alchemist[Witch]]]
         and extract the Witch character instance.
         """
-        if isinstance(self, character_t):
-            return self
+        yield self
 
         if (
             isinstance(self, Philosopher)
             and self.active_ability is not None
-            and (ret := self.active_ability.get_ability(character_t)) is not None
         ):
-            return ret
+            yield from self.active_ability.walk_ability_tree()
+
         if isinstance(self, Hermit):
             for subability in self.active_abilities:
-                if (ret := subability.get_ability(character_t)) is not None:
-                    return ret
+                yield from subability.walk_ability_tree()
 
         # TODO: Alchemist
-        return None
 
     def acts_like(self, character: type[Character]) -> bool:
         """
@@ -393,11 +387,15 @@ class Character:
         Like 'has_ability', but also returns True on characters that think they
         have the queried ability.
         """
-        if self.get_ability(character) is not None:
-            return True
-        if (sim := getattr(self, 'drunklike_character', None)) is not None:
-            return sim.acts_like(character)
-        return False
+        return (
+            any(
+                isinstance(ability, character)
+                for ability in self.walk_ability_tree()
+            ) or (
+                (sim := getattr(self, 'drunklike_character', None)) is not None
+                and sim.acts_like(character)
+            )
+        )
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         """
@@ -678,10 +676,15 @@ class Boffin(Minion):
             if info.IsCategory(player.id, Demon)(state, me).not_false()
             # and player.is_alive  # Not relevant during SETUP...
         ]
+
+        JINXED_IMPOSSIBLE_ROLES = {
+            Drunk, Politician, # Heretic, # Ogre,
+        }
         abilities = [
             character for character in state.puzzle.script
             if issubclass(character, (Townsfolk, Outsider))
             and info.IsInPlay(character)(state, me).not_true()
+            and character not in JINXED_IMPOSSIBLE_ROLES
         ]
         assert len(abilities) and len(demon_ids)
         for demon_id, ability_t in itertools.product(demon_ids, abilities):
@@ -1109,7 +1112,8 @@ class Drunklike(Character):
         """Create a parallel world where the Drunklike really has the ability"""
         sim_state = state.fork()
         sim_player = sim_state.players[me]
-        sim_player.character = sim_player.character.drunklike_character
+        sim_character = sim_player.get_ability(Drunklike)
+        sim_player.character = sim_character.drunklike_character
         return sim_state, sim_player.character
 
     def _extract_from_simulation(
@@ -1332,8 +1336,8 @@ class EvilTwin(Minion):
     def pre_death_in_town(
         self,
         state: State,
+        me: PlayerID,
         death: PlayerID,
-        me: PlayerID
     ) -> StateGen:
         eviltwin = state.players[me]
         if (
@@ -3650,8 +3654,8 @@ class ScarletWoman(Minion):
     def pre_death_in_town(
         self,
         state: State,
+        me: PlayerID,
         about_to_die: PlayerID,
-        me: PlayerID
     ) -> StateGen:
         """Catch a Demon death."""
         scarletwoman = state.players[me]

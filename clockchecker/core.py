@@ -58,6 +58,13 @@ class CompromiseConfig:
     max_speculation: int = 99
 
 
+class Callbacks(enum.Enum):
+    # E.g., Minstrel or ScarletWoman responding to death
+    PRE_DEATH = 'pre_death_in_town'
+    #E.g. FT moves red-herring or EvilTwin picks new twin
+    ALIGNMENT_CHANGE = 'alignment_change_in_town'
+
+
 @dataclass
 class Player:
     """
@@ -108,11 +115,14 @@ class Player:
         """
         if character_t is None:
             return self.character
-        if (ability := self.character.get_ability(character_t)) is not None:
-            return ability
+        for ability in self.walk_ability_tree():
+            if isinstance(ability, character_t):
+                return ability
+
+    def walk_ability_tree(self) -> Iterator[Character]:
+        yield from self.character.walk_ability_tree()
         if (b_ability := getattr(self, 'boffin_ability', None)) is not None:
-            return b_ability.get_ability(character_t)
-        return None
+            yield from b_ability.walk_ability_tree()
 
     def has_ability(self, character_t: type[Character]) -> bool:
         """
@@ -636,27 +646,32 @@ class State:
 
     def update_character_callbacks(self):
         """Re-gather callbacks after character changes"""
-        self.pre_death_in_town_callback_players = []
-        for player_id, player in enumerate(self.players):
-            if hasattr(player.character, "pre_death_in_town"):
-                self.pre_death_in_town_callback_players.append(player_id)
+        self.character_callbacks = {cb: [] for cb in Callbacks}
+        for callback_t, registered in self.character_callbacks.items():
+            for player in self.players:
+                if any(
+                    hasattr(ability, callback_t.value)
+                    for ability in player.walk_ability_tree()
+                ):
+                    registered.append(player.id)
+
+    def trigger_callback(self, callback: Callback, *args):
+        """Trigger callback after global event."""
+        states = [self]
+        for caller in self.character_callbacks[callback]:
+            states = apply_all(states, lambda state, caller=caller: (
+                # TODO: should really walk ability tree here
+                getattr(state.players[caller].character, callback.value)(
+                    state, caller, *args
+                )
+            ))
+        yield from states
 
     def player_upcoming_in_night_order(self, player: PlayerID) -> bool:
         assert self.current_phase is Phase.NIGHT
         char = type(self.players[player].character)
         remaining_chars = self.puzzle.night_order[self.phase_order_index + 1:]
         return player in self.players_still_to_act or char in remaining_chars
-
-    def pre_death_in_town(self, dying_player_id: PlayerID) -> StateGen:
-        """Trigger things that require global checks, e.g. Minstrel or SW."""
-        states = [self]
-        for caller in self.pre_death_in_town_callback_players:
-            states = apply_all(states, lambda state, caller=caller: (
-                state.players[caller].character.pre_death_in_town(
-                    state, dying_player_id, caller
-                )
-            ))
-        yield from states
 
     def post_death_in_town(self, dead_player_id: PlayerID) -> StateGen:
         """Called immediately after a player died."""
