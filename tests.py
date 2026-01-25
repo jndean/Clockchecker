@@ -2795,6 +2795,199 @@ class TestPhilosopher(unittest.TestCase):
             solution_endchars=((Artist, Leviathan, Cerenovus, Philosopher, Dreamer),),
         )
 
+class TestNoDashii(unittest.TestCase):
+    def test_nodashii_poisons_only_tf(self):
+        You, B, C, D, E, F = range(6)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Investigator)
+                        & IsCharacter(C, Saint)
+                        & IsCharacter(D, NoDashii)
+                        & IsCharacter(E, ScarletWoman)
+                        & IsCharacter(F, Empath)
+                    ),
+                }),
+                Player('B', claim=Investigator, night_info={
+                    1: Investigator.Ping(You, B, ScarletWoman),
+                }),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+                Player('E', claim=Recluse),
+                Player('F', claim=Empath, night_info={
+                    1: Empath.Ping(2),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[NoDashii, ScarletWoman],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(3, 1, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=(
+                (Artist, Investigator, Saint, NoDashii, ScarletWoman, Empath),
+            ),
+            info_condition=(IsDroisoned(B) & IsDroisoned(F)),
+        )
+
+    def test_nodashii_cant_poison_spy(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                night_info={1: NightWatchman.Ping(E)},
+                day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Investigator)
+                        & IsCharacter(C, NoDashii)
+                        & IsCharacter(D, Spy)
+                        & IsCharacter(E, NightWatchman)
+                    ),
+                }),
+                Player('B', claim=Investigator, night_info={
+                    1: Investigator.Ping(You, B, Spy),
+                }),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+                Player('E', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(You),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[NoDashii, Spy],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_drunk_nodashii(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                night_info={1: NightWatchman.Ping(D)},
+                day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Soldier)
+                        & IsCharacter(C, NoDashii)
+                        & IsCharacter(D, NightWatchman)
+                        & IsCharacter(E, Courtier)  # TODO: Use sailor here instead?
+                    ),
+                }),
+                Player('B', claim=Soldier),
+                Player('C', claim=Saint),
+                Player('D', claim=NightWatchman, night_info={
+                    1: NightWatchman.Choice(You),
+                }),
+                Player('E', claim=Courtier, night_info={
+                    1: Courtier.Choice(NoDashii),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[NoDashii],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(4, 0, 0, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Soldier, NoDashii, NightWatchman, Courtier),),
+        )
+
+    def test_poison_moves_on_character_change(self):
+        # NoDashii poisoning moves from D to E to D, and importantly it is on E
+        # when they make their Courtier choice, so the NoDashii can kill N3
+        You, B, C, D, E, F = range(6)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Empath)
+                        & IsCharacter(C, NoDashii)
+                        & IsCharacter(D, Slayer)
+                        & IsCharacter(E, Courtier)
+                        & IsCharacter(F, PitHag)
+                    ),
+                }),
+                Player('B', claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player('C', claim=Saint),
+                Player('D', claim=Slayer,
+                    day_info={1: Slayer.Shot(C, died=False)},
+                    night_info={
+                        2: CharacterChange(Saint),
+                        3: CharacterChange(Slayer),
+                    },
+                ),
+                Player('E', claim=Courtier, night_info={
+                    3: Courtier.Choice(NoDashii),
+                }),
+                Player('F', claim=Saint),
+            ],
+            day_events={},
+            night_deaths={2: B, 3: F},
+            hidden_characters=[NoDashii, PitHag],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(4, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Empath, NoDashii, Slayer, Courtier, PitHag),),
+            info_condition=(IsDroisoned(B) & IsDroisoned(D)),
+        )
+
+    def test_poison_doesnt_move_when_tf_becomes_tf(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist,
+                day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Empath)
+                        & IsCharacter(C, NoDashii)
+                        & IsCharacter(D, Slayer)
+                        & IsCharacter(E, PitHag)
+                    ),
+                }),
+                Player('B', claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player('C', claim=Saint),
+                Player('D', claim=Slayer,
+                    day_info={1: Slayer.Shot(C, died=False)},
+                    night_info={
+                        2: [
+                            CharacterChange(NightWatchman),
+                            NightWatchman.Choice(You),
+                        ],
+                    },
+                ),
+                Player('E', claim=Saint),
+            ],
+            day_events={},
+            night_deaths={2: B},
+            hidden_characters=[NoDashii, PitHag],
+            hidden_self=[],
+            also_on_script=[NightWatchman],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Empath, NoDashii, Slayer, PitHag),),
+            solution_endchars=((Artist, Empath, NoDashii, NightWatchman, PitHag),),
+            info_condition=(IsDroisoned(B) & IsDroisoned(D)),
+        )
+
 # Test:
 # Test Evil Courtier
 # Test SnakeCharmer. Also, test demon claims to have been charmed.

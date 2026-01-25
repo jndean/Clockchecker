@@ -22,7 +22,7 @@ behaving evil (or NotImplementedError) _not_ just being evil.
 - There can no longer be misregistration during setup actions, so Marionette can't sit next to Recluse, Recluse can't be in Typhon line, Spy can't increase Xaan number. This ruling is not completely stable /adopted by the community, so I will not change the implementation to rule out worlds using these mechanics just yet.
 
 - Seperately track night number and a character's personal night number
-  e.g. so that a Chef created on night 3 will register as waking up. Partially done this, but need to go through each character to check they respect the correctnight number. I think in general "each night*" refers to true game night number,whereas "you start knowing" means your personal first night.
+  e.g. so that a Chef created on night 3 will register as waking up. Partially done this, but need to go through each character to check they respect the correct night number. I think in general "each night*" refers to true game night number,whereas "you start knowing" means your personal first night.
 
  - Get rid of player.woke_tonight. Rather than characters recording if they woke during run_night, make every WakePattern.MANUAL character override the .wakes_tonight() method so that this can always be checked statically? [This is made hard by characters such as SW who can't be determined statically in advance..., so right now we awkwards have both `character.wakes_tonight()` (which makes a best effort in advance), and `player.woke_tonight` (which records the truth after the fact)]
 
@@ -34,7 +34,7 @@ behaving evil (or NotImplementedError) _not_ just being evil.
 
  - Implement the events system! (Some of the below could be token callbcaks, not events...)
  - Characters that would like to listen for character_changed events:
-   - NoDashii to update poisoned neighbours
+   - NoDashii to update poisoned neighbours - DONE
    - Vigormortis to update poisoned neighbours of killed minions and unvigormortise killed minions
    - Xaan to poison new townsfolk
    - Philo to drunk new players with the same role
@@ -52,19 +52,15 @@ behaving evil (or NotImplementedError) _not_ just being evil.
 
 # Active Bugs To Fix:
 
-        - Currently players can be ceremad as evil characters. Would need to add a final day check on mad player claims.
+  - Currently players can be ceremad as evil characters. Would need to add a final day check on mad player claims.
 
 	- Not respecting the jinx on cannibal/juggler. What a ridiculous jinx!
 
-	- EvilTwin is doesn't pick a new twin if they change alignment
-
 	- Not respecting Lunatic-Mathematician jinx.
-
-	- The Mathematician implementation can't handle the possibiliy of an evil Townsolk learning incorrect info.
 
 	- FangGu jump will also be caught by a ScarletWoman
 
-	- Currently 'safe_from_demon' doesn't protect from demon poisoning. It's easy to implement this if the poisoning is applied after safe_from_demon, but we don't track where droison count comes from so it is not currently possible to implement this if the poisoning happens first.
+	- The Mathematician implementation can't handle the possibiliy of an evil Townsolk learning incorrect info.
 
 	- In general, Mathematician is implemented badly. Currently only "first-degree" math numbers are counted, e.g. during run_night, an ability doesn't work on the spot. However, a drunk Poisoner, Xaan, No Dashii etc who is failing to poison their target should increment the count, but only at the moment that their target's ability _does_ work. This happens at an arbitrary point later, and is not implemented. E.g., a droisoned Monk or Soldier failing to protect from the demon won't Math right, poisoned Princess etc...
 	The Spy misregistering as good is detected fine by Mathematician, but a drunk Spy _not_ misregistering as good when they would normally is _not_ picked up by Math.

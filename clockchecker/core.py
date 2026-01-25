@@ -61,8 +61,10 @@ class CompromiseConfig:
 class Callbacks(enum.Enum):
     # E.g., Minstrel or ScarletWoman responding to death
     PRE_DEATH = 'pre_death_in_town'
-    #E.g. FT moves red-herring or EvilTwin picks new twin
+    # E.g. FT moves red-herring or EvilTwin picks new twin
     ALIGNMENT_CHANGE = 'alignment_change_in_town'
+    # E.g., NoDashii changes which neighbours they're poisoning
+    CHARACTER_CHANGE = 'character_change_in_town'
 
 
 @dataclass
@@ -156,6 +158,7 @@ class Player:
     def get_misreg_categories(
         self,
         state: State,
+        assume_droisoned: bool = False,
     ) -> tuple[characters.Category]:
         """
         Get the Categories this Player can misregister as. Recurses into wrapped
@@ -163,7 +166,7 @@ class Player:
         Boffin abilities.
         """
         categories = (
-            () if self.droison_count
+            () if (self.droison_count or assume_droisoned)
             else self.character.misregister_categories
         )
         # boffin_ability is only present when the Boffin is sober-and-healthy
@@ -642,7 +645,10 @@ class State:
             if not substate.check_game_over():
                 behaves_evil = info.behaves_evil(substate, player_id)
                 substate.players[player_id].ever_behaved_evil |= behaves_evil
-                yield substate
+                yield from substate.trigger_callback(
+                    Callbacks.CHARACTER_CHANGE,
+                    player_id,
+                )
 
     def update_character_callbacks(self):
         """Re-gather callbacks after character changes"""
@@ -655,7 +661,7 @@ class State:
                 ):
                     registered.append(player.id)
 
-    def trigger_callback(self, callback: Callback, *args):
+    def trigger_callback(self, callback: Callback, *args)-> StateGen:
         """Trigger callback after global event."""
         states = [self]
         for caller in self.character_callbacks[callback]:

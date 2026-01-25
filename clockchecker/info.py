@@ -276,9 +276,14 @@ class IsCharacter(Info):
 class IsCategory(Info):
     player: PlayerID
     category: Category
+    # Useful sometimes, e.g. finding NoDashii poison targets
+    assume_droisoned: bool = False
+
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        misreg_categories = player.get_misreg_categories(state)
+        misreg_categories = player.get_misreg_categories(
+            state, assume_droisoned=self.assume_droisoned
+        )
         truth = isinstance(player.character, self.category)
         is_maybe = (
             self.category in misreg_categories
@@ -427,21 +432,23 @@ def all_registration_combinations(
     ):
         yield trues + list(maybe_combination)
 
-def tf_candidates_in_direction(
+def tf_to_droison_in_direction(
     state: State,
     src: PlayerID,
     direction: int,
 ) -> list[PlayerID]:
     """
-    Find all players that could register as the closest Townsfolk in a given
-    direction from a src player. Used by e.g. NoDashii and Vigormortis.
-    Direction 1 = clockwise, -1 = anticlockwise.
+    Find all players that could register as the closest Townsfolk even once
+    droisonedin a given direction from a src player. Used by e.g. NoDashii and
+    Vigormortis. Direction 1 = clockwise, -1 = anticlockwise.
     """
     N = len(state.players)
     candidates = []
     for step in range(1, N):
         player = (src + direction * step) % N
-        is_tf = IsCategory(player, characters.Townsfolk)(state, src)
+        is_tf = IsCategory(player, characters.Townsfolk, assume_droisoned=True)(
+            state, src
+        )
         if is_tf.not_false():
             candidates.append(player)
         if is_tf.is_true():

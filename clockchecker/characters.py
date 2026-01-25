@@ -1369,6 +1369,7 @@ class GenericDemon(Demon):
 
         for target in self._get_targets(state, me):
             new_state = state.fork()
+            new_state.log(f'{demon.name} attacks {state.players[target].name}')
             if self.is_droisoned(state, me):
                 if not state.players[target].is_dead:
                     new_state.math_misregistration(me)
@@ -2556,53 +2557,64 @@ class NoDashii(GenericDemon):
     Each night*, choose a player: they die.
     Your 2 Townsfolk neighbors are poisoned.
     """
-    tf_neighbour1: PlayerID | None = None
-    tf_neighbour2: PlayerID | None = None
+    tf_neighbour_fwd: PlayerID | None = None
+    tf_neighbour_bkwd: PlayerID | None = None
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        # TODO: This implementation allows the No Dashii to poison
-        # misregistering characters (e.g. Spy), so there may be multiple
-        # possible combinations of neighbour pairs depending on ST choices.
-        # However this is wrong and should be simplified.
-        # In order to do it truly properly, we need to be able to check if the
-        # neighbour misreg is from that player's ability, i.e., we need to know
-        # if a neighbouring demon is holding the Boffin[Alchemist[Spy]] ability
-        # and could misregister as a Townsfolk to catch the poison.
-        N = len(state.players)
-        fwd_candidates, bkwd_candidates = [], []
-        for candidates, direction in (
-            (fwd_candidates, 1),
-            (bkwd_candidates, -1),
-        ):
-            for step in range(1, N):
-                player = (me + direction * step) % N
-                is_tf = info.IsCategory(player, Townsfolk)(state, me)
-                if is_tf.not_false():
-                    candidates.append(player)
-                if is_tf.is_true():
-                    break
         # Create a world or each combination of left and right poisoned player
+        fwd_candidates = info.tf_to_droison_in_direction(state, me, 1)
+        bkwd_candidates = info.tf_to_droison_in_direction(state, me, -1)
+        do_fork = len(fwd_candidates) * len(bkwd_candidates) > 1
+        assert fwd_candidates
         for fwd in fwd_candidates:
             for bkwd in bkwd_candidates:
-                new_state = state.fork()
+                new_state = state.fork() if do_fork else state
                 new_nodashii = new_state.players[me].get_ability(NoDashii)
-                new_nodashii.tf_neighbour1 = fwd
-                new_nodashii.tf_neighbour2 = bkwd
+                new_nodashii.tf_neighbour_fwd = fwd
+                new_nodashii.tf_neighbour_bkwd = bkwd
                 new_nodashii.maybe_activate_effects(new_state, me)
                 yield new_state
 
+    def character_change_in_town(
+        self,
+        state: State,
+        me: PlayerID,
+        changed: PlayerID,
+    ) -> StateGen:
+        """If a poisoned neighbour stops being a TF, the poison moves."""
+        fwd_candidates = info.tf_to_droison_in_direction(state, me, 1)
+        bkwd_candidates = info.tf_to_droison_in_direction(state, me, -1)
+        do_fork = len(fwd_candidates) * len(bkwd_candidates) > 1
+        assert fwd_candidates
+        for fwd in fwd_candidates:
+            for bkwd in bkwd_candidates:
+                new_state = state.fork() if do_fork else state
+                nodashii = new_state.players[me].get_ability(NoDashii)
+                old_fwd = nodashii.tf_neighbour_fwd
+                old_bkwd = nodashii.tf_neighbour_bkwd
+                if self.effects_active:
+                    if fwd != old_fwd:
+                        new_state.players[old_fwd].undroison(state, me)
+                        new_state.players[fwd].droison(state, me)
+                    elif bkwd != old_bkwd:
+                        new_state.players[old_bkwd].undroison(state, me)
+                        new_state.players[bkwd].droison(state, me)
+                nodashii.tf_neighbour_fwd = fwd
+                nodashii.tf_neighbour_bkwd = bkwd
+                yield new_state
+
     def _activate_effects_impl(self, state: State, src: PlayerID):
-        state.players[self.tf_neighbour1].droison(state, src)
-        state.players[self.tf_neighbour2].droison(state, src)
+        state.players[self.tf_neighbour_fwd].droison(state, src)
+        state.players[self.tf_neighbour_bkwd].droison(state, src)
 
     def _deactivate_effects_impl(self, state: State, src: PlayerID):
-        state.players[self.tf_neighbour1].undroison(state, src)
-        state.players[self.tf_neighbour2].undroison(state, src)
+        state.players[self.tf_neighbour_fwd].undroison(state, src)
+        state.players[self.tf_neighbour_bkwd].undroison(state, src)
 
     def _world_str(self, state: State) -> str:
         return 'NoDashii (Poisoned {} & {})'.format(
-            state.players[self.tf_neighbour1].name,
-            state.players[self.tf_neighbour2].name,
+            state.players[self.tf_neighbour_fwd].name,
+            state.players[self.tf_neighbour_bkwd].name,
         )
 
 @dataclass
@@ -4449,13 +4461,13 @@ class Vigormortis(GenericDemon):
             # 4. The killed minion world
             minion_state = state.fork()
             minion = minion_state.players[target].character
-            minion.vigormortised = True
-            # TODO: ALL of the player's abilities should be marked vigormortised
-            # not just the root ability/character. Do this by maing an ability
-            # generator on a player, which `get_ability` and `has_ability` call.
+            for ability in minion.walk_ability_tree():
+                ability.vigormortised = True
+            # TODO: Currently only minions check if they're vigormortised,
+            # but here we could have vigormortised good abilities.
             poison_candidates = (
-                info.tf_candidates_in_direction(minion_state, target, -1)
-                + info.tf_candidates_in_direction(minion_state, target, 1)
+                info.tf_to_droison_in_direction(minion_state, target, -1)
+                + info.tf_to_droison_in_direction(minion_state, target, 1)
             )
             for ss1 in minion.attacked_at_night(minion_state, target, me):
                 for poison_candidate in poison_candidates:
