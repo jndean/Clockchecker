@@ -3139,64 +3139,128 @@ def puzzle_NQT63():
     return PuzzleDef(puzzle, solutions)
 
 
-def puzzle_NQT64():
-    # TODO: URL not available yet
+# Where did this puzzle come from?
+# def puzzle_NQT64():
+#     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1qejlkp/weekly_puzzle_64_featuring_the_pope/
 
-    You, Olivia, Fraser, Tim, Sarah, Hannah, Aoife, Josh = range(8)
+#     You, Olivia, Fraser, Tim, Sarah, Hannah, Aoife, Josh = range(8)
+#     puzzle = Puzzle(
+#         players=[
+#             Player('You', claim=Seamstress, night_info={
+#                 1: Seamstress.Ping(Sarah, Aoife, same=True),
+#             }),
+#             Player('Olivia', claim=Sage, night_info={
+#                 3: Sage.Ping(Tim, Josh),
+#             }),
+#             Player('Fraser', claim=SnakeCharmer, night_info={
+#                 1: SnakeCharmer.Choice(Josh),
+#                 2: SnakeCharmer.Choice(Hannah),
+#             }),
+#             Player('Tim', claim=Artist, day_info={
+#                 3: Artist.Ping(IsCategory(Aoife, Demon))
+#             }),
+#             Player('Sarah', claim=Mathematician, night_info={
+#                 1: Mathematician.Ping(0),
+#             }),
+#             Player('Hannah', claim=Juggler,
+#                 day_info={
+#                     1: Juggler.Juggle({
+#                         You: Vortox,
+#                         Olivia: Vortox,
+#                         Tim: NoDashii,
+#                         Sarah: NoDashii,
+#                         Aoife: Vigormortis,
+#                     })
+#                 },
+#                 night_info={2: Juggler.Ping(0)}
+#             ),
+#             Player('Aoife', claim=Clockmaker, night_info={
+#                 1: Clockmaker.Ping(4)
+#             }),
+#             Player('Josh', claim=Oracle, night_info={
+#                 2: Oracle.Ping(1),
+#                 3: Oracle.Ping(1),
+#             }),
+#         ],
+#         day_events={
+#             1: Execution(You),
+#             2: [
+#                 Dies(player=Hannah, after_nominating=True),
+#                 Execution(Fraser),
+#             ],
+#         },
+#         night_deaths={2: Sarah, 3: Olivia},
+#         hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
+#         hidden_self=[],
+#     )
+#     solutions = (
+#         (Seamstress, Sage, SnakeCharmer, Vigormortis, Mathematician, Juggler,
+#             Clockmaker, Witch),
+#     )
+#     return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT65():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1qqaf8t/weekly_puzzle_65_the_slipup/
+
+    You, Tom, Anna, Sarah, Fraser, Oscar, Dan, Matt = range(8)
     puzzle = Puzzle(
         players=[
-            Player('You', claim=Seamstress, night_info={
-                1: Seamstress.Ping(Sarah, Aoife, same=True),
+            Player('You', claim=Klutz),
+            Player('Tom', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Anna, Dan, same=False),
             }),
-            Player('Olivia', claim=Sage, night_info={
-                3: Sage.Ping(Tim, Josh),
+            Player('Anna', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+                2: Mathematician.Ping(0),
+            }),
+            Player('Sarah', claim=Artist, day_info={
+                1: Artist.Ping(IsCategory(Tom, Demon) | IsCategory(Matt, Demon))
             }),
             Player('Fraser', claim=SnakeCharmer, night_info={
-                1: SnakeCharmer.Choice(Josh),
-                2: SnakeCharmer.Choice(Hannah),
+                1: SnakeCharmer.Choice(Matt),
+                2: SnakeCharmer.Choice(Oscar),
+                3: SnakeCharmer.Choice(Tom),
             }),
-            Player('Tim', claim=Artist, day_info={
-                3: Artist.Ping(IsCategory(Aoife, Demon))
-            }),
-            Player('Sarah', claim=Mathematician, night_info={
-                1: Mathematician.Ping(0),
-            }),
-            Player('Hannah', claim=Juggler,
+            Player('Oscar', claim=Juggler,
                 day_info={
                     1: Juggler.Juggle({
-                        You: Vortox,
-                        Olivia: Vortox,
-                        Tim: NoDashii,
-                        Sarah: NoDashii,
-                        Aoife: Vigormortis,
+                        Tom: Seamstress,
+                        Fraser: SnakeCharmer,
+                        Matt: Oracle,
                     })
                 },
-                night_info={2: Juggler.Ping(0)}
+                night_info={2: Juggler.Ping(1)}
             ),
-            Player('Aoife', claim=Clockmaker, night_info={
+            Player('Dan', claim=Clockmaker, night_info={
                 1: Clockmaker.Ping(4)
             }),
-            Player('Josh', claim=Oracle, night_info={
-                2: Oracle.Ping(1),
+            Player('Matt', claim=Oracle, night_info={
+                2: Oracle.Ping(0),
                 3: Oracle.Ping(1),
             }),
+            
         ],
         day_events={
-            1: Execution(You),
+            1: [
+                Execution(You),
+                Klutz.Choice(player=You, choice=Dan),
+            ],
             2: [
-                Dies(player=Hannah, after_nominating=True),
-                Execution(Fraser),
+                Dies(player=Anna, after_nominating=True),
+                Execution(Oscar),
             ],
         },
-        night_deaths={2: Sarah, 3: Olivia},
-        hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        night_deaths={2: Sarah, 3: Tom},
+        hidden_characters=[FangGu, NoDashii, Vortox, Witch, Mutant],
         hidden_self=[],
     )
     solutions = (
-        (Seamstress, Sage, SnakeCharmer, Vigormortis, Mathematician, Juggler,
-            Clockmaker, Witch),
+        (Klutz, FangGu, Mathematician, Artist, Witch, Juggler, Mutant, Oracle),
     )
-    return PuzzleDef(puzzle, solutions)
+    solution_endchars = (
+        (Klutz, FangGu, Mathematician, Artist, Witch, Juggler, FangGu, Oracle),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death

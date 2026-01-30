@@ -2953,60 +2953,62 @@ puzzle = Puzzle(
     hidden_self=[Drunk],
 )`
 }, {
-name: 'NQT64',
-claims: ['Seamstress', 'Sage', 'SnakeCharmer', 'Artist', 'Mathematician', 'Juggler', 'Clockmaker', 'Oracle'],
-hidden: ['Vigormortis', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
+name: 'NQT65',
+claims: ['Klutz', 'Seamstress', 'Mathematician', 'Artist', 'SnakeCharmer', 'Juggler', 'Clockmaker', 'Oracle'],
+hidden: ['FangGu', 'NoDashii', 'Vortox', 'Witch', 'Mutant'],
 value:
-`# Other: NQT64
-# TODO: URL not available
-You, Olivia, Fraser, Tim, Sarah, Hannah, Aoife, Josh = range(8)
+`# NQT65: The Slip-Up
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1qqaf8t/weekly_puzzle_65_the_slipup/
+You, Tom, Anna, Sarah, Fraser, Oscar, Dan, Matt = range(8)
 puzzle = Puzzle(
     players=[
-        Player('You', claim=Seamstress, night_info={
-            1: Seamstress.Ping(Sarah, Aoife, same=True),
+        Player('You', claim=Klutz),
+        Player('Tom', claim=Seamstress, night_info={
+            2: Seamstress.Ping(Anna, Dan, same=False),
         }),
-        Player('Olivia', claim=Sage, night_info={
-            3: Sage.Ping(Tim, Josh),
+        Player('Anna', claim=Mathematician, night_info={
+            1: Mathematician.Ping(0),
+            2: Mathematician.Ping(0),
+        }),
+        Player('Sarah', claim=Artist, day_info={
+            1: Artist.Ping(IsCategory(Tom, Demon) | IsCategory(Matt, Demon))
         }),
         Player('Fraser', claim=SnakeCharmer, night_info={
-            1: SnakeCharmer.Choice(Josh),
-            2: SnakeCharmer.Choice(Hannah),
+            1: SnakeCharmer.Choice(Matt),
+            2: SnakeCharmer.Choice(Oscar),
+            3: SnakeCharmer.Choice(Tom),
         }),
-        Player('Tim', claim=Artist, day_info={
-            3: Artist.Ping(IsCategory(Aoife, Demon))
-        }),
-        Player('Sarah', claim=Mathematician, night_info={
-            1: Mathematician.Ping(0),
-        }),
-        Player('Hannah', claim=Juggler,
+        Player('Oscar', claim=Juggler,
             day_info={
                 1: Juggler.Juggle({
-                    You: Vortox,
-                    Olivia: Vortox,
-                    Tim: NoDashii,
-                    Sarah: NoDashii,
-                    Aoife: Vigormortis,
+                    Tom: Seamstress,
+                    Fraser: SnakeCharmer,
+                    Matt: Oracle,
                 })
             },
-            night_info={2: Juggler.Ping(0)}
+            night_info={2: Juggler.Ping(1)}
         ),
-        Player('Aoife', claim=Clockmaker, night_info={
+        Player('Dan', claim=Clockmaker, night_info={
             1: Clockmaker.Ping(4)
         }),
-        Player('Josh', claim=Oracle, night_info={
-            2: Oracle.Ping(1),
+        Player('Matt', claim=Oracle, night_info={
+            2: Oracle.Ping(0),
             3: Oracle.Ping(1),
         }),
+        
     ],
     day_events={
-        1: Execution(You),
+        1: [
+            Execution(You),
+            Klutz.Choice(player=You, choice=Dan),
+        ],
         2: [
-            Dies(player=Hannah, after_nominating=True),
-            Execution(Fraser),
+            Dies(player=Anna, after_nominating=True),
+            Execution(Oscar),
         ],
     },
-    night_deaths={2: Sarah, 3: Olivia},
-    hidden_characters=[Vigormortis, NoDashii, Vortox, Witch, Mutant],
+    night_deaths={2: Sarah, 3: Tom},
+    hidden_characters=[FangGu, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
 }
@@ -3061,6 +3063,45 @@ puzzle = Puzzle(
     hidden_characters=[Imp, Spy, ScarletWoman],
     hidden_self=[],
     deduplicate_initial_characters=True,
+)`
+}, {
+name: 'josef_lunatic',
+claims: ['Imp', 'Empath', 'Soldier', 'FortuneTeller', 'Klutz', 'Dreamer'],
+hidden: ['FangGu', 'Imp', 'Boffin', 'Spy', 'Lunatic'],
+value:
+`# Other: josef_lunatic
+# Test puzzle, have you really been Fang Gu jumped or is that
+# your Lunacy talking?
+You, B, C, D, E, F = range(6)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=Imp, night_info={
+             3: CharacterChange(FangGu),
+        }),
+        Player('B', claim=Empath, night_info={
+            1: Empath.Ping(1),
+        }),
+        Player('C', claim=Soldier),
+        Player('D', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(You, B, demon=True),
+            2: FortuneTeller.Ping(C, D, demon=False),
+            3: FortuneTeller.Ping(E, F, demon=False),
+        }),
+        Player('E', claim=Klutz, day_info={
+            2: Klutz.Choice(F),
+        }),
+        Player('F', claim=Dreamer, night_info={
+            1: Dreamer.Ping(B, Klutz, FangGu),
+            2: Dreamer.Ping(E, Klutz, FangGu),
+            3: Dreamer.Ping(D, FortuneTeller, Imp),
+        }),
+    ],
+    day_events={
+        2: Execution(C),
+    },
+    night_deaths={2: E, 3: B},
+    hidden_characters=[FangGu, Imp, Boffin, Spy, Lunatic],
+    hidden_self=[Lunatic],
 )`
 }, {
 name: 'nikhilvyas27',
