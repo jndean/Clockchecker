@@ -2988,6 +2988,94 @@ class TestNoDashii(unittest.TestCase):
             info_condition=(IsDroisoned(B) & IsDroisoned(D)),
         )
 
+
+class TestDevilsAdvocate(unittest.TestCase):
+    def test_da_protects(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, DevilsAdvocate)
+                    ),
+                }),
+                Player('B', claim=Saint),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            day_events={
+                1: Execution(B, died=False),
+                2: Execution(C, died=False),
+            },
+            night_deaths={2: D},
+            hidden_characters=[Imp, DevilsAdvocate],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(1, 1, 1, 1),
+            finish_final_day=True,
+        )
+        assert_solutions(
+            self,
+            puzzle,
+            solutions=((Artist, Imp, DevilsAdvocate, Saint),),
+            info_condition=CharAttrEq(C, 'target_history', [B, C]),
+        )
+
+    def test_da_cant_protect_same_twice(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, DevilsAdvocate)
+                    ),
+                }),
+                Player('B', claim=Saint),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            day_events={
+                1: Execution(B, died=False),
+                2: Execution(B, died=False),
+            },
+            night_deaths={2: D},
+            hidden_characters=[Imp, DevilsAdvocate],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(1, 1, 1, 1),
+            finish_final_day=True,
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+    def test_drunk_da_cant_protect(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Imp)
+                        & IsCharacter(C, DevilsAdvocate)
+                    ),
+                }),
+                Player('B', claim=Saint),
+                Player('C', claim=Saint),
+                Player('D', claim=Courtier, night_info={
+                    1: Courtier.Choice(DevilsAdvocate),
+                }),
+            ],
+            day_events={1: Execution(C, died=False)},
+            night_deaths={},
+            hidden_characters=[Imp, DevilsAdvocate],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+            finish_final_day=True,
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+
 # Test:
 # Test Evil Courtier
 # Test SnakeCharmer. Also, test demon claims to have been charmed.

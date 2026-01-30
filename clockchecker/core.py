@@ -579,8 +579,13 @@ class State:
             ):
                 return
 
-        self._math_misregistration_bounds = [0, 0]
-        self._math_misregisterers = set()
+        new_misreg = getattr(self, 'tomorrow_math_misreg_players', set())
+        count = len(new_misreg)
+        self._math_misregistration_bounds = [count, count]
+        self._math_misregisterers = new_misreg
+        if count:
+            del self.tomorrow_math_misreg_players
+
 
         self.current_phase = Phase.DAY
         self.phase_order_index = 0
@@ -711,7 +716,7 @@ class State:
     def math_misregistration(
         self,
         player: PlayerID,
-        result: info.STBool | None = None
+        result: info.STBool | None = None,
     ) -> None:
         """
         Modify bounds on possible Mathematician pings this night.
@@ -728,6 +733,15 @@ class State:
 
     def exclude_player_from_math_tonight(self, player: PlayerID):
         self._math_misregisterers.add(player)
+
+    def math_misregistration_tomorrow(self, player: PlayerID):
+        """
+        Count a Mathematician misregisteration the following day, useful for
+        characters where it's easier to predict than detect failures.
+        """
+        players = getattr(self, 'tomorrow_math_misreg_players', set())
+        players.add(player)
+        self.tomorrow_math_misreg_players = players
 
     def __str__(self) -> str:
         ret = [f'World{self.debug_key if _DEBUG else ""}(']

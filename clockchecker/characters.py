@@ -286,12 +286,16 @@ class Character:
 
     def executed(self, state: State, me: PlayerID, died: bool) -> StateGen:
         """Goblin, Psychopath, Saint etc override this method."""
-        if state.players[me].is_dead:  # and not died: ?
+        player = state.players[me]
+        if player.is_dead:  # and not died: ?
             yield state
         if died:
             self.death_explanation = 'executed'
             yield from self.killed(state, me, src=None)
-        elif self.cant_die(state, me):
+        elif (
+            self.cant_die(state, me)
+            or getattr(player, 'safe_from_execution', False)
+        ):
             yield state
 
     def killed(
@@ -1059,6 +1063,77 @@ class Courtier(Townsfolk):
             state.players[me].droison_count -= 1
         elif self.target is not None:
             state.players[self.target].undroison(state, me)
+
+
+@dataclass
+class DevilsAdvocate(Minion):
+    """
+    Each night, choose a living player (different to last night):
+    if executed tomorrow, they don't die
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT
+
+    target: PlayerID | None = None
+    target_history: list[PlayerID | None] = field(default_factory=list)
+
+    def run_night(self, state: State, me: PlayerID) -> StateGen:
+        self.maybe_deactivate_effects(state, me)
+        da = state.players[me]
+        if da.is_dead and not da.vigormortised:
+            yield state; return
+
+        valid_choices = {
+            pid for pid in state.player_ids
+            if info.IsAlive(pid)(state, me).not_false()
+            and pid != self.target  # Previous pick
+        }
+        tomorrows_executions = [
+            ev for ev in state.puzzle.day_events.get(state.night, [])
+            if isinstance(ev, events.Execution) and ev.player in valid_choices
+        ]
+        # TODO: should also pick Goon when that's been implemented
+        for execution in tomorrows_executions:
+            target = execution.player
+            new_state = state.fork()
+            new_da = new_state.players[me].get_ability(DevilsAdvocate)
+            new_da.target = target
+            new_da.target_history.append(target)
+            new_da.maybe_activate_effects(new_state, me)
+            if da.droison_count and not execution.died:
+                new_state.math_misregistration_tomorrow(me)
+            new_state.log(f'{da.name} protects {state.players[target].name}')
+            yield new_state
+            valid_choices.remove(target)
+
+        if valid_choices:
+            # The world where the DA made an unimpactful choice. If there are
+            # more than two options, leave it unspecified (None) so all possible
+            # choices are legal the next night.
+            target = None if len(valid_choices) > 1 else valid_choices.pop()
+            self.target = target
+            self.target_history.append(target)
+            state.log(f'{da.name} protects elsewhere')
+            yield state
+
+    def _activate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            t = state.players[self.target]
+            t.safe_from_execution = getattr(t, 'safe_from_execution', 0) + 1
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID):
+        if self.target is not None:
+            target = state.players[self.target]
+            target.safe_from_execution -= 1
+            if not target.safe_from_execution:
+                del target.safe_from_execution
+
+    def _world_str(self, state: State) -> str:
+        players = [
+            state.players[p].name if p is not None else '?'
+            for p in self.target_history
+        ]
+        return f'{type(self).__name__} (Protected {", ".join(players)})'
+
 
 @dataclass
 class Dreamer(Townsfolk):
@@ -3090,6 +3165,7 @@ class Poisoner(Minion):
             new_poisoner = new_state.players[src].get_ability(Poisoner)
             # Even droisoned poisoners make a choice, because they might be
             # undroisoned before dusk.
+            # TODO: I don't think this comment is right
             new_poisoner.target = target
             new_poisoner.target_history.append(target)
             new_poisoner.maybe_activate_effects(new_state, src)
@@ -3162,7 +3238,7 @@ class Princess(Townsfolk):
         if self.first_night != state.day:
             return
         if any(
-            isinstance(ev, events.Execution)
+            isinstance(ev, events.Execution) and ev.player == nominee
             for ev in state.puzzle.day_events.get(state.day, [])
         ):
             self.activated = True
@@ -4114,6 +4190,41 @@ class Sweetheart(Outsider):
         return 'Sweetheart'
 
 @dataclass
+class TeaLady(Townsfolk):
+    """
+    If both your alive neighbors are good, they can't die.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+    neighbour1: PlayerID | None = None 
+    neighbour2: PlayerID | None = None
+
+    def run_setup(self, state: State, me: PlayerID) -> StateGen:
+        raise NotImplementedError('TeaLady WIP')
+        self.maybe_activate_effects(state, me)
+        yield state
+
+    def _activate_effects_impl(self, state: State, me: PlayerID) -> None:
+        left, right = (info.get_next_player_who_is(
+            state,
+            lambda s, p: info.IsAlive(p)(s, me).is_true(),
+            me,
+            clockwise,
+        ) for clockwise in (True, False))
+        protected = (~info.IsEvil(left) & ~info.IsEvil(right))(state, me)
+        
+        # soldier = state.players[me]
+        # # Characetrs like monk might delete the attr if it hits 0, so recreate
+        # # it if neccessary.
+        # if hasattr(soldier, 'safe_from_demon_count'):
+        #     soldier.safe_from_demon_count += 1
+        # else:
+        #     soldier.safe_from_demon_count = 1
+
+    def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
+        # state.players[me].safe_from_demon_count -= 1
+        pass
+
+@dataclass
 class Undertaker(Townsfolk):
     """
     Each night*, you learn which character died by execution today.
@@ -4718,6 +4829,7 @@ GLOBAL_NIGHT_ORDER = [
     SnakeCharmer,
     Monk,
     EvilTwin,  # Nasty hack - see todo.md
+    DevilsAdvocate,
     Witch,
     Cerenovus,
     PitHag,
