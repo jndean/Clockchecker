@@ -3011,6 +3011,62 @@ puzzle = Puzzle(
     hidden_characters=[FangGu, NoDashii, Vortox, Witch, Mutant],
     hidden_self=[],
 )`
+}, {
+name: 'NQT66',
+claims: ['VillageIdiot', 'VillageIdiot', 'VillageIdiot', 'Investigator', 'Juggler', 'Ravenkeeper', 'FortuneTeller'],
+hidden: ['Imp', 'Poisoner'],
+value:
+`# NQT66: The Useful idiot
+# https://www.reddit.com/r/BloodOnTheClocktower/comments/1qvsfho/weekly_puzzle_66_the_useful_idiot/
+# Notes: Uses the Pope
+You, Aoife, Matt, Fraser, Olivia, Tim, Sarah  = range(7)
+puzzle = Puzzle(
+    players=[
+        Player('You', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Tim, is_evil=True),
+            2: VillageIdiot.Ping(Olivia, is_evil=False),
+        }),
+        Player('Aoife', claim=VillageIdiot, night_info={
+            1: VillageIdiot.Ping(Matt, is_evil=True),
+            2: VillageIdiot.Ping(Olivia, is_evil=True),
+            3: VillageIdiot.Ping(You, is_evil=False),
+        }),
+        Player('Matt', claim=VillageIdiot, night_info={
+            2: VillageIdiot.Ping(Olivia, is_evil=True),
+            1: VillageIdiot.Ping(Aoife, is_evil=False),
+            3: VillageIdiot.Ping(Fraser, is_evil=True),
+        }),
+        Player('Fraser', claim=Investigator, night_info={
+            1: Investigator.Ping(Matt, Tim, Poisoner)
+        }),
+        Player('Olivia', claim=Juggler,
+            day_info={
+                1: Juggler.Juggle({
+                    Aoife: Imp,
+                    Matt: Imp,
+                    Sarah: Imp,
+                })
+            },
+            night_info={2: Juggler.Ping(0)}
+        ),
+        Player('Tim', claim=Ravenkeeper, night_info={
+            2: Ravenkeeper.Ping(Matt, VillageIdiot)
+        }),
+        Player('Sarah', claim=FortuneTeller, night_info={
+            1: FortuneTeller.Ping(Matt, Tim, demon=False),
+            2: FortuneTeller.Ping(Olivia, Sarah, demon=False),
+            3: FortuneTeller.Ping(Aoife, Sarah, demon=True),
+        }), 
+    ],
+    day_events={
+        1: Execution(Fraser),
+        2: Execution(You),
+    },
+    night_deaths={2: Tim, 3: Olivia},
+    hidden_characters=[Imp, Poisoner],
+    hidden_self=[],
+    allow_duplicate_tokens_in_bag=True,
+)`
 }
 ], "Other": [{
 name: 'josef_yes_but_dont',

@@ -3262,6 +3262,67 @@ def puzzle_NQT65():
     )
     return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
+def puzzle_NQT66():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1qvsfho/weekly_puzzle_66_the_useful_idiot/
+
+    You, Aoife, Matt, Fraser, Olivia, Tim, Sarah  = range(7)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Tim, is_evil=True),
+                2: VillageIdiot.Ping(Olivia, is_evil=False),
+            }),
+            Player('Aoife', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Matt, is_evil=True),
+                2: VillageIdiot.Ping(Olivia, is_evil=True),
+                3: VillageIdiot.Ping(You, is_evil=False),
+            }),
+            Player('Matt', claim=VillageIdiot, night_info={
+                2: VillageIdiot.Ping(Olivia, is_evil=True),
+                1: VillageIdiot.Ping(Aoife, is_evil=False),
+                3: VillageIdiot.Ping(Fraser, is_evil=True),
+            }),
+            Player('Fraser', claim=Investigator, night_info={
+                1: Investigator.Ping(Matt, Tim, Poisoner)
+            }),
+            Player('Olivia', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Aoife: Imp,
+                        Matt: Imp,
+                        Sarah: Imp,
+                    })
+                },
+                night_info={2: Juggler.Ping(0)}
+            ),
+            Player('Tim', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Matt, VillageIdiot)
+            }),
+            Player('Sarah', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Matt, Tim, demon=False),
+                2: FortuneTeller.Ping(Olivia, Sarah, demon=False),
+                3: FortuneTeller.Ping(Aoife, Sarah, demon=True),
+            }), 
+        ],
+        day_events={
+            1: Execution(Fraser),
+            2: Execution(You),
+        },
+        night_deaths={2: Tim, 3: Olivia},
+        hidden_characters=[Imp, Poisoner],
+        hidden_self=[],
+        allow_duplicate_tokens_in_bag=True,
+    )
+    solutions = (
+        (VillageIdiot, VillageIdiot, Poisoner, Investigator, Juggler, Imp, 
+            FortuneTeller),
+    )
+    solution_endchars = (
+        (VillageIdiot, VillageIdiot, Imp, Investigator, Juggler, Imp, 
+            FortuneTeller),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
