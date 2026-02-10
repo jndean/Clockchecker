@@ -60,10 +60,6 @@ body {
     user-select: none;
 }
 
-.samples-tray.visible {
-    /*    display: flex;*/
-}
-
 .toggle-samples-tray-button {
     width: 40px;
     height: 120px;
@@ -1185,4 +1181,482 @@ body.resizing-h {
     width: 30px;
     background-color: #6b7280;
     border-radius: 1px;
+}
+
+/* ========== Puzzle Builder Styles ========== */
+
+/* Tab Bar */
+.input-tab-bar {
+    display: flex;
+    background-color: #2d3748;
+    border-bottom: 1px solid #4b5563;
+    flex-shrink: 0;
+}
+
+.input-tab {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+}
+
+.input-tab:hover {
+    color: #e5e7eb;
+    background-color: #374151;
+}
+
+.input-tab.active {
+    color: #10b981;
+    border-bottom-color: #10b981;
+    background-color: #1e1f20;
+}
+
+/* Tab Content */
+.input-tab-content {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.input-tab-content.active {
+    display: flex;
+}
+
+/* Text input container needs relative positioning for buttons */
+#textInputContainer {
+    position: relative;
+}
+
+/* Builder Styles */
+#builderInputContainer {
+    background-color: #1e1f20;
+    padding: 0.75rem;
+    overflow-y: auto;
+}
+
+.builder-section {
+    margin-bottom: 0.5rem;
+}
+
+.builder-setup-header {
+    margin-bottom: 0.5rem;
+}
+
+.builder-setup-header label {
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+.builder-setup-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.builder-text-input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    background-color: #374151;
+    border: 1px solid #4b5563;
+    border-radius: 0.375rem;
+    color: #e5e7eb;
+    font-size: 0.875rem;
+}
+
+.builder-text-input:focus {
+    outline: none;
+    border-color: #10b981;
+}
+
+.builder-start-btn {
+    padding: 0.5rem 1rem;
+    background-color: #10b981;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.builder-start-btn:hover {
+    background-color: #059669;
+}
+
+/* Players Container */
+.builder-players-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Player Row */
+.builder-player-row {
+    background-color: #2d3748;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.6rem;
+    border-left: 3px solid #4b5563;
+}
+
+.builder-player-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.builder-player-name {
+    font-weight: 600;
+    color: #e5e7eb;
+    min-width: 80px;
+}
+
+.builder-player-claim {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.builder-player-claim label {
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+/* Dropdowns */
+.builder-select {
+    padding: 0.375rem 0.5rem;
+    background-color: #374151;
+    border: 1px solid #4b5563;
+    border-radius: 0.25rem;
+    color: #e5e7eb;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.builder-select:focus {
+    outline: none;
+    border-color: #10b981;
+}
+
+.builder-select option {
+    background-color: #374151;
+}
+
+/* Character colors in selects */
+.builder-select.townsfolk-character {
+    color: #7fa5f3;
+}
+
+.builder-select.outsider-character {
+    color: #77aaff;
+}
+
+.builder-select.evil-character {
+    color: #db6c4f;
+}
+
+/* Info Sections */
+.builder-info-section {
+    margin-top: 0.25rem;
+    margin-left: 0.75rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid #4b5563;
+}
+
+.builder-info-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.builder-info-title {
+    color: #9ca3af;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.builder-add-btn {
+    padding: 0.2rem 0.5rem;
+    background-color: #065f46;
+    color: #a7f3d0;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.builder-add-btn:hover {
+    background-color: #047857;
+}
+
+/* Info Items */
+.builder-info-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.builder-info-items>.builder-add-btn {
+    align-self: flex-start;
+}
+
+.builder-info-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #1e1f20;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.builder-info-item .builder-day-num {
+    background-color: #4b5563;
+    color: #e5e7eb;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    min-width: 50px;
+    text-align: center;
+}
+
+.builder-info-item .builder-field-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.builder-info-item label {
+    color: #6b7280;
+    font-size: 0.7rem;
+}
+
+.builder-remove-btn {
+    padding: 0.15rem 0.4rem;
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.builder-remove-btn:hover {
+    background-color: #991b1b;
+}
+
+/* Global Settings Section */
+.builder-globals {
+    background-color: #2d3748;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.builder-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #e5e7eb;
+    font-size: 0.875rem;
+    cursor: pointer;
+    margin: 0;
+    margin-bottom: 0.5rem;
+}
+
+.builder-section-title .collapse-icon {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+.builder-section-title.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.builder-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.builder-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Inline Add Button in Fields */
+.builder-field-inline {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.builder-field-inline>label {
+    color: #9ca3af;
+    font-size: 0.75rem;
+    min-width: 100px;
+    padding-top: 0.25rem;
+}
+
+.builder-field-inline .builder-multi-select {
+    flex: 1;
+}
+
+.builder-multi-select .builder-add-btn {
+    flex-shrink: 0;
+}
+
+.builder-field>label {
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+.builder-multi-select {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.builder-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: #4b5563;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.builder-tag.evil {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+}
+
+.builder-tag.good {
+    background-color: #065f46;
+    color: #a7f3d0;
+}
+
+.builder-tag .remove-tag {
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.builder-tag .remove-tag:hover {
+    opacity: 1;
+}
+
+.builder-checkbox-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.builder-checkbox-field input[type="checkbox"] {
+    accent-color: #10b981;
+}
+
+.builder-checkbox-field label {
+    color: #e5e7eb;
+}
+
+/* Events Container */
+.builder-events-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.builder-events-container>.builder-add-btn {
+    align-self: flex-start;
+}
+
+.builder-event-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #1e1f20;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.builder-event-row .builder-day-num {
+    background-color: #4b5563;
+    color: #e5e7eb;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Event fields - inline flow */
+.builder-event-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.builder-event-fields .builder-field-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.builder-event-fields label {
+    color: #6b7280;
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+/* Builder Actions */
+.builder-actions {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #4b5563;
+}
+
+.builder-generate-btn {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.builder-generate-btn:hover {
+    background-color: #2563eb;
+}
+
+/* Small number input */
+.builder-number-input {
+    width: 50px;
+    padding: 0.25rem 0.5rem;
+    background-color: #374151;
+    border: 1px solid #4b5563;
+    border-radius: 0.25rem;
+    color: #e5e7eb;
+    font-size: 0.8rem;
+    text-align: center;
 }
