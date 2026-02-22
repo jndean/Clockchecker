@@ -3438,44 +3438,50 @@ def puzzle_josef_yes_but_dont():
 
 def puzzle_josef_lunatic():
     # Test puzzle, have you really been Fang Gu jumped or is that
-    # your Lunacy talking?
-    You, B, C, D, E, F = range(6)
+    #  your Lunacy talking?
+    You, Tom, Nicola, Tristan, Katharine, Lloyd, Ian, Charlie = range(8)
     puzzle = Puzzle(
         players=[
             Player('You', claim=Imp, night_info={
-                 3: CharacterChange(FangGu),
+                3: CharacterChange(FangGu),
             }),
-            Player('B', claim=Empath, night_info={
-                1: Empath.Ping(1),
+            Player('Tom', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Lloyd, Dreamer),
             }),
-            Player('C', claim=Soldier),
-            Player('D', claim=FortuneTeller, night_info={
-                1: FortuneTeller.Ping(You, B, demon=True),
-                2: FortuneTeller.Ping(C, D, demon=False),
-                3: FortuneTeller.Ping(E, F, demon=False),
+            Player('Nicola', claim=Soldier),
+            Player('Tristan', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Tom, demon=True),
+                2: FortuneTeller.Ping(Lloyd, Charlie, demon=True),
+                3: FortuneTeller.Ping(You, Ian, demon=True),
             }),
-            Player('E', claim=Klutz, day_info={
-                2: Klutz.Choice(F),
+            Player('Katharine', claim=Golem, night_info={
+                2: NightWatchman.Ping(Charlie),
             }),
-            Player('F', claim=Dreamer, night_info={
-                1: Dreamer.Ping(B, Klutz, FangGu),
-                2: Dreamer.Ping(E, Klutz, FangGu),
-                3: Dreamer.Ping(D, FortuneTeller, Imp),
+            Player('Lloyd', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Katharine, Golem, FangGu),
+            }),
+            Player('Ian', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Tristan, Katharine, same=True),
+            }),
+            Player('Charlie', claim=NightWatchman, night_info={
+                2: NightWatchman.Choice(Katharine),
             }),
         ],
         day_events={
-            2: Execution(C),
+            1: [
+                Dies(player=Ian, after_nominated_by=Katharine),
+                Execution(Lloyd),
+            ],
+            2: Execution(Nicola),
         },
-        night_deaths={2: E, 3: B},
+        night_deaths={2: Katharine, 3: Tom},
         hidden_characters=[FangGu, Imp, Boffin, Spy, Lunatic],
         hidden_self=[Lunatic],
     )
-    solutions = (
-        (Lunatic, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
-    )
-    solutions_endchars = (
-        (FangGu, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
-    )
+    solutions = ((Lunatic, FangGu, Boffin, FortuneTeller, Golem, Dreamer,
+                   Seamstress, NightWatchman),)
+    solutions_endchars = ((FangGu, FangGu, Boffin, FortuneTeller, Golem, 
+                            Dreamer, Seamstress, NightWatchman),)
     return PuzzleDef(puzzle, solutions, solutions_endchars)
 
 def puzzle_nikhilvyas27():
