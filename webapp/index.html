@@ -1324,6 +1324,17 @@
             return html;
         }
 
+        function getDefaultNight(claimName) {
+            // EACH_NIGHT_STAR characters wake each night except the first
+            if (GuiSchema.eachNightStarCharacters.includes(claimName)) return 2;
+            return 1;
+        }
+
+        function getDefaultDay(claimName, infoType) {
+            // Juggler does their juggle on day 1
+            return 1;
+        }
+
         function autoPopulateInfoForClaim(playerIdx, claimName) {
             if (!claimName) return;
             const player = builderState.players[playerIdx];
@@ -1341,7 +1352,9 @@
                     const defaultType = ping ? ping.key : matching[0].key;
                     const newItem = { id: Date.now(), type: defaultType, fields: {} };
                     initializeFieldDefaults(newItem, defaultType, 'night');
-                    player.nightInfo[1] = [newItem];
+                    // Juggler.Ping arrives on night 2
+                    const defaultNight = (claimName === 'Juggler' && defaultType === 'Juggler.Ping') ? 2 : getDefaultNight(claimName);
+                    player.nightInfo[defaultNight] = [newItem];
                     renderInfoItems(playerIdx, 'night');
                 }
             }
@@ -1355,7 +1368,8 @@
                     const defaultType = ping ? ping.key : matching[0].key;
                     const newItem = { id: Date.now() + 1, type: defaultType, fields: {} };
                     initializeFieldDefaults(newItem, defaultType, 'day');
-                    player.dayInfo[1] = [newItem];
+                    const defaultDay = getDefaultDay(claimName, defaultType);
+                    player.dayInfo[defaultDay] = [newItem];
                     renderInfoItems(playerIdx, 'day');
                 }
             }
@@ -1428,9 +1442,12 @@
                 items.forEach((item, itemIdx) => {
                     const itemEl = document.createElement('div');
                     itemEl.className = 'builder-info-item';
+                    const dayOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                        .map(n => `<option value="${n}"${n == day ? ' selected' : ''}>${n}</option>`).join('');
                     itemEl.innerHTML = `
-                        <input type="number" class="builder-number-input builder-day-input" 
-                            value="${day}" min="1" max="99" data-item-id="${item.id}">
+                        <select class="builder-select builder-day-input" data-item-id="${item.id}">
+                            ${dayOptions}
+                        </select>
                         <select class="builder-select builder-info-type-select" data-item-id="${item.id}">
                             <option value="">-- Info Type --</option>
                             ${types.map(t => `<option value="${t.key}">${t.key}</option>`).join('')}
@@ -1458,7 +1475,7 @@
                     });
 
                     // Handle day change
-                    itemEl.querySelector('.builder-day-input').addEventListener('change', (e) => {
+                    itemEl.querySelector('.builder-day-input').addEventListener('change', function (e) {
                         const oldDay = day;
                         const newDay = e.target.value;
                         if (oldDay !== newDay) {
@@ -1524,6 +1541,9 @@
                     case 'number':
                         item.fields[field.name] = String(field.min || 0);
                         break;
+                    case 'juggleMap':
+                        item.fields[field.name] = [];
+                        break;
                     case 'bool': {
                         const val = Math.random() < 0.5 ? 'True' : 'False';
                         item.fields[field.name] = val;
@@ -1567,13 +1587,18 @@
                             input.innerHTML = `<option value="">--</option>${renderCharacterOptions()}`;
                         }
                         break;
-                    case 'number':
-                        input = document.createElement('input');
-                        input.type = 'number';
-                        input.className = 'builder-number-input';
-                        input.min = field.min || 0;
-                        input.max = field.max || 99;
+                    case 'number': {
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        const min = field.min || 0;
+                        const max = field.max || 10;
+                        let numOpts = '';
+                        for (let n = min; n <= max; n++) {
+                            numOpts += `<option value="${n}">${n}</option>`;
+                        }
+                        input.innerHTML = numOpts;
                         break;
+                    }
                     case 'category':
                         input = document.createElement('select');
                         input.className = 'builder-select';
@@ -1587,6 +1612,75 @@
                         input.className = 'builder-select';
                         input.innerHTML = '<option value="True">True</option><option value="False">False</option>';
                         break;
+                    case 'juggleMap': {
+                        // Render a juggle map container with add button
+                        const juggleContainer = document.createElement('div');
+                        juggleContainer.className = 'builder-juggle-map';
+                        juggleContainer.dataset.fieldName = field.name;
+                        const maxItems = field.maxItems || 5;
+
+                        // Ensure state array exists
+                        if (!Array.isArray(fieldValues[field.name])) {
+                            fieldValues[field.name] = [];
+                        }
+                        const juggleState = fieldValues[field.name];
+
+                        function renderJuggleEntries() {
+                            juggleContainer.innerHTML = '';
+                            juggleState.forEach((entry, i) => {
+                                const row = document.createElement('div');
+                                row.className = 'builder-juggle-entry';
+                                row.innerHTML = `
+                                    <select class="builder-select juggle-player">
+                                        <option value="">-- Player --</option>
+                                        ${renderPlayerOptions()}
+                                    </select>
+                                    <span>→</span>
+                                    <select class="builder-select juggle-character">
+                                        <option value="">-- Character --</option>
+                                        ${renderCharacterOptions()}
+                                    </select>
+                                    <button class="builder-remove-btn">✕</button>
+                                `;
+                                juggleContainer.appendChild(row);
+                                const playerSel = row.querySelector('.juggle-player');
+                                const charSel = row.querySelector('.juggle-character');
+                                if (entry.player) playerSel.value = entry.player;
+                                if (entry.character) {
+                                    charSel.value = entry.character;
+                                    updateClaimSelectColor(charSel);
+                                }
+                                playerSel.addEventListener('change', (e) => { entry.player = e.target.value; });
+                                charSel.addEventListener('change', (e) => {
+                                    entry.character = e.target.value;
+                                    updateClaimSelectColor(charSel);
+                                });
+                                row.querySelector('.builder-remove-btn').addEventListener('click', () => {
+                                    juggleState.splice(i, 1);
+                                    renderJuggleEntries();
+                                });
+                            });
+                            // Add button (if under max)
+                            if (juggleState.length < maxItems) {
+                                const addBtn = document.createElement('button');
+                                addBtn.className = 'builder-add-btn';
+                                addBtn.textContent = '+ Add Juggle';
+                                addBtn.addEventListener('click', () => {
+                                    juggleState.push({ player: '', character: '' });
+                                    renderJuggleEntries();
+                                });
+                                juggleContainer.appendChild(addBtn);
+                            }
+                        }
+                        renderJuggleEntries();
+
+                        const juggleLabel = document.createElement('label');
+                        juggleLabel.textContent = field.label + ':';
+                        wrapper.appendChild(juggleLabel);
+                        wrapper.appendChild(juggleContainer);
+                        container.appendChild(wrapper);
+                        return; // Skip the generic input handling below
+                    }
                     default:
                         input = document.createElement('input');
                         input.type = 'text';
@@ -1697,8 +1791,12 @@
             const row = document.createElement('div');
             row.className = 'builder-event-row';
             row.dataset.eventId = eventId;
+            const dayEvtOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                .map(n => `<option value="${n}"${n === nextDay ? ' selected' : ''}>${n}</option>`).join('');
             row.innerHTML = `
-                <input type="number" class="builder-number-input builder-day-input" value="${nextDay}" min="1" max="99">
+                <select class="builder-select builder-day-input">
+                    ${dayEvtOptions}
+                </select>
                 <select class="builder-select builder-event-type-select">
                     <option value="">-- Event --</option>
                     ${Object.keys(GuiSchema.dayEvents).map(e => `<option value="${e}">${e}</option>`).join('')}
@@ -1716,6 +1814,8 @@
             typeSelect.value = defaultEventType;
             renderEventFields(row.querySelector('.builder-event-fields'), defaultEventType, newEvent.fields);
 
+            let currentDay = String(nextDay);
+
             typeSelect.addEventListener('change', (e) => {
                 const event = findEventById(eventId);
                 if (event) {
@@ -1725,6 +1825,28 @@
                         initializeEventDefaults(event);
                     }
                     renderEventFields(row.querySelector('.builder-event-fields'), e.target.value, event.fields);
+                }
+            });
+
+            // Handle day number change
+            row.querySelector('.builder-day-input').addEventListener('change', (e) => {
+                const oldDay = currentDay;
+                const newDay = e.target.value;
+                if (oldDay !== newDay) {
+                    // Remove from old day
+                    if (builderState.dayEvents[oldDay]) {
+                        const idx = builderState.dayEvents[oldDay].findIndex(ev => ev.id === eventId);
+                        if (idx > -1) builderState.dayEvents[oldDay].splice(idx, 1);
+                        if (builderState.dayEvents[oldDay].length === 0) {
+                            delete builderState.dayEvents[oldDay];
+                        }
+                    }
+                    // Add to new day
+                    if (!builderState.dayEvents[newDay]) {
+                        builderState.dayEvents[newDay] = [];
+                    }
+                    builderState.dayEvents[newDay].push(newEvent);
+                    currentDay = newDay;
                 }
             });
 
@@ -1861,9 +1983,13 @@
             row.className = 'builder-event-row';
             row.dataset.deathId = deathId;
             let currentNight = String(nextNight);
+            const nightDeathOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                .map(n => `<option value="${n}"${n === nextNight ? ' selected' : ''}>${n}</option>`).join('');
             row.innerHTML = `
                 <span class="builder-day-num">Night</span>
-                <input type="number" class="builder-number-input" value="${nextNight}" min="1" max="99">
+                <select class="builder-select builder-night-input">
+                    ${nightDeathOptions}
+                </select>
                 <span>:</span>
                 <select class="builder-select">
                     <option value="">-- Player --</option>
@@ -1876,15 +2002,15 @@
             const addBtn = container.querySelector('.builder-add-btn');
             container.insertBefore(row, addBtn);
 
-            // Auto-open the player dropdown
-            const playerSelect = row.querySelector('select');
+            // Auto-open the player dropdown (second select after night input)
+            const playerDropdown = row.querySelectorAll('select')[1];
             requestAnimationFrame(() => {
-                playerSelect.focus();
-                playerSelect.dispatchEvent(new MouseEvent('mousedown'));
+                playerDropdown.focus();
+                playerDropdown.dispatchEvent(new MouseEvent('mousedown'));
             });
 
             // Handle night number change
-            row.querySelector('input[type="number"]').addEventListener('change', (e) => {
+            row.querySelector('.builder-night-input').addEventListener('change', (e) => {
                 const oldNight = currentNight;
                 const newNight = e.target.value;
                 if (oldNight !== newNight) {
@@ -1905,7 +2031,8 @@
                 }
             });
 
-            row.querySelector('select').addEventListener('change', (e) => {
+            // Handle player select change (second <select> in the row, after night input)
+            playerDropdown.addEventListener('change', (e) => {
                 deathObj.player = e.target.value;
             });
 
@@ -2061,6 +2188,28 @@
             // Switch to text tab
             document.getElementById('textTabBtn').click();
         }
+
+        // Auto-generate code periodically when builder is active and complete
+        let autoGenInterval = null;
+        function startAutoGen() {
+            if (autoGenInterval) return;
+            autoGenInterval = setInterval(() => {
+                // Only auto-gen if builder tab is active and players exist
+                const builderTab = document.getElementById('builderTabBtn');
+                if (!builderTab.classList.contains('active')) return;
+                if (!builderState.players || builderState.players.length === 0) return;
+
+                // Only generate if there are no incomplete fields
+                const issues = findIncompleteFields();
+                if (issues.length > 0) return;
+
+                const code = generatePuzzleCode();
+                if (codeMirrorEditor && codeMirrorEditor.getValue() !== code) {
+                    codeMirrorEditor.setValue(code);
+                }
+            }, 2000);
+        }
+        startAutoGen();
 
         function generatePuzzleCode() {
             const lines = [];
@@ -2218,6 +2367,19 @@
             // Build argument list, filtering optional/default fields
             const args = [];
             typeDef.fields.forEach(field => {
+                // Special handling for juggleMap type
+                if (field.type === 'juggleMap') {
+                    const entries = fieldValues[field.name] || [];
+                    const validEntries = entries.filter(e => e.player && e.character);
+                    if (validEntries.length > 0) {
+                        const mapStr = validEntries.map(e => `${e.player}: ${e.character}`).join(', ');
+                        args.push(`{${mapStr}}`);
+                    } else {
+                        args.push('{}');
+                    }
+                    return;
+                }
+
                 const value = fieldValues[field.name] || '';
                 const isOptional = field.optional || field.default !== undefined;
 

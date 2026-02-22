@@ -1649,7 +1649,7 @@ body.resizing-h {
     background-color: #2563eb;
 }
 
-/* Small number input */
+/* Small number input (legacy, kept for compat) */
 .builder-number-input {
     width: 50px;
     padding: 0.25rem 0.5rem;
@@ -1659,4 +1659,33 @@ body.resizing-h {
     color: #e5e7eb;
     font-size: 0.8rem;
     text-align: center;
+}
+
+/* Juggle Map */
+.builder-juggle-map {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+}
+
+.builder-juggle-entry {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background-color: #2d3748;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.builder-juggle-entry span {
+    color: #9ca3af;
+    font-size: 0.85rem;
+}
+
+/* Day/night select in info items - compact width */
+.builder-info-item .builder-day-input,
+.builder-event-row .builder-day-input,
+.builder-event-row .builder-night-input {
+    width: 55px;
 }

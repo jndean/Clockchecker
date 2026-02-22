@@ -3323,6 +3323,66 @@ def puzzle_NQT66():
     )
     return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
+
+def puzzle_NQT67():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ratkwi/weekly_puzzle_67_minus_one_thats_three_times_two/
+
+    You, Adam, Sarah, Oscar, Fraser, Hannah, Matthew, Tim, Jasmine = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Juggler, night_info={
+                2: Juggler.Ping(2),
+            }, day_info={
+                1: Juggler.Juggle({Sarah: Politician, Oscar: Politician, Fraser: Xaan, Tim: Puzzlemaster}),
+            }),
+            Player('Adam', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Tim, Sarah, same=True),
+            }),
+            Player('Sarah', claim=Noble, night_info={
+                1: Noble.Ping(Adam, You, Jasmine),
+            }),
+            Player('Oscar', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False),
+            }),
+            Player('Fraser', claim=Seamstress, night_info={
+                1: Seamstress.Ping(You, Hannah, same=True),
+            }),
+            Player('Hannah', claim=Politician),
+            Player('Matthew', claim=NightWatchman, night_info={
+                3: NightWatchman.Choice(Oscar),
+            }),
+            Player('Tim', claim=Puzzlemaster, day_info={
+                2: Puzzlemaster.Ping(guess=Sarah, demon=Matthew),
+            }),
+            Player('Jasmine', claim=Dreamer, night_info={
+                1: Dreamer.Ping(You, Juggler, Xaan),
+                2: Dreamer.Ping(Oscar, Shugenja, Spy),
+                3: Dreamer.Ping(Hannah, Politician, Xaan),
+            }),
+        ],
+        day_events={
+            1: Execution(Adam),
+            2: Execution(Tim),
+            3: [
+                Dies(player=Fraser, after_nominating=False, after_nominated_by=Oscar),
+                Dies(player=Oscar, after_nominating=False, after_nominated_by=Fraser),
+                Dies(player=Jasmine, after_nominating=False, after_nominated_by=Oscar),
+                Dies(player=You, after_nominating=False, after_nominated_by=Jasmine),
+            ],
+        },
+        hidden_characters=[Riot, Spy, Xaan, Politician],
+        hidden_self=[],
+    )
+    solutions = (
+        (Juggler, Seamstress, Spy, Shugenja, Riot, Politician, NightWatchman,
+            Puzzlemaster, Dreamer),
+    )
+    solution_endchars = (
+        (Juggler, Seamstress, Riot, Shugenja, Riot, Politician, NightWatchman,
+            Puzzlemaster, Dreamer),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)

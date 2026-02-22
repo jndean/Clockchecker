@@ -89,6 +89,9 @@ def render_puzzle(puzzle_or_state: Puzzle | State) -> str:
                 if isinstance(ev, events.Execution) and ev.died:
                     if ev.player not in player_deaths:
                         player_deaths[ev.player] = {"text": f"Executed D{n}", "type": "execution"}
+                elif isinstance(ev, events.Dies):
+                    if ev.player not in player_deaths:
+                        player_deaths[ev.player] = {"text": f"Died D{n}", "type": "execution"}
                 elif hasattr(ev, 'died') and ev.died and hasattr(ev, 'player'):
                     if ev.player not in player_deaths:
                         player_deaths[ev.player] = {"text": f"Died D{n}", "type": "nature"}

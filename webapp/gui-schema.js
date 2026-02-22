@@ -288,7 +288,7 @@ const GuiSchema = {
                 template: 'Savant.Ping(\n    {statement1},\n    {statement2}\n)'
             },
             'Juggler.Juggle': {
-                fields: [{ name: 'juggle', type: 'juggle', label: 'Juggles' }],
+                fields: [{ name: 'juggle', type: 'juggleMap', label: 'Juggles', maxItems: 5 }],
                 template: 'Juggler.Juggle({juggle})'
             },
             'Flowergirl.Voters': {
@@ -423,6 +423,11 @@ const GuiSchema = {
             template: 'ExactlyN(N={N}, args=[{args}])'
         }
     },
+
+    // Characters with EACH_NIGHT_STAR wake pattern (wake each night except the first)
+    eachNightStarCharacters: [
+        'Acrobat', 'Exorcist', 'Flowergirl', 'Gambler', 'Monk', 'Oracle', 'Undertaker'
+    ],
 
     // Helper to get character color class
     getCharacterColorClass(char) {
