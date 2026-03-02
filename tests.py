@@ -3076,6 +3076,116 @@ class TestDevilsAdvocate(unittest.TestCase):
         assert_solutions(self, puzzle, solutions=())
 
 
+class TestTeaLady(unittest.TestCase):
+    def test_tealady_protects_good(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TeaLady)
+                        & IsCharacter(C, Saint)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TeaLady),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            day_events={2: Execution(You, died=False)},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TeaLady, Saint, Imp),
+        ))
+
+    def test_tealady_maybe_protect_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TeaLady)
+                        & IsCharacter(C, Recluse)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TeaLady),
+                Player('C', claim=Recluse),
+                Player('D', claim=Saint),
+            ],
+            day_events={2: Execution(You, died=True)},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TeaLady, Recluse, Imp),
+        ))
+
+    def test_poisoned_tealady(self):
+        You, B, C, D, E = range(5)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    2: Artist.Ping(
+                        IsCharacter(B, TeaLady)
+                        & IsCharacter(C, Virgin)
+                        & IsCharacter(D, Imp)
+                        & IsCharacter(E, Poisoner)
+                    ),
+                }),
+                Player('B', claim=TeaLady),
+                Player('C', claim=Virgin),
+                Player('D', claim=Saint),
+                Player('E', claim=Recluse),
+            ],
+            day_events={},
+            night_deaths={2: C},
+            hidden_characters=[Imp, Poisoner],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(3, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TeaLady, Virgin, Imp, Poisoner),
+        ))
+
+    def test_philo_tealady(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Philosopher)
+                        & IsCharacter(C, Virgin)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=Philosopher, night_info={
+                    1: Philosopher.Choice(TeaLady),
+                }),
+                Player('C', claim=Virgin),
+                Player('D', claim=Philosopher),
+            ],
+            day_events={1: Execution(You, died=False)},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            also_on_script=[TeaLady],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Philosopher, Virgin, Imp),
+        ))
+
+
 # Test:
 # Test Evil Courtier
 # Test SnakeCharmer. Also, test demon claims to have been charmed.

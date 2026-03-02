@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from abc import ABC
@@ -27,7 +26,7 @@ Implementing a Character Checklist:
  - For more complex characters or characters who have to make choices that are
    not evidenced by a Ping, override the relevant character methods such as
    [modify_category_counts, run_night/day/setup, killed, executed, etc.].
- - For characetrs that do things publicly in the day, consider implementing an
+ - For characters that do things publicly in the day, consider implementing an
    Event instead of a Ping.
  - When overriding the default methods for complex characters, remember to
    consider the desired behaviour of the new character if they are:
@@ -37,7 +36,8 @@ Implementing a Character Checklist:
     - not the character who gets their claimed ping (Some TODO!)
     - spent
     - vortoxed
-    - vigormortised, exorcised
+    - vigormortised
+    - exorcised
  - Remember to set or call the following as appropriately
     - set `character.spent`
     - call `player.woke()` for Chambermaid if character uses using WakePattern.MANUAL
@@ -274,13 +274,16 @@ class Character:
         calling method, because e.g. the Goon will create a state where the
         attacker has become drunk.
         """
-        if state.players[me].is_dead:
+        player = state.players[me]
+        if player.is_dead:
             if state.puzzle.allow_killing_dead_players:
                 yield state
-        elif self.safe_from_attacker(state, me, src):
+            return
+        safe = player.safe_from_attacker(state, src)
+        if safe.not_false():
             state.math_misregistration(src)
-            yield state
-        else:
+            yield state.fork() if safe.is_maybe() else state
+        if safe.not_true():
             self.death_explanation = f'killed by {state.players[src].name}'
             yield from self.apply_death(state, me, src)
 
@@ -289,11 +292,12 @@ class Character:
         player = state.players[me]
         if player.is_dead:  # and not died: ?
             yield state
-        if died:
+        cant_die = player.cant_die(state)
+        if died and cant_die.not_true():
             self.death_explanation = 'executed'
             yield from self.killed(state, me, src=None)
-        elif (
-            self.cant_die(state, me)
+        elif not died and (
+            cant_die.not_false()
             or getattr(player, 'safe_from_execution', False)
         ):
             yield state
@@ -305,37 +309,18 @@ class Character:
         src: PlayerID | None,
     ) -> StateGen:
         """Check the death is logically valid, then apply it."""
-        if not self.cant_die(state, me) and not state.players[me].is_dead:
+        player = state.players[me]
+        if player.cant_die(state).not_true() and not player.is_dead:
             yield from self.apply_death(state, me, src)
 
-    def safe_from_attacker(
-        self,
-        state: State,
-        me: PlayerID,
-        attacker: PlayerID
-    ) -> bool:
+    def char_cant_die(self, state: State, me: PlayerID) -> STBool:
         """
-        Queried when player is attacked. Exists separately from the
-        `attacked_at_night` method because things like FangGu need to be able to
-        check "would they die" without effecting the death.
+        TODO: Sailor or Lleech should extend this method, though they
+        could also consider just adding to the existing protection_map
+        on the Player? Things like Soldier and Monk live in
+        `safe_from_attacker`.
         """
-        return (
-            self.cant_die(state, me)
-            or (
-                isinstance(state.players[attacker].character, Demon)
-                and (
-                    getattr(state.players[me], 'safe_from_demon_count', 0)
-                    or getattr(state, 'active_princesses', 0)
-                )
-            )
-        )
-
-    def cant_die(self, state: State, me: PlayerID) -> bool:
-        """
-        TODO: Innkeeper should be checked here. Sailor or Lleech should extend
-        this method. Things like Soldier and Monk live in `safe_from_attacker`.
-        """
-        return hasattr(state, 'pithag_preventing_kills')
+        return info.STBool.FALSE
 
     def is_droisoned(self, state: State, me: PlayerID) -> bool:
         """
@@ -1472,7 +1457,7 @@ class GenericDemon(Demon):
             for player in state.players:
                 if player.is_dead:
                     dead_target = player.id
-                elif player.character.safe_from_attacker(state, player.id, me):
+                elif player.safe_from_attacker(state, me).not_false():
                     safe_target = player.id
             if dead_target is not None:
                 targets.add(dead_target)
@@ -1536,49 +1521,44 @@ class FangGu(GenericDemon):
                 droison_state = state.fork()
                 droison_state.math_misregistration(me)
                 yield droison_state
-                continue
+                break  # TODO: Pick Goon
 
             is_outsider = info.IsCategory(target, Outsider)(state, me)
 
-            already_jumped = getattr(state, 'fanggu_already_jumped', False)
-            wouldnt_jump = already_jumped or (is_outsider.not_true())
-            fails_jump = (
-                fanggu.character.safe_from_attacker(state, me, me)  # Wouldn't catch Boffin Soldier...
-                or target_player.character.safe_from_attacker(state, target, me)
+            tries_jump = is_outsider & info.STBool(
+                not getattr(state, 'fanggu_already_jumped', False)
             )
+            jump_thwarted = (
+                fanggu.safe_from_attacker(state, me)
+                | target_player.safe_from_attacker(state, me)
+            )
+            jumps = tries_jump & ~jump_thwarted
+
             # 3. The normal kill world. This includes the case where they can't
             # jump due to other player's abilities.
-            if wouldnt_jump or fails_jump:
+            if jumps.not_true():
                 kill_state = state.fork()
                 if (
-                    (fails_jump and not wouldnt_jump)
-                    or (
-                        is_outsider.is_maybe()
-                        and isinstance(target_player.character, Outsider)
-                    )
+                    isinstance(target_player.character, Outsider)
+                    and tries_jump.not_false()
                 ):
                     kill_state.math_misregistration(me)
                 kill_target = kill_state.players[target].character
                 kill_state.log(f'FangGu attacks {state.players[target].name}')
                 yield from kill_target.attacked_at_night(kill_state, target, me)
-                # Let MAYBE through to also create a jump world
-                if already_jumped or fails_jump or is_outsider.is_false():
-                    continue
 
             # 4. The world where the Fang Gu jumps.
-            jump_state = state.fork()
-            jump_state.fanggu_already_jumped = True
-            jump_state.log(f'FangGu jumps to {state.players[target].name}')
-            if (
-                is_outsider.is_maybe()
-                and not isinstance(target_player.character, Outsider)
-            ):
-                jump_state.math_misregistration(me)
-            for ss in jump_state.change_character(target, FangGu):
-                for jump_substate in ss.change_alignment(target, is_evil=True):
-                    new_me = jump_substate.players[me].get_ability(FangGu)
-                    new_me.death_explanation = f'Jumped N{jump_substate.night}'
-                    yield from new_me.apply_death(jump_substate, me, src=me)
+            if jumps.not_false():
+                jump_state = state.fork()
+                jump_state.fanggu_already_jumped = True
+                jump_state.log(f'FangGu jumps to {target_player.name}')
+                if not isinstance(target_player.character, Outsider):
+                    jump_state.math_misregistration(me)
+                for ss_ in jump_state.change_character(target, FangGu):
+                    for ss in ss_.change_alignment(target, is_evil=True):
+                        new_me = ss.players[me].get_ability(FangGu)
+                        new_me.death_explanation = f'Jumped N{state.night}'
+                        yield from new_me.apply_death(ss, me, src=me)
 
 @dataclass
 class Flowergirl(Townsfolk):
@@ -1956,8 +1936,11 @@ class Hermit(Outsider):
         method = getattr(self.active_abilities[method_idx], 'killed')
         return method(state, *args, **kwargs)
 
-    def cant_die(self, state: State, me: PlayerID) -> bool:
-        return any(x.cant_die(state, me) for x in self.active_abilities)
+    def char_cant_die(self, state: State, me: PlayerID) -> STBool:
+        result = info.STBool.FALSE
+        for ability in self.active_abilities:
+            result |= ability.char_cant_die(state, me)
+        return result
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         return any(x.wakes_tonight(state, me) for x in self.active_abilities)
@@ -2008,15 +1991,16 @@ class Imp(GenericDemon):
             yield from target_char.attacked_at_night(new_state, target, me)
 
         # Star pass
-        if (
-            self.is_droisoned(state, me)
-            or self.cant_die(state, me)
-            or getattr(imp, 'safe_from_demon_count', 0)
-        ):
+        safe = imp.safe_from_attacker(state, me)
+        droisoned = self.is_droisoned(state, me)
+        cant_starpass = droisoned or safe.is_true()
+        maybe_starpass = not droisoned and safe.is_maybe()
+        if cant_starpass or maybe_starpass:
             failed_starpass_state = state.fork()
             failed_starpass_state.math_misregistration(me)
             yield failed_starpass_state
-            return
+            if cant_starpass:
+                return
         self.death_explanation = f'Starpassed N{state.night}'
         # Decide who catches the star pass. SW must catch if able.
 
@@ -2869,10 +2853,10 @@ class Philosopher(Townsfolk):
             return super().killed(*args, **kwargs)
         return self.active_ability.killed(*args, **kwargs)
 
-    def cant_die(self, state: State, me: PlayerID) -> bool:
+    def char_cant_die(self, state: State, me: PlayerID) -> bool:
         if self.active_ability is None:
-            return super().cant_die(state, me)
-        return self.active_ability.cant_die(state, me)
+            return super().char_cant_die(state, me)
+        return self.active_ability.char_cant_die(state, me)
 
     def wakes_tonight(self, state: State, me: PlayerID) -> bool:
         if self.active_ability is None:
@@ -4197,9 +4181,23 @@ class TeaLady(Townsfolk):
     wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
     neighbour1: PlayerID | None = None 
     neighbour2: PlayerID | None = None
+    is_protecting: STBool | None = None
 
     def run_setup(self, state: State, me: PlayerID) -> StateGen:
-        raise NotImplementedError('TeaLady WIP')
+        self.maybe_activate_effects(state, me)
+        yield state
+
+    def post_death_in_town(
+        self, state: State, me: PlayerID, died: PlayerID
+    ) -> StateGen:
+        self.maybe_deactivate_effects(state, me)
+        self.maybe_activate_effects(state, me)
+        yield state
+
+    def alignment_change_in_town(
+        self, state: State, me: PlayerID, changed: PlayerID,
+    ) -> StateGen:
+        self.maybe_deactivate_effects(state, me)
         self.maybe_activate_effects(state, me)
         yield state
 
@@ -4210,19 +4208,21 @@ class TeaLady(Townsfolk):
             me,
             clockwise,
         ) for clockwise in (True, False))
-        protected = (~info.IsEvil(left) & ~info.IsEvil(right))(state, me)
-        
-        # soldier = state.players[me]
-        # # Characetrs like monk might delete the attr if it hits 0, so recreate
-        # # it if neccessary.
-        # if hasattr(soldier, 'safe_from_demon_count'):
-        #     soldier.safe_from_demon_count += 1
-        # else:
-        #     soldier.safe_from_demon_count = 1
+        protection = (~info.IsEvil(left) & ~info.IsEvil(right))(state, me)
+        self.neighbour1, self.neighbour2 = left, right
+        for pid in (left, right):
+            protection_map = getattr(state.players[pid], 'protection_map', {})
+            assert me not in protection_map
+            protection_map[me] = protection
+            state.players[pid].protection_map = protection_map
 
     def _deactivate_effects_impl(self, state: State, me: PlayerID) -> None:
-        # state.players[me].safe_from_demon_count -= 1
-        pass
+        for pid in (self.neighbour1, self.neighbour2):
+            protection_map = state.players[pid].protection_map
+            assert me in protection_map
+            del protection_map[me]
+            if not protection_map:
+                del state.players[pid].protection_map
 
 @dataclass
 class Undertaker(Townsfolk):
@@ -4511,7 +4511,7 @@ class Witch(Minion):
         nominator = state.players[nomination.nominator]
         if self.target is not nominator.id:
             yield state
-        elif nominator.character.cant_die(state, nominator.id):
+        elif nominator.safe_from_attacker(state, me).not_false():
             state.math_misregistration(me)
             yield state
 
@@ -4811,6 +4811,7 @@ GLOBAL_SETUP_ORDER = [
     Progidy,
     Drunk,
     Soldier,
+    TeaLady,
     Xaan,
     EvilTwin,  # Must go after any alignment changes
     LordOfTyphon,  # Goes last to check evils created by setup are in a line
@@ -4902,5 +4903,6 @@ INACTIVE_CHARACTERS = [
     Soldier,
     Spy,
     Sweetheart,
+    TeaLady,
     Virgin,
 ]

@@ -2863,6 +2863,59 @@ def puzzle_NQT55():
     )
     return PuzzleDef(puzzle, solutions)
 
+
+def puzzle_NQT57():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1o7eafy/weekly_puzzle_57_neither_victims_nor_executioners
+
+    You, Matt, Steph, Dan, Sarah, Fraser, Adam, Aoife = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Noble, night_info={
+                1: Noble.Ping(Steph, Sarah, Aoife),
+            }),
+            Player('Matt', claim=TeaLady),
+            Player('Steph', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+                3: Oracle.Ping(1),
+                4: Oracle.Ping(1),
+            }),
+            Player('Dan', claim=Slayer, day_info={
+                2: Slayer.Shot(Adam, died=False),
+            }),
+            Player('Sarah', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Adam, You, same=True),
+            }),
+            Player('Fraser', claim=Artist, day_info={
+                4: Artist.Ping(~IsCategory(Matt, Demon)),
+            }),
+            Player('Adam', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Aoife', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Fraser, Artist),
+            }),
+        ],
+        day_events={
+            1: Execution(You, died=False),
+            2: Execution(Dan),
+            3: Execution(You, died=False),
+        },
+        night_deaths={
+            2: Aoife,
+            3: Sarah,
+            4: You,
+        },
+        hidden_characters=[Vigormortis, Poisoner, DevilsAdvocate],
+        hidden_self=[],
+    )
+    solutions = (
+        (Noble, TeaLady, Oracle, Slayer, Seamstress, Vigormortis,
+          Chef, Poisoner),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+
+
 def puzzle_NQT58():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ocd6pd/weekly_puzzle_58_minus_one_thats_three/
 
