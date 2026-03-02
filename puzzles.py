@@ -3315,6 +3315,127 @@ def puzzle_NQT65():
     )
     return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
+def puzzle_NQT66():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1qvsfho/weekly_puzzle_66_the_useful_idiot/
+
+    You, Aoife, Matt, Fraser, Olivia, Tim, Sarah  = range(7)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Tim, is_evil=True),
+                2: VillageIdiot.Ping(Olivia, is_evil=False),
+            }),
+            Player('Aoife', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Matt, is_evil=True),
+                2: VillageIdiot.Ping(Olivia, is_evil=True),
+                3: VillageIdiot.Ping(You, is_evil=False),
+            }),
+            Player('Matt', claim=VillageIdiot, night_info={
+                2: VillageIdiot.Ping(Olivia, is_evil=True),
+                1: VillageIdiot.Ping(Aoife, is_evil=False),
+                3: VillageIdiot.Ping(Fraser, is_evil=True),
+            }),
+            Player('Fraser', claim=Investigator, night_info={
+                1: Investigator.Ping(Matt, Tim, Poisoner)
+            }),
+            Player('Olivia', claim=Juggler,
+                day_info={
+                    1: Juggler.Juggle({
+                        Aoife: Imp,
+                        Matt: Imp,
+                        Sarah: Imp,
+                    })
+                },
+                night_info={2: Juggler.Ping(0)}
+            ),
+            Player('Tim', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Matt, VillageIdiot)
+            }),
+            Player('Sarah', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Matt, Tim, demon=False),
+                2: FortuneTeller.Ping(Olivia, Sarah, demon=False),
+                3: FortuneTeller.Ping(Aoife, Sarah, demon=True),
+            }), 
+        ],
+        day_events={
+            1: Execution(Fraser),
+            2: Execution(You),
+        },
+        night_deaths={2: Tim, 3: Olivia},
+        hidden_characters=[Imp, Poisoner],
+        hidden_self=[],
+        allow_duplicate_tokens_in_bag=True,
+    )
+    solutions = (
+        (VillageIdiot, VillageIdiot, Poisoner, Investigator, Juggler, Imp, 
+            FortuneTeller),
+    )
+    solution_endchars = (
+        (VillageIdiot, VillageIdiot, Imp, Investigator, Juggler, Imp, 
+            FortuneTeller),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
+
+
+def puzzle_NQT67():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ratkwi/weekly_puzzle_67_minus_one_thats_three_times_two/
+
+    You, Adam, Sarah, Oscar, Fraser, Hannah, Matthew, Tim, Jasmine = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Juggler, night_info={
+                2: Juggler.Ping(2),
+            }, day_info={
+                1: Juggler.Juggle({Sarah: Politician, Oscar: Politician, Fraser: Xaan, Tim: Puzzlemaster}),
+            }),
+            Player('Adam', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Tim, Sarah, same=True),
+            }),
+            Player('Sarah', claim=Noble, night_info={
+                1: Noble.Ping(Adam, You, Jasmine),
+            }),
+            Player('Oscar', claim=Shugenja, night_info={
+                1: Shugenja.Ping(clockwise=False),
+            }),
+            Player('Fraser', claim=Seamstress, night_info={
+                1: Seamstress.Ping(You, Hannah, same=True),
+            }),
+            Player('Hannah', claim=Politician),
+            Player('Matthew', claim=NightWatchman, night_info={
+                3: NightWatchman.Choice(Oscar),
+            }),
+            Player('Tim', claim=Puzzlemaster, day_info={
+                2: Puzzlemaster.Ping(guess=Sarah, demon=Matthew),
+            }),
+            Player('Jasmine', claim=Dreamer, night_info={
+                1: Dreamer.Ping(You, Juggler, Xaan),
+                2: Dreamer.Ping(Oscar, Shugenja, Spy),
+                3: Dreamer.Ping(Hannah, Politician, Xaan),
+            }),
+        ],
+        day_events={
+            1: Execution(Adam),
+            2: Execution(Tim),
+            3: [
+                Dies(player=Fraser, after_nominating=False, after_nominated_by=Oscar),
+                Dies(player=Oscar, after_nominating=False, after_nominated_by=Fraser),
+                Dies(player=Jasmine, after_nominating=False, after_nominated_by=Oscar),
+                Dies(player=You, after_nominating=False, after_nominated_by=Jasmine),
+            ],
+        },
+        hidden_characters=[Riot, Spy, Xaan, Politician],
+        hidden_self=[],
+    )
+    solutions = (
+        (Juggler, Seamstress, Spy, Shugenja, Riot, Politician, NightWatchman,
+            Puzzlemaster, Dreamer),
+    )
+    solution_endchars = (
+        (Juggler, Seamstress, Riot, Shugenja, Riot, Politician, NightWatchman,
+            Puzzlemaster, Dreamer),
+    )
+    return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
@@ -3370,44 +3491,50 @@ def puzzle_josef_yes_but_dont():
 
 def puzzle_josef_lunatic():
     # Test puzzle, have you really been Fang Gu jumped or is that
-    # your Lunacy talking?
-    You, B, C, D, E, F = range(6)
+    #  your Lunacy talking?
+    You, Tom, Nicola, Tristan, Katharine, Lloyd, Ian, Charlie = range(8)
     puzzle = Puzzle(
         players=[
             Player('You', claim=Imp, night_info={
-                 3: CharacterChange(FangGu),
+                3: CharacterChange(FangGu),
             }),
-            Player('B', claim=Empath, night_info={
-                1: Empath.Ping(1),
+            Player('Tom', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Lloyd, Dreamer),
             }),
-            Player('C', claim=Soldier),
-            Player('D', claim=FortuneTeller, night_info={
-                1: FortuneTeller.Ping(You, B, demon=True),
-                2: FortuneTeller.Ping(C, D, demon=False),
-                3: FortuneTeller.Ping(E, F, demon=False),
+            Player('Nicola', claim=Soldier),
+            Player('Tristan', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Tom, demon=True),
+                2: FortuneTeller.Ping(Lloyd, Charlie, demon=True),
+                3: FortuneTeller.Ping(You, Ian, demon=True),
             }),
-            Player('E', claim=Klutz, day_info={
-                2: Klutz.Choice(F),
+            Player('Katharine', claim=Golem, night_info={
+                2: NightWatchman.Ping(Charlie),
             }),
-            Player('F', claim=Dreamer, night_info={
-                1: Dreamer.Ping(B, Klutz, FangGu),
-                2: Dreamer.Ping(E, Klutz, FangGu),
-                3: Dreamer.Ping(D, FortuneTeller, Imp),
+            Player('Lloyd', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Katharine, Golem, FangGu),
+            }),
+            Player('Ian', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Tristan, Katharine, same=True),
+            }),
+            Player('Charlie', claim=NightWatchman, night_info={
+                2: NightWatchman.Choice(Katharine),
             }),
         ],
         day_events={
-            2: Execution(C),
+            1: [
+                Dies(player=Ian, after_nominated_by=Katharine),
+                Execution(Lloyd),
+            ],
+            2: Execution(Nicola),
         },
-        night_deaths={2: E, 3: B},
+        night_deaths={2: Katharine, 3: Tom},
         hidden_characters=[FangGu, Imp, Boffin, Spy, Lunatic],
         hidden_self=[Lunatic],
     )
-    solutions = (
-        (Lunatic, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
-    )
-    solutions_endchars = (
-        (FangGu, FangGu, Boffin, FortuneTeller, Klutz, Dreamer),
-    )
+    solutions = ((Lunatic, FangGu, Boffin, FortuneTeller, Golem, Dreamer,
+                   Seamstress, NightWatchman),)
+    solutions_endchars = ((FangGu, FangGu, Boffin, FortuneTeller, Golem, 
+                            Dreamer, Seamstress, NightWatchman),)
     return PuzzleDef(puzzle, solutions, solutions_endchars)
 
 def puzzle_nikhilvyas27():

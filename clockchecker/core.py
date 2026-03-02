@@ -835,9 +835,12 @@ class Puzzle:
     def __post_init__(self, hidden_characters: list[type[Character]]):
         """Finish building Puzzle representation from user inputs."""
         if self.category_counts is None:
-            self.category_counts = characters.DEFAULT_CATEGORY_COUNTS[
-                len(self.players)
-            ]
+            self.category_counts = characters.DEFAULT_CATEGORY_COUNTS.get(
+                len(self.players), None
+            )
+            if self.category_counts is None:
+                raise ValueError("No default Minion/Outsider counts for "
+                                 f"{len(self.players)} players.")
         self.demons, self.minions, self.hidden_good = (
             [], [], []
         )

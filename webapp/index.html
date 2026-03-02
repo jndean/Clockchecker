@@ -76,17 +76,100 @@
             <div class="main-content">
                 <div class="panels-container">
                     <div id="inputPanel" class="panel input-panel">
-                        <div class="share-button-container">
-                            <div id="shareSuccessMsg" class="share-success-msg" style="display: none;"></div>
-                            <button id="shareButton" class="history-button"
-                                title="Share a link to this puzzle&#10;(including current output)"><img
-                                    class="link-image" src="link.png"></button>
+                        <!-- Tab Bar -->
+                        <div class="input-tab-bar">
+                            <button id="textTabBtn" class="input-tab active" data-tab="text">Text</button>
+                            <button id="builderTabBtn" class="input-tab" data-tab="builder">Builder</button>
                         </div>
-                        <div class="history-buttons-container">
-                            <button id="undoInputButton" class="history-button" title="Undo (Ctrl+Z)">←</button>
-                            <button id="redoInputButton" class="history-button" title="Redo (Ctrl+Y)">→</button>
+
+                        <!-- Text Input Panel (existing) -->
+                        <div id="textInputContainer" class="input-tab-content active">
+                            <div class="share-button-container">
+                                <div id="shareSuccessMsg" class="share-success-msg" style="display: none;"></div>
+                                <button id="shareButton" class="history-button"
+                                    title="Share a link to this puzzle&#10;(including current output)"><img
+                                        class="link-image" src="link.png"></button>
+                            </div>
+                            <div class="history-buttons-container">
+                                <button id="undoInputButton" class="history-button" title="Undo (Ctrl+Z)">←</button>
+                                <button id="redoInputButton" class="history-button" title="Redo (Ctrl+Y)">→</button>
+                            </div>
+                            <textarea id="inputText" placeholder="Enter text here..."></textarea>
                         </div>
-                        <textarea id="inputText" placeholder="Enter text here..."></textarea>
+
+                        <!-- GUI Builder Panel (new) -->
+                        <div id="builderInputContainer" class="input-tab-content">
+                            <!-- Setup Section -->
+                            <div id="builderSetup" class="builder-section">
+                                <div class="builder-setup-header">
+                                    This GUI is a Work In Progress.<br>
+                                    <label for="playerNamesInput">Player Names (comma-separated):</label>
+                                </div>
+                                <div class="builder-setup-row">
+                                    <input type="text" id="playerNamesInput"
+                                        placeholder="You, Tim, Sarah, Oscar, Anna..." class="builder-text-input">
+                                    <button id="startBuilderBtn" class="builder-start-btn">Start</button>
+                                </div>
+                            </div>
+
+                            <!-- Players Container -->
+                            <div id="builderPlayers" class="builder-players-container"></div>
+
+                            <!-- Global Settings Section -->
+                            <div id="builderGlobals" class="builder-section builder-globals" style="display: none;">
+                                <h4 class="builder-section-title">
+                                    <span class="collapse-icon">▼</span> Puzzle Settings
+                                </h4>
+                                <div class="builder-section-content">
+                                    <!-- Hidden Characters -->
+                                    <div class="builder-field-inline">
+                                        <label>Hidden Characters:</label>
+                                        <div id="hiddenCharsContainer" class="builder-multi-select"></div>
+                                    </div>
+
+                                    <!-- Hidden Self -->
+                                    <div class="builder-field-inline">
+                                        <label>Hidden Self:</label>
+                                        <div id="hiddenSelfContainer" class="builder-multi-select"></div>
+                                    </div>
+
+                                    <!-- Day Events -->
+                                    <div class="builder-field">
+                                        <label>Day Events:</label>
+                                        <div id="dayEventsContainer" class="builder-events-container"></div>
+                                    </div>
+
+                                    <!-- Night Deaths -->
+                                    <div class="builder-field">
+                                        <label>Night Deaths:</label>
+                                        <div id="nightDeathsContainer" class="builder-events-container"></div>
+                                    </div>
+
+                                    <!-- Options -->
+                                    <div class="builder-field builder-checkbox-field">
+                                        <input type="checkbox" id="playerZeroIsYou" checked>
+                                        <label for="playerZeroIsYou">Player 0 is "You"</label>
+                                    </div>
+                                    <div class="builder-field builder-checkbox-field">
+                                        <input type="checkbox" id="allowDuplicateTokens">
+                                        <label for="allowDuplicateTokens">Allow duplicate tokens in bag</label>
+                                    </div>
+                                    <div class="builder-field builder-checkbox-field">
+                                        <input type="checkbox" id="finishFinalDay">
+                                        <label for="finishFinalDay">Finish final day</label>
+                                    </div>
+                                    <div class="builder-field builder-checkbox-field">
+                                        <input type="checkbox" id="deduplicateInitialCharacters" checked>
+                                        <label for="deduplicateInitialCharacters">Deduplicate initial characters</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Generate Code Button -->
+                            <div id="builderActions" class="builder-actions" style="display: none;">
+                                <button id="generateCodeBtn" class="builder-generate-btn">Generate Code</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="vResizer" class="resizer v-resizer"></div>
@@ -258,8 +341,26 @@
         </div>
     </div>
 
+    <!-- Incomplete Fields Warning Modal -->
+    <div id="incompleteFieldsModalOverlay" class="modal-overlay">
+        <div id="incompleteFieldsModalContent" class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3>Incomplete Fields</h3>
+                <button id="closeIncompleteFieldsModal" class="modal-button close-dialog">&times;</button>
+            </div>
+            <p id="incompleteFieldsMessage"></p>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end;">
+                <button id="incompleteFieldsCancelBtn" class="modal-button"
+                    style="background-color: #6b7280; color: white;">Cancel</button>
+                <button id="incompleteFieldsGenerateBtn" class="modal-button"
+                    style="background-color: #f59e0b; color: white;">Generate Anyway</button>
+            </div>
+        </div>
+    </div>
+
     <script src="puzzles.js"></script>
     <script src="characters.js"></script>
+    <script src="gui-schema.js"></script>
 
     <script>
         const inputTextElement = document.getElementById('inputText');
@@ -415,7 +516,6 @@
                 // Set starting puzzle
                 var url = new URL(window.location);
                 let puzzle_payload = url.searchParams.get('puzzle');
-                let output_payload = url.searchParams.get('output');
                 if (puzzle_payload === null) {
                     puzzleSamples["NotQuiteTangible"].forEach(puzzle => {
                         if (puzzle.name == 'NQT41') {
@@ -424,9 +524,6 @@
                     });
                 } else {
                     codeMirrorEditor.setValue(LZString.decompressFromEncodedURIComponent(puzzle_payload));
-                }
-                if (output_payload !== null) {
-                    outputText.innerHTML = LZString.decompressFromEncodedURIComponent(output_payload);
                 }
                 saveInputState(codeMirrorEditor.getValue() || "");
                 codeMirrorEditor.focus();
@@ -612,8 +709,7 @@
             let puzzle = LZString.compressToEncodedURIComponent(
                 codeMirrorEditor.getValue()
             );
-            output = LZString.compressToEncodedURIComponent(outputText.innerHTML);
-            let payload = `${url.origin}${url.pathname}?puzzle=${puzzle}&output=${output}`;
+            let payload = `${url.origin}${url.pathname}?puzzle=${puzzle}`;
             function pulseMessage(message) {
                 shareSuccessMsg.innerText = message;
                 shareSuccessMsg.style.transition = '0.3s';
@@ -901,21 +997,6 @@
             console.log("Stop requested by user.");
         });
 
-        function share(include_output = true) {
-            let url = new URL(window.location);
-            let puzzle = LZString.compressToEncodedURIComponent(
-                codeMirrorEditor.getValue()
-            );
-            let ret = `${url.origin}${url.pathname}?puzzle=${puzzle}`
-            if (include_output) {
-                output = LZString.compressToEncodedURIComponent(
-                    outputText.innerHTML
-                );
-                ret += `&output=${output}`;
-            }
-            return ret;
-        }
-
         document.addEventListener('keydown', (event) => {
             const isInputFocused = codeMirrorEditor && codeMirrorEditor.hasFocus();
 
@@ -1075,6 +1156,1258 @@
             // Hook into try toggles
             document.getElementById('toggleLongSamplesTrayButton')?.addEventListener('click', () => setTimeout(updateVResizerHandle, 300));
             document.getElementById('toggleShortSamplesTrayButton')?.addEventListener('click', () => setTimeout(updateVResizerHandle, 300));
+        }
+
+        // ========== Puzzle Builder Logic ==========
+
+        const builderState = {
+            players: [],
+            hiddenCharacters: [],
+            hiddenSelf: [],
+            dayEvents: {},
+            nightDeaths: {},
+            playerZeroIsYou: true,
+            allowDuplicateTokens: false,
+            finishFinalDay: false,
+            deduplicateInitialCharacters: true
+        };
+
+        // Tab switching
+        document.querySelectorAll('.input-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.input-tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const tabId = tab.dataset.tab;
+                if (tabId === 'text') {
+                    document.getElementById('textInputContainer').classList.add('active');
+                    // Refresh CodeMirror when switching to text tab
+                    if (codeMirrorEditor) {
+                        setTimeout(() => codeMirrorEditor.refresh(), 0);
+                    }
+                } else {
+                    document.getElementById('builderInputContainer').classList.add('active');
+                }
+            });
+        });
+
+        // Start builder button
+        document.getElementById('startBuilderBtn').addEventListener('click', () => {
+            const namesInput = document.getElementById('playerNamesInput').value.trim();
+            if (!namesInput) {
+                alert('Please enter player names');
+                return;
+            }
+            const names = namesInput.split(',').map(n => n.trim()).filter(n => n);
+            if (names.length < 2) {
+                alert('Please enter at least 2 player names');
+                return;
+            }
+            initializeBuilder(names);
+        });
+
+        function initializeBuilder(playerNames) {
+            // Reset builder state
+            builderState.players = playerNames.map((name, index) => ({
+                id: index,
+                name: name,
+                claim: '',
+                nightInfo: {},
+                dayInfo: {}
+            }));
+            builderState.hiddenCharacters = [];
+            builderState.hiddenSelf = [];
+            builderState.dayEvents = {};
+            builderState.nightDeaths = {};
+            builderState.playerZeroIsYou = true;
+            builderState.allowDuplicateTokens = false;
+            builderState.finishFinalDay = false;
+            builderState.deduplicateInitialCharacters = true;
+
+            // Sync checkbox states
+            document.getElementById('playerZeroIsYou').checked = true;
+            document.getElementById('allowDuplicateTokens').checked = false;
+            document.getElementById('finishFinalDay').checked = false;
+            document.getElementById('deduplicateInitialCharacters').checked = true;
+
+            // Render player rows
+            renderBuilderPlayers();
+
+            // Reset global section containers with inline add buttons
+            document.getElementById('hiddenCharsContainer').innerHTML = '';
+            initHiddenCharSelect('hiddenCharsContainer', builderState.hiddenCharacters, hiddenCharsOrder);
+            document.getElementById('hiddenSelfContainer').innerHTML = '';
+            initHiddenCharSelect('hiddenSelfContainer', builderState.hiddenSelf, hiddenSelfOrder);
+            document.getElementById('dayEventsContainer').innerHTML = '';
+            appendDayEventAddBtn();
+            document.getElementById('nightDeathsContainer').innerHTML = '';
+            appendNightDeathAddBtn();
+
+            // Show global settings and actions
+            document.getElementById('builderGlobals').style.display = 'block';
+            document.getElementById('builderActions').style.display = 'block';
+        }
+
+        function renderBuilderPlayers() {
+            const container = document.getElementById('builderPlayers');
+            container.innerHTML = '';
+
+            builderState.players.forEach((player, idx) => {
+                const row = document.createElement('div');
+                row.className = 'builder-player-row';
+                row.innerHTML = `
+                    <div class="builder-player-header">
+                        <span class="builder-player-name">${player.name}</span>
+                        <div class="builder-player-claim">
+                            <label>claim=</label>
+                            <select class="builder-select builder-claim-select" data-player="${idx}">
+                                <option value="">-- Select --</option>
+                                ${renderCharacterOptions()}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="builder-info-section">
+                        <span class="builder-info-title">Night Info</span>
+                        <div class="builder-info-items" id="nightInfo-${idx}"></div>
+                    </div>
+                    <div class="builder-info-section">
+                        <span class="builder-info-title">Day Info</span>
+                        <div class="builder-info-items" id="dayInfo-${idx}"></div>
+                    </div>
+                `;
+                container.appendChild(row);
+
+                // Set initial claim value if exists
+                const claimSelect = row.querySelector('.builder-claim-select');
+                if (player.claim) {
+                    claimSelect.value = player.claim;
+                }
+
+                // Handle claim change
+                claimSelect.addEventListener('change', (e) => {
+                    builderState.players[idx].claim = e.target.value;
+                    updateClaimSelectColor(claimSelect);
+                    autoPopulateInfoForClaim(idx, e.target.value);
+                });
+
+                // Render info items (includes inline add buttons)
+                renderInfoItems(idx, 'night');
+                renderInfoItems(idx, 'day');
+            });
+        }
+
+        function renderCharacterOptions() {
+            let html = '';
+            for (const [category, chars] of Object.entries(GuiSchema.characters)) {
+                html += `<optgroup label="${category}">`;
+                chars.forEach(char => {
+                    const colorClass = GuiSchema.getCharacterColorClass(char);
+                    html += `<option value="${char}" class="${colorClass}">${char}</option>`;
+                });
+                html += '</optgroup>';
+            }
+            return html;
+        }
+
+        function renderCharacterOptionsOrdered(categoryOrder) {
+            let html = '';
+            categoryOrder.forEach(category => {
+                const chars = GuiSchema.characters[category];
+                if (!chars) return;
+                html += `<optgroup label="${category}">`;
+                chars.forEach(char => {
+                    const colorClass = GuiSchema.getCharacterColorClass(char);
+                    html += `<option value="${char}" class="${colorClass}">${char}</option>`;
+                });
+                html += '</optgroup>';
+            });
+            return html;
+        }
+
+        function getDefaultNight(claimName) {
+            // EACH_NIGHT_STAR characters wake each night except the first
+            if (GuiSchema.eachNightStarCharacters.includes(claimName)) return 2;
+            return 1;
+        }
+
+        function getDefaultDay(claimName, infoType) {
+            // Juggler does their juggle on day 1
+            return 1;
+        }
+
+        function autoPopulateInfoForClaim(playerIdx, claimName) {
+            if (!claimName) return;
+            const player = builderState.players[playerIdx];
+
+            // Only auto-populate if player has no existing info
+            const hasNightInfo = Object.keys(player.nightInfo).some(d => player.nightInfo[d].length > 0);
+            const hasDayInfo = Object.keys(player.dayInfo).some(d => player.dayInfo[d].length > 0);
+
+            // Auto-populate night info
+            if (!hasNightInfo) {
+                const nightTypes = GuiSchema.getAllInfoTypes('night');
+                const matching = nightTypes.filter(t => t.key.startsWith(claimName + '.'));
+                if (matching.length > 0) {
+                    const ping = matching.find(t => t.key.endsWith('.Ping'));
+                    const defaultType = ping ? ping.key : matching[0].key;
+                    const newItem = { id: Date.now(), type: defaultType, fields: {} };
+                    initializeFieldDefaults(newItem, defaultType, 'night');
+                    // Juggler.Ping arrives on night 2
+                    const defaultNight = (claimName === 'Juggler' && defaultType === 'Juggler.Ping') ? 2 : getDefaultNight(claimName);
+                    player.nightInfo[defaultNight] = [newItem];
+                    renderInfoItems(playerIdx, 'night');
+                }
+            }
+
+            // Auto-populate day info
+            if (!hasDayInfo) {
+                const dayTypes = GuiSchema.getAllInfoTypes('day');
+                const matching = dayTypes.filter(t => t.key.startsWith(claimName + '.'));
+                if (matching.length > 0) {
+                    const ping = matching.find(t => t.key.endsWith('.Ping'));
+                    const defaultType = ping ? ping.key : matching[0].key;
+                    const newItem = { id: Date.now() + 1, type: defaultType, fields: {} };
+                    initializeFieldDefaults(newItem, defaultType, 'day');
+                    const defaultDay = getDefaultDay(claimName, defaultType);
+                    player.dayInfo[defaultDay] = [newItem];
+                    renderInfoItems(playerIdx, 'day');
+                }
+            }
+        }
+
+        function updateClaimSelectColor(select) {
+            select.classList.remove('townsfolk-character', 'outsider-character', 'evil-character');
+            if (select.value) {
+                select.classList.add(GuiSchema.getCharacterColorClass(select.value));
+            }
+        }
+
+        function renderPlayerOptions() {
+            return builderState.players.map(p =>
+                `<option value="${p.name}">${p.name}</option>`
+            ).join('');
+        }
+
+        function addInfoItem(playerIdx, phase) {
+            const player = builderState.players[playerIdx];
+            const infoDict = phase === 'night' ? player.nightInfo : player.dayInfo;
+            const types = GuiSchema.getAllInfoTypes(phase);
+
+            // Find next day number
+            const existingDays = Object.keys(infoDict).map(Number);
+            const nextDay = existingDays.length > 0 ? Math.max(...existingDays) + 1 : 1;
+
+            // Default type from claimed character
+            let defaultType = '';
+            if (player.claim) {
+                const relevantTypes = types.filter(t => t.key.startsWith(player.claim + '.'));
+                if (relevantTypes.length > 0) {
+                    // Pick Ping if available, otherwise first match
+                    const ping = relevantTypes.find(t => t.key.endsWith('.Ping'));
+                    defaultType = ping ? ping.key : relevantTypes[0].key;
+                }
+            }
+
+            // Create info item
+            const itemId = Date.now();
+            if (!infoDict[nextDay]) {
+                infoDict[nextDay] = [];
+            }
+            const newItem = {
+                id: itemId,
+                type: defaultType,
+                fields: {}
+            };
+
+            // Initialize fields with random defaults if type was auto-selected
+            if (defaultType) {
+                initializeFieldDefaults(newItem, defaultType, phase);
+            }
+
+            infoDict[nextDay].push(newItem);
+            renderInfoItems(playerIdx, phase);
+        }
+
+        function renderInfoItems(playerIdx, phase) {
+            const player = builderState.players[playerIdx];
+            const infoDict = phase === 'night' ? player.nightInfo : player.dayInfo;
+            const container = document.getElementById(`${phase}Info-${playerIdx}`);
+            container.innerHTML = '';
+
+            const types = GuiSchema.getAllInfoTypes(phase);
+            const sortedDays = Object.keys(infoDict).sort((a, b) => Number(a) - Number(b));
+
+            sortedDays.forEach(day => {
+                const items = infoDict[day];
+                items.forEach((item, itemIdx) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'builder-info-item';
+                    const dayOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                        .map(n => `<option value="${n}"${n == day ? ' selected' : ''}>${n}</option>`).join('');
+                    itemEl.innerHTML = `
+                        <select class="builder-select builder-day-input" data-item-id="${item.id}">
+                            ${dayOptions}
+                        </select>
+                        <select class="builder-select builder-info-type-select" data-item-id="${item.id}">
+                            <option value="">-- Info Type --</option>
+                            ${types.map(t => `<option value="${t.key}">${t.key}</option>`).join('')}
+                        </select>
+                        <div class="builder-field-group builder-info-fields" data-item-id="${item.id}"></div>
+                        <button class="builder-remove-btn" data-item-id="${item.id}">✕</button>
+                    `;
+                    container.appendChild(itemEl);
+
+                    // Set type if exists
+                    const typeSelect = itemEl.querySelector('.builder-info-type-select');
+                    if (item.type) {
+                        typeSelect.value = item.type;
+                        renderInfoFields(itemEl.querySelector('.builder-info-fields'), item.type, item.fields);
+                    }
+
+                    // Handle type change
+                    typeSelect.addEventListener('change', (e) => {
+                        item.type = e.target.value;
+                        item.fields = {};
+                        if (e.target.value) {
+                            initializeFieldDefaults(item, e.target.value, phase);
+                        }
+                        renderInfoFields(itemEl.querySelector('.builder-info-fields'), e.target.value, item.fields);
+                    });
+
+                    // Handle day change
+                    itemEl.querySelector('.builder-day-input').addEventListener('change', function (e) {
+                        const oldDay = day;
+                        const newDay = e.target.value;
+                        if (oldDay !== newDay) {
+                            // Move item to new day
+                            const idx = infoDict[oldDay].findIndex(i => i.id === item.id);
+                            infoDict[oldDay].splice(idx, 1);
+                            if (infoDict[oldDay].length === 0) {
+                                delete infoDict[oldDay];
+                            }
+                            if (!infoDict[newDay]) {
+                                infoDict[newDay] = [];
+                            }
+                            infoDict[newDay].push(item);
+                            renderInfoItems(playerIdx, phase);
+                        }
+                    });
+
+                    // Handle remove
+                    itemEl.querySelector('.builder-remove-btn').addEventListener('click', () => {
+                        const idx = infoDict[day].findIndex(i => i.id === item.id);
+                        infoDict[day].splice(idx, 1);
+                        if (infoDict[day].length === 0) {
+                            delete infoDict[day];
+                        }
+                        renderInfoItems(playerIdx, phase);
+                    });
+                });
+            });
+
+            // Append inline add button at end of list
+            const addBtn = document.createElement('button');
+            addBtn.className = 'builder-add-btn';
+            addBtn.textContent = '+ Add';
+            addBtn.addEventListener('click', () => {
+                addInfoItem(playerIdx, phase);
+            });
+            container.appendChild(addBtn);
+        }
+
+        function initializeFieldDefaults(item, infoType, phase) {
+            const allTypes = { ...GuiSchema.infoTypes.night, ...GuiSchema.infoTypes.day };
+            const typeDef = allTypes[infoType];
+            if (!typeDef || !typeDef.fields) return;
+
+            const players = builderState.players.map(p => p.name);
+            const allChars = GuiSchema.allCharacters;
+
+            typeDef.fields.forEach(field => {
+                if (field.optional || field.default !== undefined) return; // Don't pre-fill optional/defaulted fields
+                switch (field.type) {
+                    case 'player':
+                        if (players.length > 0) {
+                            item.fields[field.name] = players[Math.floor(Math.random() * players.length)];
+                        }
+                        break;
+                    case 'character': {
+                        const chars = field.category ? GuiSchema.characters[field.category] : allChars;
+                        if (chars && chars.length > 0) {
+                            item.fields[field.name] = chars[Math.floor(Math.random() * chars.length)];
+                        }
+                        break;
+                    }
+                    case 'number':
+                        item.fields[field.name] = String(field.min || 0);
+                        break;
+                    case 'juggleMap':
+                        item.fields[field.name] = [];
+                        break;
+                    case 'bool': {
+                        const val = Math.random() < 0.5 ? 'True' : 'False';
+                        item.fields[field.name] = val;
+                        break;
+                    }
+                    case 'category':
+                        item.fields[field.name] = GuiSchema.categories[Math.floor(Math.random() * GuiSchema.categories.length)];
+                        break;
+                }
+            });
+        }
+
+        function renderInfoFields(container, infoType, fieldValues) {
+            container.innerHTML = '';
+            if (!infoType) return;
+
+            const allTypes = { ...GuiSchema.infoTypes.night, ...GuiSchema.infoTypes.day };
+            const typeDef = allTypes[infoType];
+            if (!typeDef || !typeDef.fields) return;
+
+            typeDef.fields.forEach(field => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'builder-field-group';
+
+                let input;
+                switch (field.type) {
+                    case 'player':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        input.innerHTML = `<option value="">--</option>${renderPlayerOptions()}`;
+                        break;
+                    case 'character':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        if (field.category) {
+                            input.innerHTML = `<option value="">--</option>` +
+                                GuiSchema.characters[field.category].map(c =>
+                                    `<option value="${c}">${c}</option>`
+                                ).join('');
+                        } else {
+                            input.innerHTML = `<option value="">--</option>${renderCharacterOptions()}`;
+                        }
+                        break;
+                    case 'number': {
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        const min = field.min || 0;
+                        const max = field.max || 10;
+                        let numOpts = '';
+                        for (let n = min; n <= max; n++) {
+                            numOpts += `<option value="${n}">${n}</option>`;
+                        }
+                        input.innerHTML = numOpts;
+                        break;
+                    }
+                    case 'category':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        input.innerHTML = `<option value="">--</option>` +
+                            GuiSchema.categories.map(c =>
+                                `<option value="${c}">${c}</option>`
+                            ).join('');
+                        break;
+                    case 'bool':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        input.innerHTML = '<option value="True">True</option><option value="False">False</option>';
+                        break;
+                    case 'juggleMap': {
+                        // Render a juggle map container with add button
+                        const juggleContainer = document.createElement('div');
+                        juggleContainer.className = 'builder-juggle-map';
+                        juggleContainer.dataset.fieldName = field.name;
+                        const maxItems = field.maxItems || 5;
+
+                        // Ensure state array exists
+                        if (!Array.isArray(fieldValues[field.name])) {
+                            fieldValues[field.name] = [];
+                        }
+                        const juggleState = fieldValues[field.name];
+
+                        function renderJuggleEntries() {
+                            juggleContainer.innerHTML = '';
+                            juggleState.forEach((entry, i) => {
+                                const row = document.createElement('div');
+                                row.className = 'builder-juggle-entry';
+                                row.innerHTML = `
+                                    <select class="builder-select juggle-player">
+                                        <option value="">-- Player --</option>
+                                        ${renderPlayerOptions()}
+                                    </select>
+                                    <span>→</span>
+                                    <select class="builder-select juggle-character">
+                                        <option value="">-- Character --</option>
+                                        ${renderCharacterOptions()}
+                                    </select>
+                                    <button class="builder-remove-btn">✕</button>
+                                `;
+                                juggleContainer.appendChild(row);
+                                const playerSel = row.querySelector('.juggle-player');
+                                const charSel = row.querySelector('.juggle-character');
+                                if (entry.player) playerSel.value = entry.player;
+                                if (entry.character) {
+                                    charSel.value = entry.character;
+                                    updateClaimSelectColor(charSel);
+                                }
+                                playerSel.addEventListener('change', (e) => { entry.player = e.target.value; });
+                                charSel.addEventListener('change', (e) => {
+                                    entry.character = e.target.value;
+                                    updateClaimSelectColor(charSel);
+                                });
+                                row.querySelector('.builder-remove-btn').addEventListener('click', () => {
+                                    juggleState.splice(i, 1);
+                                    renderJuggleEntries();
+                                });
+                            });
+                            // Add button (if under max)
+                            if (juggleState.length < maxItems) {
+                                const addBtn = document.createElement('button');
+                                addBtn.className = 'builder-add-btn';
+                                addBtn.textContent = '+ Add Juggle';
+                                addBtn.addEventListener('click', () => {
+                                    juggleState.push({ player: '', character: '' });
+                                    renderJuggleEntries();
+                                });
+                                juggleContainer.appendChild(addBtn);
+                            }
+                        }
+                        renderJuggleEntries();
+
+                        const juggleLabel = document.createElement('label');
+                        juggleLabel.textContent = field.label + ':';
+                        wrapper.appendChild(juggleLabel);
+                        wrapper.appendChild(juggleContainer);
+                        container.appendChild(wrapper);
+                        return; // Skip the generic input handling below
+                    }
+                    default:
+                        input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'builder-text-input';
+                        input.style.width = '100px';
+                }
+
+                input.dataset.fieldName = field.name;
+
+                // Set value from state, or sync state from DOM default
+                if (fieldValues[field.name] !== undefined) {
+                    input.value = fieldValues[field.name];
+                } else if (input.value) {
+                    // Sync DOM default back to state (fixes boolean/select defaults)
+                    fieldValues[field.name] = input.value;
+                }
+
+                // Handle change
+                input.addEventListener('change', (e) => {
+                    fieldValues[field.name] = e.target.value;
+                });
+
+                const label = document.createElement('label');
+                label.textContent = field.label + ':';
+                wrapper.appendChild(label);
+                wrapper.appendChild(input);
+                container.appendChild(wrapper);
+            });
+        }
+
+        // Initialize always-visible dropdowns for hidden characters/self
+        function initHiddenCharSelect(containerId, array, categoryOrder) {
+            const container = document.getElementById(containerId);
+            appendHiddenCharSelect(container, array, categoryOrder);
+        }
+
+        function appendHiddenCharSelect(container, array, categoryOrder) {
+            const select = document.createElement('select');
+            select.className = 'builder-select';
+            const options = categoryOrder
+                ? renderCharacterOptionsOrdered(categoryOrder)
+                : renderCharacterOptions();
+            select.innerHTML = `<option value="">-- Add --</option>${options}`;
+
+            select.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    array.push(e.target.value);
+                    // Replace select with tag
+                    const tag = document.createElement('span');
+                    const isEvil = GuiSchema.characters.Minions.includes(e.target.value) ||
+                        GuiSchema.characters.Demons.includes(e.target.value);
+                    tag.className = `builder-tag ${isEvil ? 'evil' : 'good'}`;
+                    tag.innerHTML = `${e.target.value} <span class="remove-tag">×</span>`;
+                    tag.querySelector('.remove-tag').addEventListener('click', () => {
+                        const idx = array.indexOf(e.target.value);
+                        if (idx > -1) array.splice(idx, 1);
+                        tag.remove();
+                    });
+                    select.replaceWith(tag);
+                    // Append a NEW empty dropdown at the end
+                    appendHiddenCharSelect(container, array, categoryOrder);
+                }
+            });
+
+            container.appendChild(select);
+        }
+
+        const hiddenCharsOrder = ['Demons', 'Minions', 'Outsiders', 'Townsfolk', 'Homebrews'];
+        const hiddenSelfOrder = ['Outsiders', 'Townsfolk', 'Minions', 'Demons', 'Homebrews'];
+        initHiddenCharSelect('hiddenCharsContainer', builderState.hiddenCharacters, hiddenCharsOrder);
+        initHiddenCharSelect('hiddenSelfContainer', builderState.hiddenSelf, hiddenSelfOrder);
+
+        // Day events - inline add button
+        function appendDayEventAddBtn() {
+            const container = document.getElementById('dayEventsContainer');
+            // Remove existing add button if present
+            const existing = container.querySelector('.builder-add-btn');
+            if (existing) existing.remove();
+            const addBtn = document.createElement('button');
+            addBtn.className = 'builder-add-btn';
+            addBtn.textContent = '+ Add Day Event';
+            addBtn.addEventListener('click', () => {
+                addDayEvent();
+            });
+            container.appendChild(addBtn);
+        }
+
+        appendDayEventAddBtn();
+
+        function addDayEvent() {
+            const container = document.getElementById('dayEventsContainer');
+            const eventId = Date.now();
+
+            // Find next day number
+            const existingDays = Object.keys(builderState.dayEvents).map(Number);
+            const nextDay = existingDays.length > 0 ? Math.max(...existingDays) + 1 : 1;
+
+            if (!builderState.dayEvents[nextDay]) {
+                builderState.dayEvents[nextDay] = [];
+            }
+
+            // Default to Execution type
+            const defaultEventType = 'Execution';
+            const newEvent = { id: eventId, type: defaultEventType, fields: {} };
+            initializeEventDefaults(newEvent);
+            builderState.dayEvents[nextDay].push(newEvent);
+
+            const row = document.createElement('div');
+            row.className = 'builder-event-row';
+            row.dataset.eventId = eventId;
+            const dayEvtOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                .map(n => `<option value="${n}"${n === nextDay ? ' selected' : ''}>${n}</option>`).join('');
+            row.innerHTML = `
+                <select class="builder-select builder-day-input">
+                    ${dayEvtOptions}
+                </select>
+                <select class="builder-select builder-event-type-select">
+                    <option value="">-- Event --</option>
+                    ${Object.keys(GuiSchema.dayEvents).map(e => `<option value="${e}">${e}</option>`).join('')}
+                </select>
+                <div class="builder-field-group builder-event-fields"></div>
+                <button class="builder-remove-btn">✕</button>
+            `;
+
+            // Insert before the add button
+            const addBtn = container.querySelector('.builder-add-btn');
+            container.insertBefore(row, addBtn);
+
+            // Set default type and render its fields
+            const typeSelect = row.querySelector('.builder-event-type-select');
+            typeSelect.value = defaultEventType;
+            renderEventFields(row.querySelector('.builder-event-fields'), defaultEventType, newEvent.fields);
+
+            let currentDay = String(nextDay);
+
+            typeSelect.addEventListener('change', (e) => {
+                const event = findEventById(eventId);
+                if (event) {
+                    event.type = e.target.value;
+                    event.fields = {};
+                    if (e.target.value) {
+                        initializeEventDefaults(event);
+                    }
+                    renderEventFields(row.querySelector('.builder-event-fields'), e.target.value, event.fields);
+                }
+            });
+
+            // Handle day number change
+            row.querySelector('.builder-day-input').addEventListener('change', (e) => {
+                const oldDay = currentDay;
+                const newDay = e.target.value;
+                if (oldDay !== newDay) {
+                    // Remove from old day
+                    if (builderState.dayEvents[oldDay]) {
+                        const idx = builderState.dayEvents[oldDay].findIndex(ev => ev.id === eventId);
+                        if (idx > -1) builderState.dayEvents[oldDay].splice(idx, 1);
+                        if (builderState.dayEvents[oldDay].length === 0) {
+                            delete builderState.dayEvents[oldDay];
+                        }
+                    }
+                    // Add to new day
+                    if (!builderState.dayEvents[newDay]) {
+                        builderState.dayEvents[newDay] = [];
+                    }
+                    builderState.dayEvents[newDay].push(newEvent);
+                    currentDay = newDay;
+                }
+            });
+
+            row.querySelector('.builder-remove-btn').addEventListener('click', () => {
+                removeEventById(eventId);
+                row.remove();
+            });
+        }
+
+        function initializeEventDefaults(event) {
+            const typeDef = GuiSchema.dayEvents[event.type];
+            if (!typeDef || !typeDef.fields) return;
+
+            const players = builderState.players.map(p => p.name);
+
+            typeDef.fields.forEach(field => {
+                if (field.optional || field.default !== undefined) return;
+                switch (field.type) {
+                    case 'player':
+                        if (players.length > 0) {
+                            event.fields[field.name] = players[Math.floor(Math.random() * players.length)];
+                        }
+                        break;
+                    case 'bool': {
+                        event.fields[field.name] = Math.random() < 0.5 ? 'True' : 'False';
+                        break;
+                    }
+                }
+            });
+        }
+
+        function findEventById(eventId) {
+            for (const day of Object.keys(builderState.dayEvents)) {
+                const event = builderState.dayEvents[day].find(e => e.id === eventId);
+                if (event) return event;
+            }
+            return null;
+        }
+
+        function removeEventById(eventId) {
+            for (const day of Object.keys(builderState.dayEvents)) {
+                const idx = builderState.dayEvents[day].findIndex(e => e.id === eventId);
+                if (idx > -1) {
+                    builderState.dayEvents[day].splice(idx, 1);
+                    if (builderState.dayEvents[day].length === 0) {
+                        delete builderState.dayEvents[day];
+                    }
+                    return;
+                }
+            }
+        }
+
+        function renderEventFields(container, eventType, fieldValues) {
+            container.innerHTML = '';
+            if (!eventType) return;
+
+            const typeDef = GuiSchema.dayEvents[eventType];
+            if (!typeDef || !typeDef.fields) return;
+
+            typeDef.fields.forEach(field => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'builder-field-group';
+
+                let input;
+                switch (field.type) {
+                    case 'player':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        input.innerHTML = `<option value="">--</option>${renderPlayerOptions()}`;
+                        break;
+                    case 'bool':
+                        input = document.createElement('select');
+                        input.className = 'builder-select';
+                        input.innerHTML = '<option value="True">True</option><option value="False">False</option>';
+                        break;
+                    default:
+                        input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'builder-text-input';
+                        input.style.width = '80px';
+                }
+
+                input.dataset.fieldName = field.name;
+
+                // Set value from state, or sync state from DOM default
+                if (fieldValues[field.name] !== undefined) {
+                    input.value = fieldValues[field.name];
+                } else if (input.value) {
+                    fieldValues[field.name] = input.value;
+                }
+
+                input.addEventListener('change', (e) => {
+                    fieldValues[field.name] = e.target.value;
+                });
+
+                const label = document.createElement('label');
+                label.textContent = field.label + ':';
+                wrapper.appendChild(label);
+                wrapper.appendChild(input);
+                container.appendChild(wrapper);
+            });
+        }
+
+        // Night deaths - inline add button
+        function appendNightDeathAddBtn() {
+            const container = document.getElementById('nightDeathsContainer');
+            const existing = container.querySelector('.builder-add-btn');
+            if (existing) existing.remove();
+            const addBtn = document.createElement('button');
+            addBtn.className = 'builder-add-btn';
+            addBtn.textContent = '+ Add';
+            addBtn.addEventListener('click', () => {
+                addNightDeath();
+            });
+            container.appendChild(addBtn);
+        }
+
+        appendNightDeathAddBtn();
+
+        function addNightDeath() {
+            const container = document.getElementById('nightDeathsContainer');
+            const deathId = Date.now();
+
+            const existingNights = Object.keys(builderState.nightDeaths).map(Number);
+            const nextNight = existingNights.length > 0 ? Math.max(...existingNights) + 1 : 2;
+
+            if (!builderState.nightDeaths[nextNight]) {
+                builderState.nightDeaths[nextNight] = [];
+            }
+            const deathObj = { id: deathId, player: '' };
+            builderState.nightDeaths[nextNight].push(deathObj);
+
+            const row = document.createElement('div');
+            row.className = 'builder-event-row';
+            row.dataset.deathId = deathId;
+            let currentNight = String(nextNight);
+            const nightDeathOptions = Array.from({ length: 10 }, (_, i) => i + 1)
+                .map(n => `<option value="${n}"${n === nextNight ? ' selected' : ''}>${n}</option>`).join('');
+            row.innerHTML = `
+                <span class="builder-day-num">Night</span>
+                <select class="builder-select builder-night-input">
+                    ${nightDeathOptions}
+                </select>
+                <span>:</span>
+                <select class="builder-select">
+                    <option value="">-- Player --</option>
+                    ${renderPlayerOptions()}
+                </select>
+                <button class="builder-remove-btn">✕</button>
+            `;
+
+            // Insert before the add button
+            const addBtn = container.querySelector('.builder-add-btn');
+            container.insertBefore(row, addBtn);
+
+            // Auto-open the player dropdown (second select after night input)
+            const playerDropdown = row.querySelectorAll('select')[1];
+            requestAnimationFrame(() => {
+                playerDropdown.focus();
+                playerDropdown.dispatchEvent(new MouseEvent('mousedown'));
+            });
+
+            // Handle night number change
+            row.querySelector('.builder-night-input').addEventListener('change', (e) => {
+                const oldNight = currentNight;
+                const newNight = e.target.value;
+                if (oldNight !== newNight) {
+                    // Remove from old night
+                    if (builderState.nightDeaths[oldNight]) {
+                        const idx = builderState.nightDeaths[oldNight].findIndex(d => d.id === deathId);
+                        if (idx > -1) builderState.nightDeaths[oldNight].splice(idx, 1);
+                        if (builderState.nightDeaths[oldNight].length === 0) {
+                            delete builderState.nightDeaths[oldNight];
+                        }
+                    }
+                    // Add to new night
+                    if (!builderState.nightDeaths[newNight]) {
+                        builderState.nightDeaths[newNight] = [];
+                    }
+                    builderState.nightDeaths[newNight].push(deathObj);
+                    currentNight = newNight;
+                }
+            });
+
+            // Handle player select change (second <select> in the row, after night input)
+            playerDropdown.addEventListener('change', (e) => {
+                deathObj.player = e.target.value;
+            });
+
+            row.querySelector('.builder-remove-btn').addEventListener('click', () => {
+                if (builderState.nightDeaths[currentNight]) {
+                    const idx = builderState.nightDeaths[currentNight].findIndex(d => d.id === deathId);
+                    if (idx > -1) builderState.nightDeaths[currentNight].splice(idx, 1);
+                    if (builderState.nightDeaths[currentNight].length === 0) {
+                        delete builderState.nightDeaths[currentNight];
+                    }
+                }
+                row.remove();
+            });
+        }
+
+        // Puzzle flag checkboxes
+        document.getElementById('playerZeroIsYou').addEventListener('change', (e) => {
+            builderState.playerZeroIsYou = e.target.checked;
+        });
+        document.getElementById('allowDuplicateTokens').addEventListener('change', (e) => {
+            builderState.allowDuplicateTokens = e.target.checked;
+        });
+        document.getElementById('finishFinalDay').addEventListener('change', (e) => {
+            builderState.finishFinalDay = e.target.checked;
+        });
+        document.getElementById('deduplicateInitialCharacters').addEventListener('change', (e) => {
+            builderState.deduplicateInitialCharacters = e.target.checked;
+        });
+
+        // Generate code button
+        document.getElementById('generateCodeBtn').addEventListener('click', () => {
+            const issues = findIncompleteFields();
+            if (issues.length > 0) {
+                showIncompleteFieldsModal(issues);
+            } else {
+                doGenerateCode();
+            }
+        });
+
+        function findIncompleteFields() {
+            const issues = [];
+
+            // Check each player
+            builderState.players.forEach((player, idx) => {
+                if (!player.claim) {
+                    issues.push(`Player "${player.name}" has no character claim selected`);
+                }
+
+                // Check night info
+                Object.keys(player.nightInfo).forEach(day => {
+                    player.nightInfo[day].forEach((item, itemIdx) => {
+                        if (!item.type) {
+                            issues.push(`Player "${player.name}" has an empty night info type (day ${day})`);
+                        } else {
+                            const typeDef = GuiSchema.infoTypes.night[item.type];
+                            if (typeDef) {
+                                typeDef.fields.forEach(field => {
+                                    if (!field.optional && !item.fields[field.name]) {
+                                        issues.push(`Player "${player.name}": ${item.type} missing "${field.label}" (day ${day})`);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                });
+
+                // Check day info
+                Object.keys(player.dayInfo).forEach(day => {
+                    player.dayInfo[day].forEach((item, itemIdx) => {
+                        if (!item.type) {
+                            issues.push(`Player "${player.name}" has an empty day info type (day ${day})`);
+                        } else {
+                            const typeDef = GuiSchema.infoTypes.day[item.type];
+                            if (typeDef) {
+                                typeDef.fields.forEach(field => {
+                                    if (!field.optional && !item.fields[field.name]) {
+                                        issues.push(`Player "${player.name}": ${item.type} missing "${field.label}" (day ${day})`);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                });
+            });
+
+            // Check day events
+            Object.keys(builderState.dayEvents).forEach(day => {
+                builderState.dayEvents[day].forEach(event => {
+                    if (!event.type) {
+                        issues.push(`Day ${day}: empty event type`);
+                    } else {
+                        const typeDef = GuiSchema.dayEvents[event.type];
+                        if (typeDef) {
+                            typeDef.fields.forEach(field => {
+                                if (!field.optional && !event.fields[field.name]) {
+                                    issues.push(`Day ${day} ${event.type}: missing "${field.label}"`);
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+
+            // Check night deaths
+            Object.keys(builderState.nightDeaths).forEach(night => {
+                builderState.nightDeaths[night].forEach(death => {
+                    if (!death.player) {
+                        issues.push(`Night ${night}: no player selected for death`);
+                    }
+                });
+            });
+
+            return issues;
+        }
+
+        function showIncompleteFieldsModal(issues) {
+            const overlay = document.getElementById('incompleteFieldsModalOverlay');
+            const message = document.getElementById('incompleteFieldsMessage');
+
+            // Show first 5 issues to avoid overwhelming
+            const displayIssues = issues.slice(0, 5);
+            let html = 'The following fields are incomplete:<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">';
+            displayIssues.forEach(issue => {
+                html += `<li style="margin-bottom: 0.25rem;">${issue}</li>`;
+            });
+            if (issues.length > 5) {
+                html += `<li style="color: #9ca3af;">...and ${issues.length - 5} more issues</li>`;
+            }
+            html += '</ul>';
+
+            message.innerHTML = html;
+            overlay.classList.add('show');
+        }
+
+        document.getElementById('closeIncompleteFieldsModal').addEventListener('click', () => {
+            document.getElementById('incompleteFieldsModalOverlay').classList.remove('show');
+        });
+
+        document.getElementById('incompleteFieldsCancelBtn').addEventListener('click', () => {
+            document.getElementById('incompleteFieldsModalOverlay').classList.remove('show');
+        });
+
+        document.getElementById('incompleteFieldsGenerateBtn').addEventListener('click', () => {
+            document.getElementById('incompleteFieldsModalOverlay').classList.remove('show');
+            doGenerateCode();
+        });
+
+        function doGenerateCode() {
+            const code = generatePuzzleCode();
+            if (codeMirrorEditor) {
+                codeMirrorEditor.setValue(code);
+            }
+            // Switch to text tab
+            document.getElementById('textTabBtn').click();
+        }
+
+        // Auto-generate code periodically when builder is active and complete
+        let autoGenInterval = null;
+        function startAutoGen() {
+            if (autoGenInterval) return;
+            autoGenInterval = setInterval(() => {
+                // Only auto-gen if builder tab is active and players exist
+                const builderTab = document.getElementById('builderTabBtn');
+                if (!builderTab.classList.contains('active')) return;
+                if (!builderState.players || builderState.players.length === 0) return;
+
+                // Only generate if there are no incomplete fields
+                const issues = findIncompleteFields();
+                if (issues.length > 0) return;
+
+                const code = generatePuzzleCode();
+                if (codeMirrorEditor && codeMirrorEditor.getValue() !== code) {
+                    codeMirrorEditor.setValue(code);
+                }
+            }, 2000);
+        }
+        startAutoGen();
+
+        function generatePuzzleCode() {
+            const lines = [];
+
+            // Player variable assignments
+            const playerVars = builderState.players.map(p => p.name).join(', ');
+            lines.push(`${playerVars} = range(${builderState.players.length})`);
+            lines.push('');
+            lines.push('puzzle = Puzzle(');
+            lines.push('    players=[');
+
+            // Player definitions
+            builderState.players.forEach((player, idx) => {
+                let playerLine = `        Player('${player.name}'`;
+                if (player.claim) {
+                    playerLine += `, claim=${player.claim}`;
+                }
+
+                // Night info
+                const nightInfoLines = generateInfoLines(player.nightInfo, 'night');
+                if (nightInfoLines.length > 0) {
+                    playerLine += `, night_info={`;
+                    if (nightInfoLines.length === 1) {
+                        playerLine += `\n            ${nightInfoLines[0]}\n        }`;
+                    } else {
+                        playerLine += '\n';
+                        nightInfoLines.forEach(line => {
+                            playerLine += `            ${line}\n`;
+                        });
+                        playerLine += '        }';
+                    }
+                }
+
+                // Day info
+                const dayInfoLines = generateInfoLines(player.dayInfo, 'day');
+                if (dayInfoLines.length > 0) {
+                    playerLine += `, day_info={`;
+                    if (dayInfoLines.length === 1) {
+                        playerLine += `\n            ${dayInfoLines[0]}\n        }`;
+                    } else {
+                        playerLine += '\n';
+                        dayInfoLines.forEach(line => {
+                            playerLine += `            ${line}\n`;
+                        });
+                        playerLine += '        }';
+                    }
+                }
+
+                playerLine += '),';
+                lines.push(playerLine);
+            });
+
+            lines.push('    ],');
+
+            // Day events
+            if (Object.keys(builderState.dayEvents).length > 0) {
+                lines.push('    day_events={');
+                Object.keys(builderState.dayEvents).sort((a, b) => Number(a) - Number(b)).forEach(day => {
+                    const events = builderState.dayEvents[day];
+                    const eventStrs = events.map(e => generateEventCode(e)).filter(e => e);
+                    if (eventStrs.length === 1) {
+                        lines.push(`        ${day}: ${eventStrs[0]},`);
+                    } else if (eventStrs.length > 1) {
+                        lines.push(`        ${day}: [`);
+                        eventStrs.forEach(e => lines.push(`            ${e},`));
+                        lines.push('        ],');
+                    }
+                });
+                lines.push('    },');
+            }
+
+            // Night deaths
+            if (Object.keys(builderState.nightDeaths).length > 0) {
+                lines.push('    night_deaths={');
+                Object.keys(builderState.nightDeaths).sort((a, b) => Number(a) - Number(b)).forEach(night => {
+                    const deaths = builderState.nightDeaths[night];
+                    const playerStrs = deaths.filter(d => d.player).map(d => d.player);
+                    if (playerStrs.length === 1) {
+                        lines.push(`        ${night}: ${playerStrs[0]},`);
+                    } else if (playerStrs.length > 1) {
+                        lines.push(`        ${night}: [${playerStrs.join(', ')}],`);
+                    }
+                });
+                lines.push('    },');
+            }
+
+            // Hidden characters (required argument, always emit)
+            lines.push(`    hidden_characters=[${builderState.hiddenCharacters.join(', ')}],`);
+
+            // Hidden self (required argument, always emit)
+            lines.push(`    hidden_self=[${builderState.hiddenSelf.join(', ')}],`);
+
+            // Puzzle flags (only emit non-default values)
+            if (!builderState.playerZeroIsYou) {
+                lines.push('    player_zero_is_you=False,');
+            }
+            if (builderState.allowDuplicateTokens) {
+                lines.push('    allow_duplicate_tokens_in_bag=True,');
+            }
+            if (builderState.finishFinalDay) {
+                lines.push('    finish_final_day=True,');
+            }
+            if (!builderState.deduplicateInitialCharacters) {
+                lines.push('    deduplicate_initial_characters=False,');
+            }
+
+            lines.push(')');
+
+            return lines.join('\n');
+        }
+
+        function generateInfoLines(infoDict, phase) {
+            const lines = [];
+            const allTypes = { ...GuiSchema.infoTypes.night, ...GuiSchema.infoTypes.day };
+
+            Object.keys(infoDict).sort((a, b) => Number(a) - Number(b)).forEach(day => {
+                const items = infoDict[day];
+                const codeStrs = [];
+                items.forEach(item => {
+                    if (!item.type) return;
+                    const typeDef = allTypes[item.type];
+                    if (!typeDef) return;
+
+                    const code = buildCodeFromTemplate(typeDef, item.fields);
+                    if (code) codeStrs.push(code);
+                });
+                if (codeStrs.length === 1) {
+                    lines.push(`${day}: ${codeStrs[0]},`);
+                } else if (codeStrs.length > 1) {
+                    lines.push(`${day}: [`);
+                    codeStrs.forEach(c => lines.push(`    ${c},`));
+                    lines.push('],');
+                }
+            });
+
+            return lines;
+        }
+
+        function generateEventCode(event) {
+            if (!event.type) return '';
+            const typeDef = GuiSchema.dayEvents[event.type];
+            if (!typeDef) return '';
+
+            return buildCodeFromTemplate(typeDef, event.fields);
+        }
+
+        // Build code string from a template, omitting optional/default-matching fields
+        function buildCodeFromTemplate(typeDef, fieldValues) {
+            const template = typeDef.template;
+
+            // Extract function name (everything before first '(')
+            const parenIdx = template.indexOf('(');
+            const funcName = template.substring(0, parenIdx);
+
+            // Build argument list, filtering optional/default fields
+            const args = [];
+            typeDef.fields.forEach(field => {
+                // Special handling for juggleMap type
+                if (field.type === 'juggleMap') {
+                    const entries = fieldValues[field.name] || [];
+                    const validEntries = entries.filter(e => e.player && e.character);
+                    if (validEntries.length > 0) {
+                        const mapStr = validEntries.map(e => `${e.player}: ${e.character}`).join(', ');
+                        args.push(`{${mapStr}}`);
+                    } else {
+                        args.push('{}');
+                    }
+                    return;
+                }
+
+                const value = fieldValues[field.name] || '';
+                const isOptional = field.optional || field.default !== undefined;
+
+                if (!value && isOptional) {
+                    // Skip optional fields with no value
+                    return;
+                }
+                if (field.default !== undefined && value) {
+                    // Skip if value matches the default
+                    const defaultStr = field.default ? 'True' : 'False';
+                    if (value === defaultStr) return;
+                }
+
+                // Determine if this is a keyword arg (contains = in template)
+                const kwPattern = `${field.name}={${field.name}}`;
+                if (template.includes(kwPattern)) {
+                    args.push(`${field.name}=${value}`);
+                } else {
+                    args.push(value);
+                }
+            });
+
+            // Handle multiline templates (e.g. Savant.Ping)
+            if (template.includes('\\n')) {
+                return `${funcName}(\n    ${args.join(',\n    ')}\n)`;
+            }
+
+            return `${funcName}(${args.join(', ')})`;
         }
     </script>
 </body>
