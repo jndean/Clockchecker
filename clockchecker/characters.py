@@ -2028,7 +2028,11 @@ class Imp(GenericDemon):
                 raise NotImplementedError('SW inc Math or not inc Math')
             if sw_catch.is_true():
                 scarletwomen.append(player.id)
-            elif isinstance(character, Minion) and not player.is_dead:
+            # elif isinstance(character, Minion) and not player.is_dead:
+            elif (
+                info.IsCategory(player.id, Minion)(state, me).not_false()
+                and not player.is_dead
+            ):
                 other_minions.append(player.id)
 
         catchers = scarletwomen if scarletwomen else other_minions

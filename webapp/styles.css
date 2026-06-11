@@ -464,14 +464,14 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    flex: 2;
+    flex: 1;
 }
 
 .render-panel {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    flex: 3;
+    flex: 2;
     background-color: #1a202c;
     /* Slightly darker than page background #1f2937 */
     position: relative;

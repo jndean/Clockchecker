@@ -2863,6 +2863,54 @@ def puzzle_NQT55():
     )
     return PuzzleDef(puzzle, solutions)
 
+# This is the description of puzzle 56, uncomment when Legion is implemented
+# def puzzle_NQT56():
+#     # https://www.reddit.com/user/Not_Quite_Vertical/comments/1o5eneb/weekly_puzzle_56_meanwhile_at_the_legion_of_doom/
+
+#     You, Aoife, Hannah, Matthew, Tom, Fraser, Sula, Sarah = range(8)
+#     puzzle = Puzzle(
+#         players=[
+#             Player('You', claim=Saint),
+#             Player('Aoife', claim=Oracle, night_info={
+#                 2: Oracle.Ping(1),
+#                 3: Oracle.Ping(2),
+#             }),
+#             Player('Hannah', claim=Slayer, day_info={
+#                 3: Slayer.Shot(Fraser, died=False),
+#             }),
+#             Player('Matthew', claim=Empath, night_info={
+#                 1: Empath.Ping(2),
+#             }),
+#             Player('Tom', claim=Knight, night_info={
+#                 1: Knight.Ping(Matthew, Aoife),
+#             }),
+#             Player('Fraser', claim=Investigator, night_info={
+#                 1: Investigator.Ping(You, Hannah, Poisoner),
+#             }),
+#             Player('Sula', claim=Washerwoman, night_info={
+#                 1: Washerwoman.Ping(You, Sarah, Chambermaid),
+#             }),
+#             Player('Sarah', claim=Chambermaid, night_info={
+#                 1: Chambermaid.Ping(Aoife, Tom, 2),
+#                 2: Chambermaid.Ping(Tom, Fraser, 1),
+#             }),
+#         ],
+#         day_events={
+#             1: Execution(Matthew),
+#             2: Execution(Sarah),
+#         },
+#         night_deaths={
+#             2: Sula,
+#             3: Tom,
+#         },
+#         hidden_characters=[Legion, Imp, Poisoner],
+#         hidden_self=[],
+#     )
+#     solutions = ((
+#         Saint, Poisoner, Slayer, Empath, Knight, Imp, Washerwoman, Chambermaid
+#     ),)
+#     return PuzzleDef(puzzle, solutions)
+
 def puzzle_NQT58():
     # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ocd6pd/weekly_puzzle_58_minus_one_thats_three/
 
@@ -3238,7 +3286,7 @@ def puzzle_NQT65():
                 2: Oracle.Ping(0),
                 3: Oracle.Ping(1),
             }),
-            
+
         ],
         day_events={
             1: [
@@ -3383,6 +3431,757 @@ def puzzle_NQT67():
     )
     return PuzzleDef(puzzle, solutions, solution_endchars=solution_endchars)
 
+
+def puzzle_NQT68():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1redslq/weekly_puzzle_68_the_numbers_are_all_wrong/
+
+    You, Tom, Jasmine, Fraser, Sarah, Matthew, Anna, Olivia = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+                2: Mathematician.Ping(2),
+            }),
+            Player('Tom', claim=Juggler, night_info={
+                2: Juggler.Ping(3),
+            }, day_info={
+                1: Juggler.Juggle({Sarah: Witch, Matthew: Mutant, Anna: SnakeCharmer, Olivia: Mutant}),
+            }),
+            Player('Jasmine', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Sarah, Oracle, Witch),
+            }),
+            Player('Fraser', claim=Seamstress, night_info={
+                1: Seamstress.Ping(You, Tom, same=False),
+            }),
+            Player('Sarah', claim=Oracle, night_info={
+                2: Oracle.Ping(0),
+                3: Oracle.Ping(0),
+            }),
+            Player('Matthew', claim=Artist, day_info={
+                3: Artist.Ping(IsCategory(Tom, Townsfolk)),
+            }),
+            Player('Anna', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Tom),
+                2: SnakeCharmer.Choice(Matthew),
+                3: SnakeCharmer.Choice(Sarah),
+            }),
+            Player('Olivia', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(1),
+            }),
+        ],
+        day_events={
+            1: [
+                Dies(player=Fraser, after_nominating=True),
+                Execution(Olivia),
+            ],
+            2: Execution(Tom),
+        },
+        night_deaths={
+            2: Jasmine,
+            3: You,
+        },
+        hidden_characters=[Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Mathematician, Juggler, Dreamer, Seamstress, Vortox, Mutant, Witch,
+            Clockmaker),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT69_alt():
+    # Initial proposed puzzle, has multiple solutions due to unforseen timing
+    # issues your Sweetheart poisoning kicking in just before the Klutz is
+    # executed.
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1rlklze/weekly_puzzle_69_thats_the_sects_number/
+
+    You, Dan, Hannah, Jasmine, Matt, Sarah, Fraser, Oscar, Tim = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Sweetheart),
+            Player('Dan', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+            }),
+            Player('Hannah', claim=Artist, day_info={
+                2: Artist.Ping(~IsCategory(Dan, Townsfolk)),
+            }),
+            Player('Jasmine', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Hannah),
+                2: SnakeCharmer.Choice(Sarah),
+                3: SnakeCharmer.Choice(Fraser),
+            }),
+            Player('Matt', claim=Klutz),
+            Player('Sarah', claim=Seamstress, night_info={
+                2: Seamstress.Ping(Hannah, Tim, same=True),
+            }),
+            Player('Fraser', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+                2: Mathematician.Ping(1),
+            }),
+            Player('Oscar', claim=Sage, night_info={
+                2: Sage.Ping(Sarah, Tim),
+            }),
+            Player('Tim', claim=Juggler, night_info={
+                2: Juggler.Ping(0),
+            }, day_info={
+                1: Juggler.Juggle({You: Sweetheart, Jasmine: NoDashii, Matt: Klutz, Sarah: FangGu, Oscar: Sage}),
+            }),
+        ],
+        day_events={
+            1: [
+                Dies(player=You, after_nominating=True),
+                Execution(Matt),
+                Klutz.Choice(player=Matt, choice=Jasmine),
+            ],
+            2: [
+                Dies(player=Dan, after_nominating=True),
+                Execution(Hannah),
+            ],
+        },
+        night_deaths={
+            2: Oscar,
+            3: Fraser,
+        },
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+
+    solutions = (
+        (Sweetheart, Witch, Artist, SnakeCharmer, Klutz, NoDashii,
+            Mathematician, Sage, Juggler),
+        (Sweetheart, Oracle, Witch, Vortox, Klutz, Seamstress, Mathematician,
+            Sage, Juggler),
+        (Sweetheart, Oracle, Artist, Vortox, Klutz, Witch, Mathematician, Sage,
+            Juggler),
+        (Sweetheart, Oracle, Artist, Vortox, Klutz, Seamstress,
+            Mathematician, Sage, Witch),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT69():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1rlklze/weekly_puzzle_69_thats_the_sects_number/
+
+    You, Hannah, Matt, Adam, Fraser, Sarah, Tom, Oscar, Dan = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Sage, night_info={
+                3: Sage.Ping(Adam, Tom),
+            }),
+            Player('Hannah', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Sarah),
+                2: SnakeCharmer.Choice(Dan),
+            }),
+            Player('Matt', claim=Sweetheart),
+            Player('Adam', claim=Oracle, night_info={
+                2: Oracle.Ping(1),
+                3: Oracle.Ping(1),
+            }),
+            Player('Fraser', claim=Artist, day_info={
+                3: Artist.Ping(~IsCharacter(Fraser, Artist)),
+            }),
+            Player('Sarah', claim=Juggler, night_info={
+                2: Juggler.Ping(1),
+            }, day_info={
+                1: Juggler.Juggle({You: Witch, Hannah: NoDashii, Matt: Mutant, Fraser: NoDashii}),
+            }),
+            Player('Tom', claim=Mathematician, night_info={
+                1: Mathematician.Ping(2),
+                2: Mathematician.Ping(1),
+                3: Mathematician.Ping(2),
+            }),
+            Player('Oscar', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Hannah, Adam, same=True),
+            }),
+            Player('Dan', claim=Klutz, day_info={
+                2: Klutz.Choice(player=Dan, choice=Tom),
+            }),
+        ],
+        day_events={
+            1: [
+                Dies(player=Oscar, after_nominating=True),
+                Execution(Matt),
+            ],
+            2: [
+                Dies(player=Sarah, after_nominating=True),
+                Execution(Hannah),
+            ],
+        },
+        night_deaths={
+            2: Dan,
+            3: You,
+        },
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Sage, SnakeCharmer, Sweetheart, Oracle, NoDashii, Witch, Mathematician,
+            Seamstress, Klutz),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT70():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1rrvgzh/weekly_puzzle_70_digging_your_own_grave/
+
+    You, Dan, Hannah, Tom, Sarah, Matthew, Fraser, Adam, Jasmin = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(0),
+            }),
+            Player('Dan', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Sarah, Fraser, demon=False),
+                2: FortuneTeller.Ping(You, Hannah, demon=False),
+                3: FortuneTeller.Ping(Dan, Hannah, demon=False),
+            }),
+            Player('Hannah', claim=Librarian, night_info={
+                1: Librarian.Ping(Tom, Fraser, Drunk),
+            }),
+            Player('Tom', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Sarah, Butler),
+                3: Undertaker.Ping(You, Baron),
+                4: Undertaker.Ping(Dan, Spy),
+            }),
+            Player('Sarah', claim=Butler),
+            Player('Matthew', claim=Saint),
+            Player('Fraser', claim=Investigator, night_info={
+                1: Investigator.Ping(Hannah, Sarah, Spy),
+            }),
+            Player('Adam', claim=Recluse),
+            Player('Jasmin', claim=Ravenkeeper, night_info={
+                4: Ravenkeeper.Ping(Tom, Undertaker),
+            }),
+        ],
+        day_events={
+            1: Execution(Sarah),
+            2: Execution(You),
+            3: Execution(Dan),
+        },
+        night_deaths={
+            2: Adam,
+            3: Fraser,
+            4: Jasmin,
+        },
+        hidden_characters=[Imp, Poisoner, Spy, Baron, ScarletWoman, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Empath, FortuneTeller, Poisoner, Undertaker, Butler, Imp, Investigator,
+            Recluse, Ravenkeeper),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+# def puzzle_NQT71_alt1():
+#     # https://discord.com/channels/569683781800296501/854891541969109033/1483902503547572335
+#     # Broken version of puzzle 71 due to NQT bug. clockchecker also doesn't find
+#     # all solutions. TODO: figure out why and fix.
+#     You, Sarah, Matthew, Hannah, Tom, Oscar, Aoife, Fraser = range(8)
+#     puzzle = Puzzle(
+#         players=[
+#             Player('You', claim=Mathematician, night_info={
+#                 1: Mathematician.Ping(0),
+#                 2: Mathematician.Ping(1),
+#             }),
+#             Player('Sarah', claim=VillageIdiot, night_info={
+#                 1: VillageIdiot.Ping(Aoife, is_evil=True),
+#                 2: VillageIdiot.Ping(Fraser, is_evil=True),
+#                 3: VillageIdiot.Ping(Matthew, is_evil=True),
+#             }),
+#             Player('Matthew', claim=Slayer, day_info={
+#                 3: Slayer.Shot(Oscar, died=False),
+#             }),
+#             Player('Hannah', claim=Ravenkeeper, night_info={
+#                 2: Ravenkeeper.Ping(Oscar, Vortox),
+#             }),
+#             Player('Tom', claim=Mutant),
+#             Player('Oscar', claim=FortuneTeller, night_info={
+#                 1: FortuneTeller.Ping(Aoife, You, demon=True),
+#                 2: FortuneTeller.Ping(Matthew, Tom, demon=False),
+#                 3: FortuneTeller.Ping(Oscar, Fraser, demon=False),
+#             }),
+#             Player('Aoife', claim=Noble, night_info={
+#                 1: Noble.Ping(Matthew, Fraser, Hannah),
+#             }),
+#             Player('Fraser', claim=Chef, night_info={
+#                 1: Chef.Ping(0),
+#             }),
+#         ],
+#         day_events={
+#             1: Execution(You),
+#             2: Execution(Aoife),
+#         },
+#         night_deaths={
+#             2: Hannah,
+#             3: Tom,
+#         },
+#         hidden_characters=[NoDashii, Vortox, ScarletWoman, Mutant],
+#         hidden_self=[],
+#     )
+#     solutions = (
+#         # TODO
+#     )
+#     return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT71_alt2():
+    # https://discord.com/channels/569683781800296501/854891541969109033/1484584714785390713
+    # Broken version of puzzle 71 due to NQT bug
+    You, Sarah, Aoife, Tom, Fraser, Josh, Hannah, Dan = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Josh),
+            }),
+            Player('Sarah', claim=Empath, night_info={
+                1: Empath.Ping(1),
+                2: Empath.Ping(1),
+                3: Empath.Ping(0),
+            }),
+            Player('Aoife', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Tom, is_evil=False),
+                2: VillageIdiot.Ping(Fraser, is_evil=False),
+                3: VillageIdiot.Ping(Josh, is_evil=True),
+            }),
+            Player('Tom', claim=Slayer, day_info={
+                3: Slayer.Shot(Sarah, died=False),
+            }),
+            Player('Fraser', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Josh, Chef),
+            }),
+            Player('Josh', claim=Chef, night_info={
+                1: Chef.Ping(1),
+            }),
+            Player('Hannah', claim=Mutant),
+            Player('Dan', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+                2: Mathematician.Ping(0),
+            }),
+        ],
+        day_events={
+            1: Execution(You),
+            2: Execution(Dan),
+        },
+        night_deaths={
+            2: Hannah,
+            3: Fraser,
+        },
+        hidden_characters=[NoDashii, Vortox, ScarletWoman, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (SnakeCharmer, Empath, ScarletWoman, Slayer, NoDashii, Chef, Mutant,
+            Mathematician),
+        (SnakeCharmer, ScarletWoman, Mutant, Slayer, Ravenkeeper, Chef,
+            NoDashii, Mathematician),
+        (SnakeCharmer, ScarletWoman, VillageIdiot, Mutant, Ravenkeeper, Chef,
+            NoDashii, Mathematician),
+        (SnakeCharmer, Mutant, ScarletWoman, Slayer, Ravenkeeper, Chef,
+            NoDashii, Mathematician),
+        (SnakeCharmer, Empath, ScarletWoman, Mutant, Ravenkeeper, Chef,
+            NoDashii, Mathematician),
+        (SnakeCharmer, Mutant, VillageIdiot, Slayer, Ravenkeeper, ScarletWoman,
+            NoDashii, Mathematician),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def _puzzle_NQT71():
+    # TODO: Currently not solving correctly!
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1s2alxt/weekly_puzzle_71_the_disappearing_act/
+
+    You, Tom, Oscar, Fraser, Hannah, Sarah, Dan, Matt = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Dan),
+                2: SnakeCharmer.Choice(Sarah),
+                3: SnakeCharmer.Choice(Matt),
+            }),
+            Player('Tom', claim=Juggler, night_info={
+                2: Juggler.Ping(1),
+            }, day_info={
+                1: Juggler.Juggle({Oscar: Mutant, Fraser: Ravenkeeper, Dan: NoDashii}),
+            }),
+            Player('Oscar', claim=Mutant),
+            Player('Fraser', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Matt, Mutant),
+            }),
+            Player('Hannah', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Sarah', claim=Mathematician, night_info={
+                1: Mathematician.Ping(1),
+                2: Mathematician.Ping(0),
+                3: Mathematician.Ping(0),
+            }),
+            Player('Dan', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(4),
+            }),
+            Player('Matt', claim=VillageIdiot, night_info={
+                1: VillageIdiot.Ping(Fraser, is_evil=True),
+                2: VillageIdiot.Ping(Oscar, is_evil=True),
+                3: VillageIdiot.Ping(Tom, is_evil=True),
+            }),
+        ],
+        day_events={
+            1: Execution(Hannah),
+            2: Execution(Oscar),
+        },
+        night_deaths={
+            2: Fraser,
+            3: Tom,
+        },
+        hidden_characters=[NoDashii, Vortox, ScarletWoman, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (SnakeCharmer, Juggler, Mutant, NoDashii, Empath, Mathematician,
+            ScarletWoman, VillageIdiot),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+# TODO: NQT72, has Legion
+
+def puzzle_NQT73():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ssip2i/weekly_puzzle_73_opening_theory/
+
+    You, Jasmine, Fraser, Matthew, Sarah, Tom, Hannah, Olivia = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Butler),
+            Player('Jasmine', claim=Artist, day_info={
+                3: Artist.Ping(IsInPlay(ScarletWoman)),
+            }),
+            Player('Fraser', claim=Knight, night_info={
+                1: Knight.Ping(You, Matthew),
+            }),
+            Player('Matthew', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Olivia),
+                2: SnakeCharmer.Choice(Sarah),
+                3: SnakeCharmer.Choice(Jasmine),
+            }),
+            Player('Sarah', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(4),
+            }),
+            Player('Tom', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Fraser, Knight, Poisoner),
+            }),
+            Player('Hannah', claim=Empath, night_info={
+                1: Empath.Ping(1),
+                2: Empath.Ping(1),
+            }),
+            Player('Olivia', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(You, Fraser, 1),
+                2: Chambermaid.Ping(Fraser, Matthew, 1),
+            }),
+        ],
+        day_events={
+            1: Execution(Tom),
+            2: Execution(Olivia),
+        },
+        night_deaths={
+            2: You,
+            3: Hannah,
+        },
+        hidden_characters=[Imp, Vortox, Poisoner, ScarletWoman],
+        hidden_self=[],
+    )
+    solutions = (
+        (Butler, Artist, Knight, SnakeCharmer, Vortox, Dreamer, Empath,
+            Poisoner),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT74():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1t6bg84/weekly_puzzle_74_youre_obviously_evil/
+
+    You, Fraser, Aoife, Dan, Sarah, Oscar, Tom, Matt, Hannah = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Investigator, night_info={
+                1: Investigator.Ping(Dan, Aoife, Spy),
+            }),
+            Player('Fraser', claim=Butler),
+            Player('Aoife', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Dan', claim=Ravenkeeper, night_info={
+                4: Ravenkeeper.Ping(Oscar, Spy),
+            }),
+            Player('Sarah', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Fraser, Drunk),
+                3: Undertaker.Ping(Tom, FortuneTeller),
+            }),
+            Player('Oscar', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Tom', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Fraser, Aoife, demon=True),
+                2: FortuneTeller.Ping(Tom, Matt, demon=False),
+            }),
+            Player('Matt', claim=Recluse),
+            Player('Hannah', claim=Saint),
+        ],
+        day_events={
+            1: Execution(Fraser),
+            2: Execution(Tom),
+            3: Execution(Sarah),
+        },
+        night_deaths={
+            2: Aoife,
+            3: Hannah,
+            4: Dan,
+        },
+        hidden_characters=[Imp, Poisoner, ScarletWoman, Spy, Baron, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Investigator, Butler, Empath, Ravenkeeper, Undertaker, Imp,
+            FortuneTeller, Poisoner, Saint),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT75():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1tdqrm8/weekly_puzzle_75_cut_from_the_same_cloth/
+
+    You, Fraser, Hannah, Jasmine, Sarah, Matt, Adam, Tom = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Sarah, Adam, same=True),
+            }),
+            Player('Fraser', claim=Mathematician, night_info={
+                1: Mathematician.Ping(2),
+                2: Mathematician.Ping(0),
+            }),
+            Player('Hannah', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Matt),
+                2: SnakeCharmer.Choice(Tom),
+                3: SnakeCharmer.Choice(Fraser),
+            }),
+            Player('Jasmine', claim=Klutz, day_info={
+            }),
+            Player('Sarah', claim=Dreamer, night_info={
+                1: Dreamer.Ping(Adam, Artist, Vigormortis),
+                2: Dreamer.Ping(You, Seamstress, Vigormortis),
+                3: Dreamer.Ping(Tom, Juggler, NoDashii),
+            }),
+            Player('Matt', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(2),
+            }),
+            Player('Adam', claim=Artist, day_info={
+                1: Artist.Ping(IsCategory(Fraser, Demon)),
+            }),
+            Player('Tom', claim=Juggler, night_info={
+                2: Juggler.Ping(0),
+            }, day_info={
+                1: Juggler.Juggle({You: NoDashii, Matt: Vigormortis}),
+            }),
+        ],
+        day_events={
+            1: [
+                Execution(Jasmine),
+                Klutz.Choice(player=Jasmine, choice=Matt),
+            ],
+            2: [
+                Dies(player=Tom, after_nominating=True),
+                Execution(You),
+            ],
+        },
+        night_deaths={
+            2: Adam,
+            3: Fraser,
+        },
+        hidden_characters=[FangGu, Vigormortis, NoDashii, Vortox, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Seamstress, FangGu, Witch, Klutz, Dreamer, Mutant, Artist, Juggler),
+    )
+    solutions_endchars = (
+        (Seamstress, FangGu, Witch, Klutz, Dreamer, FangGu, Artist, Juggler),
+    )
+    return PuzzleDef(puzzle, solutions, solutions_endchars)
+
+# Puzzle 76 is an alternative puzzle format about narrowing down 3-for-3
+
+def puzzle_NQT77():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1tpaat3/weekly_puzzle_77_yes_but_dont/
+
+    You, Hannah, Matt, Fraser, Tom, Adam, Dan, Sarah, Josh = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Sarah, Baron),
+            }),
+            Player('Hannah', claim=Librarian, night_info={
+                1: Librarian.Ping(Tom, Fraser, Drunk),
+            }),
+            Player('Matt', claim=Recluse, night_info={
+                4: CharacterChange(Imp),
+            }),
+            Player('Fraser', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Adam, Drunk),
+                3: Undertaker.Ping(Tom, Spy),
+            }),
+            Player('Tom', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Adam', claim=Investigator, night_info={
+                1: Investigator.Ping(Matt, Josh, Poisoner),
+            }),
+            Player('Dan', claim=Butler),
+            Player('Sarah', claim=Saint),
+            Player('Josh', claim=Empath, night_info={
+                1: Empath.Ping(0),
+                2: Empath.Ping(1),
+            }),
+        ],
+        day_events={
+            1: Execution(Adam),
+            2: Execution(Tom),
+            3: Execution(Fraser),
+        },
+        night_deaths={
+            2: You,
+            3: Josh,
+            4: Dan,
+        },
+        hidden_characters=[Poisoner, ScarletWoman, Baron, Spy, Imp, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Ravenkeeper, Librarian, Poisoner, Drunk, Chef, Investigator, Butler,
+            Imp, Empath),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT78():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1ttxhpb/weekly_puzzle_78_its_pronounced_eefa/
+
+    You, Charlotte, Fraser, Jasmine, Matt, Sarah, Dan, Aoife, Oscar = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Undertaker, night_info={
+                2: Undertaker.Ping(Matt, Butler),
+                3: Undertaker.Ping(Jasmine, ScarletWoman),
+            }),
+            Player('Charlotte', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Aoife, Fraser, demon=False),
+                2: FortuneTeller.Ping(Charlotte, Oscar, demon=False),
+                3: FortuneTeller.Ping(Charlotte, Sarah, demon=False),
+                4: FortuneTeller.Ping(Aoife, Fraser, demon=True),
+            }),
+            Player('Fraser', claim=Slayer, day_info={
+                4: Slayer.Shot(Charlotte, died=False),
+            }),
+            Player('Jasmine', claim=Chef, night_info={
+                1: Chef.Ping(1),
+            }),
+            Player('Matt', claim=Butler),
+            Player('Sarah', claim=Investigator, night_info={
+                1: Investigator.Ping(Aoife, Fraser, Baron),
+            }),
+            Player('Dan', claim=Ravenkeeper, night_info={
+                2: Ravenkeeper.Ping(Sarah, Poisoner),
+            }),
+            Player('Aoife', claim=Recluse),
+            Player('Oscar', claim=Saint),
+        ],
+        day_events={
+            1: Execution(Matt),
+            2: Execution(Jasmine),
+            3: Execution(You),
+        },
+        night_deaths={
+            2: Dan,
+            3: Oscar,
+            4: Sarah,
+        },
+        hidden_characters=[Imp, Poisoner, ScarletWoman, Baron, Spy, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Drunk, FortuneTeller, Baron, Chef, Butler, Investigator, Imp, Recluse,
+            Saint),
+    )
+    return PuzzleDef(puzzle, solutions)
+
+def puzzle_NQT79():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1u30acu/weekly_puzzle_79_erudition_lesson/
+
+    You, Edd, Goose, Seb, Louisa, Marc, Marsh, Chris = range(8)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Savant, day_info={
+                1: Savant.Ping(
+                    ExactlyN(3, [
+                        IsInPlay(Mathematician),
+                        IsInPlay(Juggler),
+                        IsInPlay(Vigormortis),
+                        IsInPlay(NoDashii)
+                    ]),
+                    ExactlyN(2, [
+                        IsCategory(Edd, Townsfolk),
+                        IsCategory(Louisa, Townsfolk),
+                        IsCategory(Chris, Townsfolk)
+                    ])
+                ),
+                2: Savant.Ping(
+                    ExactlyN(2, [IsEvil(Edd), IsEvil(Marc), IsEvil(Chris)]),
+                    LongestRowOfTownsfolk(length=2),
+                ),
+                3: Savant.Ping(
+                    CharacterTypesAmongPlayers([Seb, Louisa, Marc, Chris], 3),
+                    CharacterIsNextToCharacter(Vigormortis, Mutant)
+                ),
+            }),
+            Player('Edd', claim=Sweetheart),
+            Player('Goose', claim=SnakeCharmer, night_info={
+                1: SnakeCharmer.Choice(Marc),
+                2: SnakeCharmer.Choice(Seb),
+                3: SnakeCharmer.Choice(Marsh),
+            }),
+            Player('Seb', claim=Seamstress, night_info={
+                1: Seamstress.Ping(Chris, You, same=False),
+            }),
+            Player('Louisa', claim=Artist, day_info={
+                2: Artist.Ping(~IsCategory(Goose, Townsfolk)),
+            }),
+            Player('Marc', claim=Clockmaker, night_info={
+                1: Clockmaker.Ping(1),
+            }),
+            Player('Marsh', claim=Mathematician, night_info={
+                1: Mathematician.Ping(0),
+                2: Mathematician.Ping(1),
+                3: Mathematician.Ping(2),
+            }),
+            Player('Chris', claim=Juggler, night_info={
+                2: Juggler.Ping(1),
+            }, day_info={
+                1: Juggler.Juggle(
+                    {You: FangGu, Edd: Vigormortis, Marc: Mutant}
+                ),
+            }),
+        ],
+        day_events={
+            1: Execution(Edd),
+            2: [
+                Dies(player=Chris, after_nominating=True),
+                Execution(Louisa),
+            ],
+        },
+        night_deaths={
+            2: Seb,
+            3: Marc,
+        },
+        hidden_characters=[FangGu, Vigormortis, Vortox, NoDashii, Witch, Mutant],
+        hidden_self=[],
+    )
+    solutions = (
+        (Savant, Sweetheart, Vortox, Seamstress, Witch, Clockmaker,
+            Mathematician, Juggler),
+    )
+    return PuzzleDef(puzzle, solutions)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
@@ -3438,7 +4237,7 @@ def puzzle_josef_yes_but_dont():
 
 def puzzle_josef_lunatic():
     # Test puzzle, have you really been Fang Gu jumped or is that
-    #  your Lunacy talking?
+    # just your Lunacy talking?
     You, Tom, Nicola, Tristan, Katharine, Lloyd, Ian, Charlie = range(8)
     puzzle = Puzzle(
         players=[
@@ -3486,7 +4285,7 @@ def puzzle_josef_lunatic():
 
 def puzzle_nikhilvyas27():
     # nikhilvyas27: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
-    
+
     You, Holly, Emily, Clara, Flora, Xavi, Val, Nick = range(8)
     puzzle = Puzzle(
         players=[
@@ -3530,7 +4329,7 @@ def puzzle_nikhilvyas27():
 
 def puzzle_nikhilvyas28():
     # nikhilvyas28: https://discord.com/channels/569683781800296501/854891541969109033/1452031978999255166
-    
+
     You, Quinn, Ugo, Ian, Viraj, Paige, Dan, Zoey = range(8)
     puzzle = Puzzle(
         players=[

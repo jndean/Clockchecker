@@ -333,7 +333,8 @@ def render_puzzle(puzzle_or_state: Puzzle | State) -> str:
     if event_html_items:
         e_left = cx - shift_x
         e_top = cy - shift_y
-        events_section = f'<div class="events-box" style="left: {e_left}px; top: {e_top}px;">{"".join(event_html_items)}</div>'
+        small_style = "font-size: 15px; max-width: 220px;" if n_players < 7 else ""
+        events_section = f'<div class="events-box" style="left: {e_left}px; top: {e_top}px; {small_style}">{"".join(event_html_items)}</div>'
 
     # Hidden Roles
     unique_hidden = []
@@ -366,7 +367,7 @@ def render_puzzle(puzzle_or_state: Puzzle | State) -> str:
 
             <div class="bottom-info-row">
                 <div class="hidden-roles-container">
-                    <div class="box-title"><span>Potential</span><span>Hidden</span><span>Roles</span></div>
+                    <div class="box-title"><span>Potential</span><span>Hidden</span><span>Characters</span></div>
                     <div class="hidden-roles-list">
                         {"".join(hidden_html_items)}
                     </div>

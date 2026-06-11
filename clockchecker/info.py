@@ -566,7 +566,7 @@ class DrunkBetweenTownsfolk(Info):
         result = STBool.FALSE
         for player in range(N):
             found_drunk = IsCharacter(player, characters.Drunk)(state, src)
-            if found_drunk.is_false():  # Allow MAYBE
+            if found_drunk.is_false():  # Allows MAYBE
                 continue
             tf_neighbours = (
                 IsCategory((player - 1) % N, characters.Townsfolk)(state, src) &
@@ -658,3 +658,22 @@ class CharacterTypesAmongPlayers(Info):
             f'{self.count} character types amongst '
             f'{", ".join(names[p] for p in self.players)}'
         )
+
+@dataclass
+class CharacterIsNextToCharacter(Info):
+    character1: type[Character]
+    character2: type[Character]
+
+    def __call__(self, state: State, src: PlayerID) -> STBool:
+        N = len(state.players)
+        result = STBool.FALSE
+        for player in range(N):
+            is_char1 = IsCharacter(player, self.character1)(state, src)
+            if is_char1.is_false():  # Allows MAYBE
+                continue
+            neighbours_char2 = (
+                IsCharacter((player - 1) % N, self.character1) |
+                IsCharacter((player + 1) % N, self.character1)
+            )(state, src)
+            result |= is_char1 & neighbours_char2
+        return result
