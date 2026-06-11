@@ -59,8 +59,10 @@ class CompromiseConfig:
 
 
 class Callbacks(enum.Enum):
-    # E.g., Minstrel or ScarletWoman responding to death
+    # E.g., ScarletWoman preempting death of demon
     PRE_DEATH = 'pre_death_in_town'
+    # E.g., Minstrel trigger, TeaLady recomputing living neighbours
+    POST_DEATH = 'post_death_in_town'
     # E.g. FT moves red-herring or EvilTwin picks new twin
     ALIGNMENT_CHANGE = 'alignment_change_in_town'
     # E.g., NoDashii changes which neighbours they're poisoning
@@ -209,6 +211,37 @@ class Player:
             )
         )
 
+    def cant_die(self, state: State) -> STBool:
+        """Check if player cannot die, e.g. TeaLady neighbour."""
+        if hasattr(state, 'pithag_preventing_kills'):
+            return info.STBool.TRUE
+        result = info.STBool.FALSE
+        # Protection from other players stored in protection map
+        if (pmap := getattr(self, 'protection_map', False)):
+            for value in pmap.values():
+                result |= value
+        # Protection from own abilities.
+        # (Could these just be in the protection map too?)
+        if result.not_true():
+            result |= self.character.char_cant_die(state, self.id)
+        return result
+
+    def safe_from_attacker(
+        self,
+        state: State,
+        attacker: PlayerID
+    ) -> STBool:
+        """Queried when player is attacked directly"""
+        cant_die = self.cant_die(state)
+        is_demon = info.IsCategory(attacker, characters.Demon)(
+            state, self.id
+        )
+        safe_from_demon = info.STBool(bool(
+            getattr(self, 'safe_from_demon_count', 0)
+            or getattr(state, 'active_princesses', 0)
+        ))
+        return cant_die | (is_demon & safe_from_demon)
+
     def change_claim_if_claimed_change_tonight(self, state: State) -> None:
         """If player claims to change character tonight, update claim now."""
         claimed_change = state.get_night_info(
@@ -224,7 +257,10 @@ class Player:
             boffin_repr = self.boffin_ability._world_str(state)
             items.append(f'with Boffin[{boffin_repr}]')
         if self.is_dead:
-            items.append('💀')
+            if getattr(self, 'vigormortised', False):
+                items.append('👻')
+            else:
+                items.append('💀')
         if self.droison_count:
             items.append('🧪')
         if hasattr(self, 'speculative_evil'):
@@ -567,6 +603,10 @@ class State:
                     return
                 currently_alive_gt[death.player] = not previously_alive_gt
         if currently_alive != currently_alive_gt:
+            self.log(
+                f'REJECT: Incorrect night deaths, currently_living='
+                f'{[int(x) for x in currently_alive]}'
+            )
             return
         del self.previously_alive
 
@@ -615,12 +655,11 @@ class State:
         yield self
 
     def change_alignment(self, pid: PlayerID, is_evil: bool) -> StateGen:
-        # Returns a StateGen because one day I will implement alignment-change
-        # event callbacks that other characters may respond to (e.g. FT, ET).
+        """Change a players alignment, trigger allignment change callbacks."""
         player = self.players[pid]
         player.is_evil = is_evil
         player.ever_behaved_evil |= info.behaves_evil(self, pid)
-        yield self
+        yield from self.trigger_callback(Callbacks.ALIGNMENT_CHANGE, pid)
 
     def change_character(
         self,
@@ -684,15 +723,15 @@ class State:
         remaining_chars = self.puzzle.night_order[self.phase_order_index + 1:]
         return player in self.players_still_to_act or char in remaining_chars
 
-    def post_death_in_town(self, dead_player_id: PlayerID) -> StateGen:
-        """Called immediately after a player died."""
-        dead_character = self.players[dead_player_id].character
-        if (
-            isinstance(dead_character, characters.Demon)
-            and self.check_game_over()
-        ):
-            return
-        yield self
+    def post_death_in_town(self, dead_player: PlayerID) -> StateGen:
+        """Called immediately after a player dies."""
+        for state in self.trigger_callback(Callbacks.POST_DEATH, dead_player):
+            dead_character = state.players[dead_player].character
+            if (
+                not isinstance(dead_character, characters.Demon)
+                or not state.check_game_over()
+            ):
+                yield state
 
     def check_game_over(self) -> bool:
         """The game is never over, so reject games where a team has won."""
