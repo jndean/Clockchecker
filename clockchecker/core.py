@@ -157,27 +157,12 @@ class Player:
     def acts_like(self, character_t: type[Character]) -> bool:
         return self.get_ability_that_acts_like(character_t) is not None
 
-    def get_misreg_categories(
-        self,
-        state: State,
-        assume_droisoned: bool = False,
-    ) -> tuple[characters.Category]:
-        """
-        Get the Categories this Player can misregister as. Recurses into wrapped
-        characters, and handles droisoning, including awkward droisoned
-        Boffin abilities.
-        """
-        categories = (
-            () if (self.droison_count or assume_droisoned)
-            else self.character.misregister_categories
-        )
-        # boffin_ability is only present when the Boffin is sober-and-healthy
-        if hasattr(self, 'boffin_ability'):
-            categories = tuple(set(
-                categories + self.boffin_ability.misregister_categories
-            ))
-        return categories
-
+    def walk_sober_abilities(self, assume_droisoned=False) -> Iterator[Character]:
+        if not (self.droison_count or assume_droisoned):
+            yield from self.character.walk_ability_tree()
+        if (b_ability := getattr(self, 'boffin_ability', None)) is not None:
+            yield from b_ability.walk_ability_tree()
+        
     @property
     def vigormortised(self):
         return getattr(self.character, 'vigormortised', False)

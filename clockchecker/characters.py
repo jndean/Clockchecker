@@ -462,6 +462,8 @@ _Category.register(Demon)
 _Category.register(Traveller)
 Category : TypeAlias = type[_Category]
 ALL_CATEGORIES = (Townsfolk, Outsider, Minion, Demon, Traveller)
+GOOD_CATEGORIES = (Townsfolk, Outsider)
+EVIL_CATEGORIES = (Minion, Demon)
 
 
 @dataclass
@@ -598,13 +600,15 @@ class Balloonist(Townsfolk):
 
         ping_player = state.players[ping.player]
         current_category = ping_player.character.get_category()
-        possible_regs = set(
-            (current_category,) + ping_player.get_misreg_categories(state)
-        )
+        possible_regs = {
+            cat for cat in ALL_CATEGORIES
+            if info.IsCategory(ping.player, cat)(state, me).not_false()
+        }
         # Anything the previous ping must have been is disallowed for this ping
         if self.prev_category is not None and len(self.prev_regs) == 1:
             possible_regs.discard(self.prev_regs[0])
         possible_regs = tuple(possible_regs)
+        # TODO: can previous player misregister again today? Differently?
         actually_same = current_category is self.prev_category
         prev_category = self.prev_category
 
@@ -914,7 +918,7 @@ class Clockmaker(Townsfolk):
             """
             This implementation checks against the min distance over all
             minion-demon pairs, giving MAYBEs as appropriate. The phrase
-            "The Demon" must give living demons priority over dead demons, so if
+0            "The Demon" must give living demons priority over dead demons, so if
             there are any living demons, all dead demons are ignored.
             """
             players = state.players
@@ -1849,9 +1853,7 @@ class Hermit(Outsider):
         """
         assert len(outsiders) > 0
         override_registry = {}
-        misreg_categories = set()
         for i, outsider in enumerate(outsiders):
-            misreg_categories.update(outsider.misregister_categories)
             for fname in ('apply_death', 'attacked_at_night', 'executed', 'killed'):
                 if getattr(outsider, fname) is not getattr(Character, fname):
                     if fname in override_registry:
@@ -1859,12 +1861,10 @@ class Hermit(Outsider):
                             f'Hermit has two conflicting overrides for {fname}'
                         )
                     override_registry[fname] = i
-        misreg_categories.discard(Outsider)
 
         cls.lies_about_character_and_info = any(
             x.lies_about_character_and_info for x in outsiders
         )
-        cls.misregister_categories = tuple(misreg_categories)
         cls.override_registry = override_registry
         cls.outsiders = tuple(outsiders)
 
@@ -2178,6 +2178,36 @@ class Knight(Townsfolk):
                 f'{names[self.player1]} and {names[self.player2]}'
                 f' are not the Demon'
             )
+
+@dataclass
+class Legion(Minion):
+    """
+    Each night*, a player might die. Executions fail if only evil voted.
+    You register as a Minion too. [Most players are Legion]
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.NEVER
+
+    @staticmethod
+    def modify_category_counts(bounds: CategoryBounds) -> CategoryBounds:
+        _, _, (min_mn, max_mn), (min_dm, max_dm) = bounds
+        bounds = (
+            (),
+            (min_out + 2, max_out + 2),
+            mn,
+            dm,
+        )
+        raise NotImplementedError()
+        return bounds
+
+    @staticmethod
+    def modify_evil_generator(
+        evil_gen: Iterator[tuple[type[Character]]],
+    ):
+        """Special case for generating Legion bags."""
+        for evils in evil_gen:
+            if Legion not in evils:
+                yield evils
+        
 
 @dataclass
 class Leviathan(Demon):

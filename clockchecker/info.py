@@ -259,14 +259,27 @@ class IsCharacter(Info):
     player: PlayerID
     character: type[Character]
     def __call__(self, state: State, src: PlayerID) -> STBool:
+
         player = state.players[self.player]
-        misreg_categories = player.get_misreg_categories(state)
         truth = isinstance(player.character, self.character)
-        is_maybe = (
-            issubclass(self.character, misreg_categories)
-            or (truth and bool(misreg_categories))
-        )
-        # TODO: Legion logic will go here too.
+        is_maybe = False
+        st_says = truth
+
+        for ability in player.walk_sober_abilities():
+            if isinstance(ability, characters.Recluse) and (
+                truth or issubclass(self.character, characters.EVIL_CATEGORIES)
+            ):
+                is_maybe = True
+            elif isinstance(ability, characters.Spy) and (
+                truth or issubclass(self.character, characters.GOOD_CATEGORIES)
+            ):
+                is_maybe = True
+            elif (
+                isinstance(ability, characters.Legion)
+                and issubclass(self.character, characters.Minion)
+            ):
+                st_says = True
+
         return STBool((truth, is_maybe, truth))
     
     def display(self, names: list[str]) -> str:
@@ -281,15 +294,27 @@ class IsCategory(Info):
 
     def __call__(self, state: State, src: PlayerID) -> STBool:
         player = state.players[self.player]
-        misreg_categories = player.get_misreg_categories(
-            state, assume_droisoned=self.assume_droisoned
-        )
         truth = isinstance(player.character, self.category)
-        is_maybe = (
-            self.category in misreg_categories
-            or (truth and bool(misreg_categories))
-        )
-        # TODO: Legion logic will go here too.
+        is_maybe = False
+        st_says = truth
+
+        for ability in player.walk_sober_abilities(self.assume_droisoned):
+            if (
+                isinstance(ability, characters.Recluse)
+                and (truth or self.category in characters.EVIL_CATEGORIES)
+            ):
+                is_maybe = True
+            elif (
+                isinstance(ability, characters.Spy)
+                and (truth or self.category in characters.GOOD_CATEGORIES)
+            ):
+                is_maybe = True
+            elif (
+                isinstance(ability, characters.Legion)
+                and self.category is characters.Minion
+            ):
+                st_says = True
+
         return STBool((truth, is_maybe, truth))
     
     def display(self, names: list[str]) -> str:

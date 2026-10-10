@@ -62,7 +62,7 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
         max_speculative_ceremad,
         speculative_ceremad_characters
     ) = _speculative_lying_starting_characters(puzzle)
-    liar_combinations = it.product(
+    evil_gen = (demons + minions for demons, minions in it.product(
         it.chain(*[
             it.combinations(puzzle.demons, i)
             for i in range(
@@ -73,7 +73,12 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
         it.chain(*[
             it.combinations(puzzle.minions, i)
             for i in range(num_minions, len(puzzle.minions) + 1)
-        ]),
+        ])
+    ))
+    if characters.Legion in puzzle.script:
+        evil_gen = characters.Legion.modify_evil_generator(evil_gen)
+    liar_combinations = it.product(
+        evil_gen,
         it.chain(*[
             it.combinations(puzzle.hidden_good, i)
             for i in range(len(puzzle.hidden_good) + 1)
@@ -87,10 +92,11 @@ def _place_hidden_characters(puzzle: Puzzle) -> ConfigGen:
             for i in range(max_speculative_ceremad + 1)
         ])
     )
+
     player_ids = list(range(len(puzzle.players)))
     dbg_idx = 0
-    for demons, minions, hidden_good, spec_evil, spec_mad in liar_combinations:
-        liars = demons + minions + hidden_good + spec_evil + spec_mad
+    for evils, hidden_good, spec_evil, spec_mad in liar_combinations:
+        liars = evils + hidden_good + spec_evil + spec_mad
 
         l, e, m = len(liars), len(spec_evil), len(spec_mad)
         if e + m > puzzle.compromises.max_speculation:
