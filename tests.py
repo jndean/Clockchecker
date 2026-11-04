@@ -3186,6 +3186,154 @@ class TestTeaLady(unittest.TestCase):
         ))
 
 
+class TestTownCrier(unittest.TestCase):
+    def test_towncrier_learns_minion(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TownCrier)
+                        & IsCharacter(C, Goblin)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TownCrier,
+                    day_info={1: TownCrier.Nominators([You, C])},
+                    night_info={2: TownCrier.Ping(True)},
+                ),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            night_deaths={2: You},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TownCrier, Goblin, Imp),
+        ))
+
+    def test_philo_towncrier_learns_minion(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Philosopher)
+                        & IsCharacter(C, Goblin)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=Philosopher,
+                    day_info={1: TownCrier.Nominators([B, C])},
+                    night_info={
+                        1: Philosopher.Choice(TownCrier),
+                        2: TownCrier.Ping(True),
+                    },
+                ),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            night_deaths={2: You},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            also_on_script=[TownCrier],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, Philosopher, Goblin, Imp),
+        ))
+
+    def test_towncrier_learns_no_on_demon(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TownCrier)
+                        & IsCharacter(C, Goblin)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TownCrier,
+                    day_info={1: TownCrier.Nominators([You, D])},
+                    night_info={2: TownCrier.Ping(False)},
+                ),
+                Player('C', claim=Saint),
+                Player('D', claim=Saint),
+            ],
+            night_deaths={2: You},
+            hidden_characters=[Imp, Goblin],
+            hidden_self=[],
+            also_on_script=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TownCrier, Goblin, Imp),
+        ))
+
+    def test_towncrier_detects_philo_recluse(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TownCrier)
+                        & IsCharacter(C, Philosopher)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TownCrier,
+                    day_info={1: TownCrier.Nominators([C, D])},
+                    night_info={2: TownCrier.Ping(True)},
+                ),
+                Player('C', claim=Philosopher, night_info={
+                    1: Philosopher.Choice(Recluse)
+                }),
+                Player('D', claim=Saint),
+            ],
+            night_deaths={2: You},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            also_on_script=[Recluse],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=(
+            (Artist, TownCrier, Philosopher, Imp),
+        ))
+
+    def test_towncrier_doesnt_detect_philo_recluse_who_changed_after_noms(self):
+        You, B, C, D = range(4)
+        puzzle = Puzzle(
+            players=[
+                Player('You', claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, TownCrier)
+                        & IsCharacter(C, Philosopher)
+                        & IsCharacter(D, Imp)
+                    ),
+                }),
+                Player('B', claim=TownCrier,
+                    day_info={1: TownCrier.Nominators([C, D])},
+                    night_info={2: TownCrier.Ping(True)},
+                ),
+                Player('C', claim=Philosopher, night_info={
+                    2: Philosopher.Choice(Recluse)
+                }),
+                Player('D', claim=Saint),
+            ],
+            night_deaths={2: You},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            also_on_script=[Recluse],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_solutions(self, puzzle, solutions=())
+
+
+
 # Test:
 # Test Evil Courtier
 # Test SnakeCharmer. Also, test demon claims to have been charmed.

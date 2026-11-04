@@ -4233,6 +4233,67 @@ def puzzle_NQT79():
     )
     return PuzzleDef(puzzle, solutions)
 
+def puzzle_NQT90():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1wkib2v/weekly_puzzle_90_last_liar_standing/
+
+    You, Dan, Anna, Aoife, Fraser, Tom, Jasmine, Olivia, Matt = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(Aoife, Aoife, demon=False),
+            }),
+            Player('Dan', claim=Golem),
+            Player('Anna', claim=Juggler, night_info={
+                2: Juggler.Ping(1),
+            }, day_info={
+                1: Juggler.Juggle({Jasmine: Drunk, Matt: Drunk}),
+            }),
+            Player('Aoife', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Fraser', claim=Librarian, night_info={
+                1: Librarian.Ping(Tom, Olivia, Drunk),
+            }),
+            Player('Tom', claim=Recluse),
+            Player('Jasmine', claim=TownCrier,
+                day_info={
+                    1: TownCrier.Nominators([Aoife, Tom]),
+                    2: TownCrier.Nominators([Fraser, Tom]),
+                },
+                night_info={
+                    2: TownCrier.Ping(False),
+                    3: TownCrier.Ping(False),
+                },
+            ),
+            Player('Olivia', claim=Saint),
+            Player('Matt', claim=Chambermaid, night_info={
+                1: Chambermaid.Ping(Aoife, Olivia, 0),
+                2: Chambermaid.Ping(Dan, Fraser, 0),
+                3: Chambermaid.Ping(Fraser, Tom, 1),
+                4: Chambermaid.Ping(Fraser, Tom, 0),
+            }),
+        ],
+        day_events={
+            1: [
+                Dies(player=Olivia, after_nominating=False, after_nominated_by=Dan),
+                Execution(You),
+            ],
+            2: Execution(Anna),
+        },
+        night_deaths={
+            2: Aoife,
+            3: Dan,
+            4: Jasmine,
+        },
+        hidden_characters=[Imp, Spy, Xaan, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (FortuneTeller, Golem, Juggler, Empath, Librarian, Imp,
+             TownCrier, Spy, Drunk),
+    )
+    return PuzzleDef(puzzle, solutions)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
