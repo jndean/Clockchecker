@@ -4233,6 +4233,58 @@ def puzzle_NQT79():
     )
     return PuzzleDef(puzzle, solutions)
 
+def puzzle_NQT80():
+    # https://www.reddit.com/r/BloodOnTheClocktower/comments/1u865jx/weekly_puzzle_80_the_x_factor/
+
+    You, Sarah, Charlotte, Fraser, Olivia, Matt, Hannah, Tom, Aoife = range(9)
+    puzzle = Puzzle(
+        players=[
+            Player('You', claim=Investigator, night_info={
+                1: Investigator.Ping(Fraser, Hannah, Xaan),
+            }),
+            Player('Sarah', claim=Butler),
+            Player('Charlotte', claim=FortuneTeller, night_info={
+                1: FortuneTeller.Ping(You, Fraser, demon=False),
+                2: FortuneTeller.Ping(Charlotte, Olivia, demon=False),
+                3: FortuneTeller.Ping(Charlotte, Aoife, demon=True),
+                4: FortuneTeller.Ping(Sarah, Fraser, demon=False),
+            }),
+            Player('Fraser', claim=Undertaker, night_info={
+                2: Undertaker.Ping(You, Investigator),
+                3: Undertaker.Ping(Matt, Recluse),
+                4: Undertaker.Ping(Hannah, Chef),
+            }),
+            Player('Olivia', claim=Ravenkeeper, night_info={
+                3: Ravenkeeper.Ping(Charlotte, FortuneTeller),
+            }),
+            Player('Matt', claim=Recluse),
+            Player('Hannah', claim=Chef, night_info={
+                1: Chef.Ping(0),
+            }),
+            Player('Tom', claim=Empath, night_info={
+                1: Empath.Ping(0),
+            }),
+            Player('Aoife', claim=Saint),
+        ],
+        day_events={
+            1: Execution(You),
+            2: Execution(Matt),
+            3: Execution(Hannah),
+        },
+        night_deaths={
+            2: Tom,
+            3: Olivia,
+            4: Aoife,
+        },
+        hidden_characters=[Imp, Spy, ScarletWoman, Xaan, Drunk],
+        hidden_self=[Drunk],
+    )
+    solutions = (
+        (Investigator, Imp, Drunk, Xaan, Ravenkeeper, Recluse, Chef, Empath,
+            Saint),
+    )
+    return PuzzleDef(puzzle, solutions)
+
 def puzzle_josef_yes_but_dont():
     # A puzzle that relies on the ScarletWoman catching a Recluse death
     You, Ali, Edd, Riley, Adam, Gina, Katharine, Tom, Zak, Jodie, _ = range(11)
