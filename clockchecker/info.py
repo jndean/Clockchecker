@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, fields
 import enum
 import itertools
-from typing import Any, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .characters import Category, Character
@@ -539,6 +539,8 @@ def pretty_print(info: Info | Event, names: Mapping[PlayerID, str]) -> str:
             ret.append(str(value))
         elif type_.startswith('Sequence'):
             ret.append(f'[{", ".join([pretty_print(x, names) for x in value])}]')
+        elif type_ == 'list[PlayerID]':
+            ret.append(f'[{", ".join([names[p] for p in value])}]')
         else:
             ret.append(f'{field.name}={str(value)}')
 

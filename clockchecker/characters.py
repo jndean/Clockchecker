@@ -4228,6 +4228,49 @@ class TeaLady(Townsfolk):
             if not protection_map:
                 del state.players[pid].protection_map
 
+
+@dataclass
+class TownCrier(Townsfolk):
+    """
+    Each night*, you learn if a Minion nominted today.
+    """
+    wake_pattern: ClassVar[WakePattern] = WakePattern.EACH_NIGHT_STAR
+
+    # minion_nominated_on_day: tuple[STBool, int] = (None, None)
+
+    @dataclass
+    class Nominators(events.Event):
+        nominators: list[PlayerID]
+        player: PlayerID | None = None
+        def __call__(self, state: State) -> StateGen:
+            # Evaluate Minion-ness as an Event at the time of the nominations, since it
+            # might change before the TownCrier received their Ping
+            minion_nominated = info.STBool.FALSE
+            for nominator in self.nominators:
+                minion_nominated |= info.IsCategory(nominator, Minion)(state, self.player)
+            towncrier = state.players[self.player]#.get_ability(TownCrier)
+            towncrier.minion_nominated_on_day = (minion_nominated, state.day)
+            yield state
+
+        def display(self, names: list[str]) -> str:
+            return f"Nominators: {', '.join([names[v] for v in self.nominators])}"
+
+    @dataclass
+    class Ping(info.Info):
+        minion_nominated: bool
+        def __call__(self, state: State, me: PlayerID) -> STBool:
+            towncrier = state.players[me]#.get_ability(TownCrier)
+            minion_nominated, day = towncrier.minion_nominated_on_day
+            assert day == state.night - 1, (
+                "TownCrier Ping without recording votes the previous day."
+            )
+            return info.STBool(self.minion_nominated) == minion_nominated
+
+        def display(self, names: list[str]) -> str:
+            if self.minion_nominated:
+                return 'Minion_nominated'
+            return 'Minion did not nominate'
+
 @dataclass
 class Undertaker(Townsfolk):
     """
@@ -4472,17 +4515,16 @@ class Witch(Minion):
 
         # Only spawn worlds cursing people who nominate tomorrow (plus one more)
         # TODO: If goon ability in play, consider cursing them (even droisoned)
-        def nominator_from_event(e):
+        def nominators_from_event(e: event.Event) -> list[PlayerID]:
             return (
-                e.player if (isinstance(e, events.Dies) and e.after_nominating)
-                else e.nominator if isinstance(e, events.UneventfulNomination)
-                else None
+                [e.player] if (isinstance(e, events.Dies) and e.after_nominating)
+                else [e.nominator] if isinstance(e, events.UneventfulNomination)
+                else e.nominators if isinstance(e, TownCrier.Nominators)
+                else []
             )
-        nominators = [
-            nominator
-            for ev in state.puzzle.day_events.get(state.night, [])
-            if (nominator := nominator_from_event(ev)) is not None
-        ]
+        nominators = []
+        for ev in state.puzzle.day_events.get(state.night, []):
+            nominators.extend(nominators_from_event(ev))
         for target in nominators:
             new_state = state.fork()
             new_witch = new_state.players[me].get_ability(Witch)
@@ -4862,6 +4904,7 @@ GLOBAL_NIGHT_ORDER = [
     Clockmaker,
     Dreamer,
     Flowergirl,
+    TownCrier,  # TODO: Look up actual location in night order, I'm on a plane right now :)
     Oracle,
     Seamstress,
     Juggler,
