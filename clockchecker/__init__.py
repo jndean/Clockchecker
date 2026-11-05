@@ -3,3 +3,4 @@ from .characters import *
 from .events import *
 from .info import *
 from .solve import solve, solve_and_print
+from .cpp_solve import solve_cpp
