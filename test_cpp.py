@@ -35,6 +35,22 @@ class TestCppPoC(unittest.TestCase):
             "puzzle_NQT16",
             "puzzle_NQT17",
             "puzzle_NQT18",
+            "puzzle_NQT19",
+            "puzzle_NQT20",
+            "puzzle_NQT21",
+            "puzzle_NQT22",
+            "puzzle_NQT23",
+            "puzzle_NQT24",
+            "puzzle_NQT26",
+            "puzzle_NQT28",
+            "puzzle_NQT29",
+            "puzzle_NQT30a",
+            "puzzle_NQT30b",
+            "puzzle_NQT31",
+            "puzzle_NQT32",
+            "puzzle_NQT33",
+            "puzzle_NQT34",
+            "puzzle_NQT35",
         ]
         lib = _get_lib()
         print(

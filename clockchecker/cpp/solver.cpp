@@ -950,6 +950,16 @@ void activate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
         case CHAR_SnakeCharmer:
             if (ab.self_droison) state.players[me].droison_count += 1;
             break;
+        case CHAR_Witch:
+            if (ab.target != NONE_PLAYER) {
+                state.players[ab.target].witch_cursed = me;
+            }
+            break;
+        case CHAR_Princess:
+            if (ab.aux_bool) {
+                state.active_princesses += 1;
+            }
+            break;
         case CHAR_Xaan:
             if (ab.aux_bool) {
                 for (PlayerID pid = 0; pid < state.puzzle->num_players; ++pid) {
@@ -1000,6 +1010,16 @@ void deactivate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
             break;
         case CHAR_SnakeCharmer:
             if (ab.self_droison) undroison_player(state, me, me);
+            break;
+        case CHAR_Witch:
+            if (ab.target != NONE_PLAYER) {
+                state.players[ab.target].witch_cursed = NONE_PLAYER;
+            }
+            break;
+        case CHAR_Princess:
+            if (ab.aux_bool) {
+                state.active_princesses -= 1;
+            }
             break;
         case CHAR_Xaan:
             if (ab.aux_bool) {
@@ -2306,6 +2326,63 @@ void run_character_night(State& state, PlayerID me, YieldFn yield) {
             return;
         }
 
+        case CHAR_Witch: {
+            maybe_deactivate_effects(state, ab, me);
+            ab.target = NONE_PLAYER;
+
+            int living_count = 0;
+            for (PlayerID pid = 0; pid < N; ++pid) {
+                if (!state.players[pid].is_dead) living_count += 1;
+            }
+            if ((player.is_dead && !ab.vigormortised) || living_count <= 3) {
+                yield(state);
+                return;
+            }
+            if (is_droisoned(state, ab, me)) {
+                STBool tm = STBoolVal::TRUE_MAYBE;
+                math_misregistration(state, me, &tm);
+                yield(state);
+                return;
+            }
+
+            PlayerID nominators[MAX_PLAYERS * 2];
+            int n_nom = 0;
+            uint16_t nom_mask = 0;
+            int ev_count = state.puzzle->day_event_counts[state.night];
+            const EventNode* evs = state.puzzle->day_events[state.night];
+            for (int i = 0; i < ev_count; ++i) {
+                if (evs[i].type == EVENT_DIES && evs[i].flag != 0) {
+                    nominators[n_nom++] = evs[i].player;
+                    nom_mask |= static_cast<uint16_t>(1u << evs[i].player);
+                } else if (evs[i].type == EVENT_UNEVENTFUL_NOMINATION) {
+                    nominators[n_nom++] = evs[i].target;
+                    nom_mask |= static_cast<uint16_t>(1u << evs[i].target);
+                } else if (evs[i].type == EVENT_TOWNCRIER_NOMINATORS) {
+                    for (int k = 0; k < evs[i].count; ++k) {
+                        nominators[n_nom++] = evs[i].players[k];
+                        nom_mask |= static_cast<uint16_t>(1u << evs[i].players[k]);
+                    }
+                }
+            }
+            for (int i = 0; i < n_nom; ++i) {
+                PlayerID target = nominators[i];
+                State new_state = state;
+                AbilityInstance& new_witch = new_state.players[me].character;
+                new_witch.target = target;
+                maybe_activate_effects(new_state, new_witch, me);
+                yield(new_state);
+            }
+            for (PlayerID target = 0; target < N; ++target) {
+                if (!(nom_mask & (1u << target))) {
+                    ab.target = target;
+                    maybe_activate_effects(state, ab, me);
+                    yield(state);
+                    return;
+                }
+            }
+            return;
+        }
+
         case CHAR_Xaan: {
             if ((player.is_dead && !ab.vigormortised) || state.night != ab.choice_night) {
                 ab.aux_bool = false;
@@ -2448,6 +2525,13 @@ void run_character_end_day(State& state, PlayerID me, YieldFn yield) {
             if (ab.target != NONE_PLAYER && (state.day - ab.choice_night) >= 2) {
                 maybe_deactivate_effects(state, ab, me);
                 ab.target = NONE_PLAYER;
+            }
+            yield(state);
+            return;
+        case CHAR_Princess:
+            if (ab.first_night < state.day) {
+                maybe_deactivate_effects(state, ab, me);
+                ab.aux_bool = false;
             }
             yield(state);
             return;
@@ -2732,6 +2816,124 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
         case EVENT_EXECUTION:
             char_executed(state, ev.player, ev.flag != 0, yield);
             return;
+
+        case EVENT_EXECUTION_BY_ST: {
+            if (ev.target != NONE_PLAYER) {
+                Player& nominee = state.players[ev.target];
+                AbilityInstance* virgin_ab = get_ability(nominee, CHAR_Virgin);
+                if (virgin_ab != nullptr) {
+                    STBool tf_nom = eval_is_category(state, ev.player, CAT_TOWNSFOLK, false, ev.target);
+                    if (nominee.is_dead || is_droisoned(state, *virgin_ab, ev.target) || virgin_ab->spent || tf_nom.is_false()) {
+                        return;
+                    }
+                    virgin_ab->spent = true;
+                    if (!tf_nom.truth()) {
+                        math_misregistration(state, ev.target);
+                    }
+                    char_executed(state, ev.player, ev.flag != 0, yield);
+                }
+            }
+            return;
+        }
+
+        case EVENT_UNEVENTFUL_NOMINATION: {
+            PlayerID nominator = ev.target;
+            PlayerID nominee = ev.player;
+            if (AbilityInstance* princess = get_ability(state.players[nominator], CHAR_Princess)) {
+                if (princess->first_night == state.day) {
+                    int ev_count = state.puzzle->day_event_counts[state.day];
+                    const EventNode* evs = state.puzzle->day_events[state.day];
+                    for (int i = 0; i < ev_count; ++i) {
+                        if ((evs[i].type == EVENT_EXECUTION || evs[i].type == EVENT_EXECUTION_BY_ST) && evs[i].player == nominee) {
+                            princess->aux_bool = true;
+                            maybe_activate_effects(state, *princess, nominator);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (AbilityInstance* golem = get_ability(state.players[nominator], CHAR_Golem)) {
+                golem->spent = true;
+                STBool is_demon = eval_is_category(state, nominee, CAT_DEMON, false, nominator);
+                if (is_demon.is_false() && is_droisoned(state, *golem, nominator)) {
+                    math_misregistration(state, nominator);
+                } else if (is_demon.is_maybe()) {
+                    if (is_category(state.players[nominee].character.type, CAT_DEMON)) {
+                        math_misregistration(state, nominator);
+                    }
+                } else if (!is_demon.is_true()) {
+                    return;
+                }
+            }
+            if (AbilityInstance* virgin = get_ability(state.players[nominee], CHAR_Virgin)) {
+                STBool nominator_is_tf = eval_is_category(state, nominator, CAT_TOWNSFOLK, false, nominee);
+                if (state.players[nominee].is_dead || virgin->spent || nominator_is_tf.not_true()) {
+                    virgin->spent = true;
+                    if (!nominator_is_tf.truth()) {
+                        math_misregistration(state, nominee);
+                    }
+                } else if (is_droisoned(state, *virgin, nominee)) {
+                    math_misregistration(state, nominee);
+                    virgin->spent = true;
+                } else {
+                    return;
+                }
+            }
+            for (PlayerID pid = 0; pid < state.puzzle->num_players; ++pid) {
+                if (AbilityInstance* witch = get_ability(state.players[pid], CHAR_Witch)) {
+                    if (witch->target != nominator) {
+                        // unaffected
+                    } else if (safe_from_attacker(state, nominator, pid).not_false()) {
+                        math_misregistration(state, pid);
+                    } else {
+                        return;
+                    }
+                    break;
+                }
+            }
+            yield(state);
+            return;
+        }
+
+        case EVENT_DIES: {
+            if (ev.flag != 0) {
+                Player& dying = state.players[ev.player];
+                PlayerID wid = dying.witch_cursed;
+                if (wid != NONE_PLAYER) {
+                    char_killed(state, ev.player, wid, yield);
+                }
+            } else if (ev.target != NONE_PLAYER) {
+                PlayerID nominator = ev.target;
+                if (state.rioting_count > 0) {
+                    PlayerID riot_id = NONE_PLAYER;
+                    for (PlayerID pid = 0; pid < state.puzzle->num_players; ++pid) {
+                        if (!state.players[pid].is_dead
+                            && has_ability(state.players[pid], CHAR_Riot)
+                            && !is_droisoned(state, state.players[pid].character, pid)) {
+                            riot_id = pid;
+                            break;
+                        }
+                    }
+                    if (riot_id != NONE_PLAYER) {
+                        if (state.players[ev.player].is_dead) {
+                            yield(state);
+                        } else {
+                            char_killed(state, ev.player, riot_id, yield);
+                        }
+                    }
+                } else if (AbilityInstance* golem = get_ability(state.players[nominator], CHAR_Golem)) {
+                    golem->spent = true;
+                    STBool is_demon = eval_is_category(state, ev.player, CAT_DEMON, false, nominator);
+                    if (!is_droisoned(state, *golem, nominator) && is_demon.not_true()) {
+                        if (is_category(state.players[ev.player].character.type, CAT_DEMON)) {
+                            math_misregistration(state, nominator);
+                        }
+                        char_killed(state, ev.player, nominator, yield);
+                    }
+                }
+            }
+            return;
+        }
 
         case EVENT_SLAYER_SHOT: {
             Player& shooter = state.players[ev.player];
@@ -3400,6 +3602,33 @@ int solve_puzzle_cpp(
             });
         });
     });
+
+    if (num_solutions == 0 && max_solutions > 0) {
+        bool has_atheist = false;
+        for (int i = 0; i < N; ++i) {
+            if (puzzle.player_claims[i] == CHAR_Atheist) {
+                has_atheist = true;
+                break;
+            }
+        }
+        if (has_atheist) {
+            SerializedSolution& out = out_solutions[num_solutions++];
+            for (int i = 0; i < N; ++i) {
+                SerializedSolutionPlayer& sp = out.players[i];
+                sp.initial_character = puzzle.player_claims[i];
+                sp.final_character = puzzle.player_claims[i];
+                sp.drunklike_character = CHAR_NONE;
+                sp.is_evil = 0;
+                sp.is_dead = 0;
+                sp.droison_count = 0;
+                sp.vigormortised = 0;
+                sp.self_droison = 0;
+                sp.target = NONE_PLAYER;
+                sp.aux_target = NONE_PLAYER;
+                sp.history_len = 0;
+            }
+        }
+    }
 
     return num_solutions;
 }

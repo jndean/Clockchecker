@@ -353,13 +353,15 @@ def _get_lib():
     so_path = os.path.join(cpp_dir, "libclockchecker.so")
     src_path = os.path.join(cpp_dir, "solver.cpp")
     hdr_path = os.path.join(cpp_dir, "clockchecker.hpp")
+    makefile_path = os.path.join(cpp_dir, "Makefile")
 
     need_build = not os.path.exists(so_path) or (
-        os.path.getmtime(so_path) < max(os.path.getmtime(src_path), os.path.getmtime(hdr_path))
+        os.path.getmtime(so_path)
+        < max(os.path.getmtime(src_path), os.path.getmtime(hdr_path), os.path.getmtime(makefile_path))
     )
     if need_build:
         subprocess.run(
-            ["g++", "-O3", "-shared", "-fPIC", "-std=c++20", src_path, "-o", so_path],
+            ["make", "-C", cpp_dir],
             check=True,
         )
 
@@ -723,6 +725,20 @@ def serialize_puzzle(puzzle: Puzzle) -> CSerializedPuzzle:
                 cev.type = EventType.EVENT_EXECUTION
                 cev.player = ev.player
                 cev.flag = int(bool(ev.died))
+            elif isinstance(ev, events.ExecutionByST):
+                cev.type = EventType.EVENT_EXECUTION_BY_ST
+                cev.player = ev.player
+                cev.target = NONE_PLAYER if ev.after_nominating is None else ev.after_nominating
+                cev.flag = int(bool(ev.died))
+            elif isinstance(ev, events.UneventfulNomination):
+                cev.type = EventType.EVENT_UNEVENTFUL_NOMINATION
+                cev.player = ev.player
+                cev.target = ev.nominator
+            elif isinstance(ev, events.Dies):
+                cev.type = EventType.EVENT_DIES
+                cev.player = ev.player
+                cev.target = NONE_PLAYER if ev.after_nominated_by is None else ev.after_nominated_by
+                cev.flag = int(bool(ev.after_nominating))
             elif isinstance(ev, characters.Slayer.Shot):
                 cev.type = EventType.EVENT_SLAYER_SHOT
                 cev.player = ev.player
