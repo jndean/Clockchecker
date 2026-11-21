@@ -315,6 +315,8 @@ class CSerializedPuzzle(Structure):
         ("day_events", (CEventNode * MAX_EVENTS_PER_DAY) * MAX_NIGHTS),
         ("night_death_counts", c_uint8 * MAX_NIGHTS),
         ("night_deaths", (CNightDeathNode * MAX_DEATHS_PER_NIGHT) * MAX_NIGHTS),
+        ("num_hermit_outsiders", c_uint8),
+        ("hermit_outsiders", c_uint8 * 8),
     ]
 
 
@@ -456,6 +458,22 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
 
     elif isinstance(item, info.DrunkBetweenTownsfolk):
         node.type = InfoType.INFO_DRUNK_BETWEEN_TOWNSFOLK
+
+    elif isinstance(item, info.WidowPoisoned):
+        node.type = InfoType.INFO_WIDOW_POISONED
+        node.player1 = item.player
+
+    elif isinstance(item, info.CharacterTypesAmongPlayers):
+        node.type = InfoType.INFO_CHARACTER_TYPES_AMONG_PLAYERS
+        node.count = item.count
+        node.extra_count = len(item.players)
+        for i, pid in enumerate(item.players):
+            node.extra_indices[i] = pid
+
+    elif isinstance(item, info.CharacterIsNextToCharacter):
+        node.type = InfoType.INFO_CHARACTER_IS_NEXT_TO_CHARACTER
+        node.character1 = CHAR_TO_ID[item.character1]
+        node.character2 = CHAR_TO_ID[item.character2]
 
     elif isinstance(item, info.LongestRowOfTownsfolk):
         node.type = InfoType.INFO_LONGEST_ROW_OF_TOWNSFOLK
@@ -604,6 +622,15 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
         node.player1 = item.guess
         node.player2 = item.demon
 
+    elif isinstance(item, characters.Progidy.Ping):
+        node.type = InfoType.PING_PRODIGY
+        node.player1 = item.chose
+        node.player2 = item.shown
+
+    elif isinstance(item, characters.Flowergirl.Ping):
+        node.type = InfoType.PING_FLOWERGIRL
+        node.flag = int(bool(item.demon_voted))
+
     elif isinstance(item, characters.Balloonist.Ping):
         node.type = InfoType.NOTINFO_BALLOONIST_PING
         node.player1 = item.player
@@ -614,6 +641,14 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
 
     elif isinstance(item, characters.Courtier.Choice):
         node.type = InfoType.NOTINFO_COURTIER_CHOICE
+        node.character1 = CHAR_TO_ID[item.character]
+
+    elif isinstance(item, characters.Exorcist.Choice):
+        node.type = InfoType.NOTINFO_EXORCIST_CHOICE
+        node.player1 = item.player
+
+    elif isinstance(item, characters.Philosopher.Choice):
+        node.type = InfoType.NOTINFO_PHILOSOPHER_CHOICE
         node.character1 = CHAR_TO_ID[item.character]
 
     elif isinstance(item, characters.Gambler.Gamble):
@@ -643,6 +678,9 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
 
     elif isinstance(item, characters.Widow.InPlay):
         node.type = InfoType.EXTINFO_WIDOW_IN_PLAY
+
+    elif isinstance(item, characters.PoppyGrower.InPlay):
+        node.type = InfoType.EXTINFO_POPPYGROWER_IN_PLAY
 
     elif isinstance(item, info.CharacterChange):
         node.type = InfoType.NOTINFO_CHARACTER_CHANGE
@@ -763,6 +801,12 @@ def serialize_puzzle(puzzle: Puzzle) -> CSerializedPuzzle:
                 cev.type = EventType.EVENT_KLUTZ_CHOICE
                 cev.player = ev.player
                 cev.target = ev.choice
+            elif isinstance(ev, characters.Flowergirl.Voters):
+                cev.type = EventType.EVENT_FLOWERGIRL_VOTERS
+                cev.player = ev.player
+                cev.count = len(ev.voters)
+                for v_idx, v_pid in enumerate(ev.voters):
+                    cev.players[v_idx] = v_pid
             else:
                 raise NotImplementedError(f"Unsupported Day Event in C++ serializer: {type(ev)}")
 
@@ -772,6 +816,15 @@ def serialize_puzzle(puzzle: Puzzle) -> CSerializedPuzzle:
         for idx, nd in enumerate(nd_list):
             cp.night_deaths[night][idx].player = nd.player
             cp.night_deaths[night][idx].is_resurrection = int(isinstance(nd, events.NightResurrection))
+
+    hermit_outsiders = (
+        getattr(puzzle, "_extra_serialised_state", {}).get("hermit_outsiders")
+        or characters.Hermit.outsiders
+        or ()
+    )
+    cp.num_hermit_outsiders = len(hermit_outsiders)
+    for i, c in enumerate(hermit_outsiders):
+        cp.hermit_outsiders[i] = CHAR_TO_ID[c]
 
     return cp
 
@@ -796,11 +849,23 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
         if sp.self_droison and hasattr(p.character, "self_droison"):
             p.character.self_droison = True
         if sp.drunklike_character != 0:
-            p.character.drunklike_character = CHARACTER_LIST[sp.drunklike_character]()
+            if isinstance(p.character, characters.Philosopher):
+                p.character.philo_ability = CHARACTER_LIST[sp.drunklike_character]()
+                p.character.droisoned_philo_choice = True
+            elif isinstance(p.character, characters.Hermit):
+                for ab in p.character.active_abilities:
+                    if isinstance(ab, characters.Drunklike):
+                        ab.drunklike_character = CHARACTER_LIST[sp.drunklike_character]()
+            else:
+                p.character.drunklike_character = CHARACTER_LIST[sp.drunklike_character]()
         if isinstance(p.character, characters.FortuneTeller) and sp.target != NONE_PLAYER:
             p.character.red_herring = int(sp.target)
         elif isinstance(p.character, characters.Puzzlemaster) and sp.target != NONE_PLAYER:
             p.character.puzzle_drunk = int(sp.target)
+        elif isinstance(p.character, characters.Hermit) and sp.target != NONE_PLAYER:
+            for ab in p.character.active_abilities:
+                if isinstance(ab, characters.Puzzlemaster):
+                    ab.puzzle_drunk = int(sp.target)
         elif isinstance(p.character, characters.EvilTwin) and sp.target != NONE_PLAYER:
             p.character.twin = int(sp.target)
         elif isinstance(p.character, characters.NoDashii):

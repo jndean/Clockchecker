@@ -51,6 +51,41 @@ class TestCppPoC(unittest.TestCase):
             "puzzle_NQT33",
             "puzzle_NQT34",
             "puzzle_NQT35",
+            "puzzle_NQT36",
+            "puzzle_NQT37",
+            "puzzle_NQT38",
+            "puzzle_NQT38_alt",
+            "puzzle_NQT39",
+            "puzzle_NQT40",
+            "puzzle_NQT41",
+            "puzzle_NQT42",
+            "puzzle_NQT43",
+            "puzzle_NQT44",
+            "puzzle_NQT44_alt",
+            "puzzle_NQT45a",
+            "puzzle_NQT45b",
+            "puzzle_NQT46",
+            "puzzle_NQT47",
+            "puzzle_NQT48",
+            "puzzle_NQT49",
+            "puzzle_NQT51",
+            "puzzle_NQT53",
+            "puzzle_NQT54",
+            "puzzle_NQT55",
+            "puzzle_NQT57",
+            "puzzle_NQT58",
+            "puzzle_NQT59",
+            "puzzle_NQT60",
+            "puzzle_NQT61",
+            "puzzle_NQT63",
+            "puzzle_NQT65",
+            "puzzle_NQT66",
+            "puzzle_NQT67",
+            "puzzle_NQT68",
+            "puzzle_NQT69_alt",
+            "puzzle_NQT69",
+            "puzzle_NQT70",
+            "puzzle_NQT71_alt2",
         ]
         lib = _get_lib()
         print(
@@ -102,6 +137,20 @@ class TestCppPoC(unittest.TestCase):
 
             self.assertEqual(py_strs, target_strs, f"{name}: Python mismatch")
             self.assertEqual(cpp_strs, target_strs, f"{name}: C++ mismatch: got {cpp_strs} vs {target_strs}")
+            if pdef_cpp.solution_endchars is not None:
+                target_end_strs = sorted(
+                    ", ".join(x.__name__ for x in sol)
+                    for sol in pdef_cpp.solution_endchars
+                )
+                cpp_end_strs = sorted(
+                    ", ".join(type(p.character).__name__ for p in w.players)
+                    for w in cpp_worlds
+                )
+                self.assertEqual(
+                    cpp_end_strs,
+                    target_end_strs,
+                    f"{name}: C++ endchars mismatch: got {cpp_end_strs} vs {target_end_strs}",
+                )
             if pdef_cpp.solution_condition is not None:
                 for w in cpp_worlds:
                     self.assertTrue(

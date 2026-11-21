@@ -420,6 +420,9 @@ struct SerializedPuzzle {
     // Night deaths: indexed by [night]
     uint8_t night_death_counts[MAX_NIGHTS];
     NightDeathNode night_deaths[MAX_NIGHTS][MAX_DEATHS_PER_NIGHT];
+
+    uint8_t num_hermit_outsiders;
+    CharacterID hermit_outsiders[8];
 };
 
 struct AbilityInstance {
@@ -439,6 +442,7 @@ struct AbilityInstance {
     int8_t choice_night = -1;
     bool aux_bool = false;
     uint16_t aux_mask = 0;
+    uint16_t vig_poisoned_mask = 0;
 };
 
 struct Player {
@@ -447,6 +451,13 @@ struct Player {
     AbilityInstance character;
     AbilityInstance drunklike_char;
     bool has_drunklike_char = false;
+
+    bool has_philo_ability = false;
+    AbilityInstance philo_ability;
+
+    bool has_boffin_ability = false;
+    AbilityInstance boffin_ability;
+    AbilityInstance inactive_boffin_ability;
 
     bool is_evil = false;
     bool is_dead = false;
