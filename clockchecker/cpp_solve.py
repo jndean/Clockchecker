@@ -386,6 +386,13 @@ def _get_lib():
         c_int,
     ]
     lib.solve_puzzle_cpp.restype = c_int
+    lib.solve_puzzle_cpp_mt.argtypes = [
+        POINTER(CSerializedPuzzle),
+        POINTER(CSerializedSolution),
+        c_int,
+        c_int,
+    ]
+    lib.solve_puzzle_cpp_mt.restype = c_int
     _LIB = lib
     return _LIB
 
@@ -890,10 +897,15 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
     return world
 
 
-def solve_cpp(puzzle: Puzzle) -> StateGen:
+def solve_cpp(puzzle: Puzzle, num_threads: int | None = None) -> StateGen:
     lib = _get_lib()
     cpuzzle = serialize_puzzle(puzzle)
     out_solutions = (CSerializedSolution * MAX_SOLUTIONS)()
-    count = lib.solve_puzzle_cpp(byref(cpuzzle), out_solutions, MAX_SOLUTIONS)
+    if num_threads is None:
+        env_np = os.environ.get("NUM_PROC")
+        threads = int(env_np) if env_np is not None else 0
+    else:
+        threads = int(num_threads)
+    count = lib.solve_puzzle_cpp_mt(byref(cpuzzle), out_solutions, MAX_SOLUTIONS, threads)
     for i in range(count):
         yield _reconstruct_state(puzzle, out_solutions[i])

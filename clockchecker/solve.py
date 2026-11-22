@@ -24,8 +24,16 @@ except ModuleNotFoundError:
 
 # Option to print out each legal starting config as it's generated
 _PRINT_CONFIGS = os.environ.get('CONFIGS', False)
+_USE_CPP_BACKEND: bool = bool(os.environ.get('FAST', False))
 
 ConfigGen: TypeAlias = Iterator['StartingConfiguration']
+
+
+def set_fast_backend(enabled: bool = True) -> None:
+    """Enable or disable the C++ solver backend for calls to solve()."""
+    global _USE_CPP_BACKEND
+    _USE_CPP_BACKEND = enabled
+
 
 @dataclass
 class StartingConfiguration:
@@ -549,11 +557,21 @@ def _solution_collecting_worker(solutions_q: Queue, num_procs: int) -> StateGen:
         raise exc
 
 
-def solve(puzzle: Puzzle, num_processes=None) -> StateGen:
+def solve(
+    puzzle: Puzzle,
+    num_processes=None,
+    *,
+    fast: bool | None = None,
+) -> StateGen:
     """Top level solver method, accepts a puzzle and generates solutions."""
 
     if num_processes is None:
         num_processes = int(os.environ.get('NUM_PROC', os.cpu_count()))
+
+    if _USE_CPP_BACKEND if fast is None else fast:
+        from .cpp_solve import solve_cpp
+        yield from solve_cpp(puzzle, num_threads=num_processes)
+        return
 
     if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
         # Non-parallel version just runs everything in one process.

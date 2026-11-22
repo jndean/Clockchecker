@@ -13,7 +13,7 @@ from clockchecker.cpp_solve import (
 
 
 class TestCppPoC(unittest.TestCase):
-    def test_first_four_nqt_puzzles(self):
+    def test_all_puzzles(self):
         puzzle_names = [
             "puzzle_NQT1",
             "puzzle_NQT2",
@@ -111,13 +111,14 @@ class TestCppPoC(unittest.TestCase):
         ]
         lib = _get_lib()
         print(
-            f"\n{'Puzzle':<13} | {'Py (1 proc)':>11} | {'C++ (e2e)':>11} | {'C++ (core)':>11} | {'Speedup (e2e / core)':>22} | Status"
+            f"\n{'Puzzle':<13} | {'Py (1 proc)':>11} | {'C++ 1T core':>11} | {'C++ MT core':>11} | {'C++ MT e2e':>11} | {'Speedup (1T/MT)':>17} | Status"
         )
-        print("-" * 92)
+        print("-" * 105)
 
         total_py = 0.0
+        total_cpp_1t = 0.0
+        total_cpp_mt = 0.0
         total_cpp_e2e = 0.0
-        total_cpp_core = 0.0
 
         for name in puzzle_names:
             pdef_py = getattr(puzzles, name)()
@@ -149,18 +150,24 @@ class TestCppPoC(unittest.TestCase):
                 cpp_worlds = list(solve_cpp(pdef_cpp.puzzle))
             t_cpp_e2e = time.perf_counter() - t0
 
-            # Pure C++ solver kernel time (excluding Python ctypes serialization & deepcopy reconstruction)
+            # Pure C++ solver kernel time (1T vs MT work-stealing)
             sub_puzzles = pdef_cpp.puzzle if isinstance(pdef_cpp.puzzle, tuple) else (pdef_cpp.puzzle,)
             cpuzzles = [serialize_puzzle(sp) for sp in sub_puzzles]
             out_solutions = (CSerializedSolution * MAX_SOLUTIONS)()
             t0 = time.perf_counter()
             for cpuzzle in cpuzzles:
-                lib.solve_puzzle_cpp(ctypes.byref(cpuzzle), out_solutions, MAX_SOLUTIONS)
-            t_cpp_core = time.perf_counter() - t0
+                lib.solve_puzzle_cpp_mt(ctypes.byref(cpuzzle), out_solutions, MAX_SOLUTIONS, 1)
+            t_cpp_1t = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            for cpuzzle in cpuzzles:
+                lib.solve_puzzle_cpp_mt(ctypes.byref(cpuzzle), out_solutions, MAX_SOLUTIONS, 0)
+            t_cpp_mt = time.perf_counter() - t0
 
             total_py += t_py
+            total_cpp_1t += t_cpp_1t
+            total_cpp_mt += t_cpp_mt
             total_cpp_e2e += t_cpp_e2e
-            total_cpp_core += t_cpp_core
 
             target_strs = sorted(
                 ", ".join(x.__name__ for x in sol)
@@ -198,19 +205,20 @@ class TestCppPoC(unittest.TestCase):
                         f"{name}: C++ solution_condition failed on {w}",
                     )
 
-            sp_e2e = t_py / t_cpp_e2e if t_cpp_e2e > 0 else float("inf")
-            sp_core = t_py / t_cpp_core if t_cpp_core > 0 else float("inf")
+            sp_1t = t_py / t_cpp_1t if t_cpp_1t > 0 else float("inf")
+            sp_mt = t_py / t_cpp_mt if t_cpp_mt > 0 else float("inf")
             print(
-                f"{name:<13} | {t_py*1000:8.2f} ms | {t_cpp_e2e*1000:8.3f} ms | {t_cpp_core*1000:8.3f} ms | "
-                f"{sp_e2e:7.1f}x / {sp_core:8.1f}x | OK ({len(cpp_worlds)} sol)"
+                f"{name:<13} | {t_py*1000:8.2f} ms | {t_cpp_1t*1000:8.3f} ms | {t_cpp_mt*1000:8.3f} ms | {t_cpp_e2e*1000:8.3f} ms | "
+                f"{sp_1t:6.1f}x / {sp_mt:7.1f}x | OK ({len(cpp_worlds)} sol)"
             )
 
-        print("-" * 92)
+        print("-" * 105)
+        sp_1t = total_py / total_cpp_1t if total_cpp_1t > 0 else float("inf")
+        sp_mt = total_py / total_cpp_mt if total_cpp_mt > 0 else float("inf")
         sp_e2e = total_py / total_cpp_e2e if total_cpp_e2e > 0 else float("inf")
-        sp_core = total_py / total_cpp_core if total_cpp_core > 0 else float("inf")
         print(
-            f"{'TOTAL':<13} | {total_py*1000:8.2f} ms | {total_cpp_e2e*1000:8.3f} ms | {total_cpp_core*1000:8.3f} ms | "
-            f"{sp_e2e:7.1f}x / {sp_core:8.1f}x |"
+            f"{'TOTAL':<13} | {total_py*1000:8.2f} ms | {total_cpp_1t*1000:8.3f} ms | {total_cpp_mt*1000:8.3f} ms | {total_cpp_e2e*1000:8.3f} ms | "
+            f"{sp_1t:6.1f}x / {sp_mt:7.1f}x | (e2e: {sp_e2e:.1f}x)"
         )
 
 

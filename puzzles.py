@@ -5184,7 +5184,11 @@ if __name__ == '__main__':
     ]
     parser = argparse.ArgumentParser()
     parser.add_argument('puzzle_name', choices=puzzle_names, nargs='?', default='1')
+    parser.add_argument('--fast', action='store_true', help='Use the C++ solver backend')
     args = parser.parse_args(sys.argv[1:])
+
+    if args.fast:
+        set_fast_backend(True)
 
     for prefix in PREFIXES:
         factory = globals().get(f'{prefix}{args.puzzle_name}', None)

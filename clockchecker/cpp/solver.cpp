@@ -1,5 +1,10 @@
 #include "clockchecker.hpp"
 #include <algorithm>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 namespace clockchecker {
@@ -148,7 +153,7 @@ void apply_seq(State& state, int idx, int count, StepFn& step_fn, YieldFn yield)
     step_fn(state, idx, make_yield(next));
 }
 
-static const SerializedPuzzle* g_current_puzzle = nullptr;
+thread_local const SerializedPuzzle* g_current_puzzle = nullptr;
 
 inline bool hermit_has_outsider(CharacterID out_id) {
     if (g_current_puzzle == nullptr) return false;
@@ -4043,9 +4048,26 @@ struct StartingConfig {
     uint16_t speculative_ceremad_mask = 0;
 };
 
-void world_check(const SerializedPuzzle& puzzle, const StartingConfig& config, YieldFn yield);
+struct SimSchedule;
+struct SolveJob;
 
-void round_robin(State& state, const StartingConfig& config, YieldFn yield) {
+void world_check_with_sched(
+    const SerializedPuzzle& puzzle,
+    const SimSchedule& sched,
+    const StartingConfig& config,
+    YieldFn yield,
+    SolveJob* ws = nullptr,
+    int worker_id = 0
+);
+
+void round_robin(
+    State& state,
+    const SimSchedule& sched,
+    const StartingConfig& config,
+    YieldFn yield,
+    SolveJob* ws = nullptr,
+    int worker_id = 0
+) {
     int N = state.puzzle->num_players;
     bool any_spec_good = false;
     for (PlayerID pid = 0; pid < N; ++pid) {
@@ -4076,7 +4098,7 @@ void round_robin(State& state, const StartingConfig& config, YieldFn yield) {
         if (spec_good_mask != 0) {
             StartingConfig redo = config;
             redo.speculative_good_mask = spec_good_mask;
-            world_check(*state.puzzle, redo, yield);
+            world_check_with_sched(*state.puzzle, sched, redo, yield, ws, worker_id);
             return;
         }
     }
@@ -4135,22 +4157,150 @@ SimSchedule build_schedule(const SerializedPuzzle& puzzle) {
     return sched;
 }
 
-void run_schedule(
+struct SolveTask {
+    State state;
+    StartingConfig config;
+    int step_idx;
+};
+
+struct SolutionKey {
+    CharacterID chars[MAX_PLAYERS * 2];
+    bool operator==(const SolutionKey& o) const {
+        return std::memcmp(chars, o.chars, sizeof(chars)) == 0;
+    }
+};
+
+struct alignas(64) WorkerQueue {
+    std::mutex mtx;
+    std::deque<SolveTask> q;
+};
+
+struct SolveJob {
+    const SerializedPuzzle* puzzle = nullptr;
+    const SimSchedule* sched = nullptr;
+    const std::vector<StartingConfig>* configs = nullptr;
+    SerializedSolution* out_solutions = nullptr;
+    int max_solutions = 0;
+    int num_workers = 1;
+
+    std::atomic<size_t> next_config{0};
+    std::atomic<int64_t> in_flight{0};
+    std::atomic<int64_t> pending_stealable{0};
+    std::atomic<int> idle_workers{0};
+    std::atomic<bool> done{false};
+
+    std::mutex wait_mtx;
+    std::condition_variable wait_cv;
+    std::deque<WorkerQueue> queues;
+
+    std::mutex sol_mtx;
+    int num_solutions = 0;
+    std::vector<SolutionKey> seen_keys;
+
+    SolveJob(
+        const SerializedPuzzle* p,
+        const SimSchedule* s,
+        const std::vector<StartingConfig>* cfgs,
+        SerializedSolution* out,
+        int max_sols,
+        int workers
+    ) : puzzle(p), sched(s), configs(cfgs), out_solutions(out), max_solutions(max_sols), num_workers(workers) {
+        in_flight.store(static_cast<int64_t>(cfgs->size()), std::memory_order_relaxed);
+        for (int i = 0; i < workers; ++i) {
+            queues.emplace_back();
+        }
+    }
+
+    void push_task(int worker_id, const State& st, const StartingConfig& cfg, int step_idx) {
+        in_flight.fetch_add(1, std::memory_order_relaxed);
+        {
+            std::lock_guard<std::mutex> lk(queues[worker_id].mtx);
+            queues[worker_id].q.push_back(SolveTask{st, cfg, step_idx});
+        }
+        pending_stealable.fetch_add(1, std::memory_order_release);
+        if (idle_workers.load(std::memory_order_acquire) > 0) {
+            {
+                std::lock_guard<std::mutex> lk(wait_mtx);
+            }
+            wait_cv.notify_one();
+        }
+    }
+
+    bool pop_local(int worker_id, SolveTask& out) {
+        std::lock_guard<std::mutex> lk(queues[worker_id].mtx);
+        if (queues[worker_id].q.empty()) return false;
+        out = queues[worker_id].q.back();
+        queues[worker_id].q.pop_back();
+        pending_stealable.fetch_sub(1, std::memory_order_relaxed);
+        return true;
+    }
+
+    bool steal_from(int victim_id, SolveTask& out) {
+        std::unique_lock<std::mutex> lk(queues[victim_id].mtx, std::try_to_lock);
+        if (!lk.owns_lock() || queues[victim_id].q.empty()) return false;
+        out = queues[victim_id].q.front();
+        queues[victim_id].q.pop_front();
+        pending_stealable.fetch_sub(1, std::memory_order_relaxed);
+        return true;
+    }
+
+    void complete_one() {
+        if (in_flight.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            {
+                std::lock_guard<std::mutex> lk(wait_mtx);
+                done.store(true, std::memory_order_release);
+            }
+            wait_cv.notify_all();
+        }
+    }
+
+    void record_solution(const State& sol) {
+        std::lock_guard<std::mutex> lk(sol_mtx);
+        int N = puzzle->num_players;
+        if (puzzle->deduplicate_initial_characters) {
+            SolutionKey key{};
+            for (int i = 0; i < N; ++i) {
+                key.chars[i] = sol.initial_characters[i];
+                key.chars[N + i] = sol.players[i].character.type;
+            }
+            for (const auto& k : seen_keys) {
+                if (k == key) return;
+            }
+            seen_keys.push_back(key);
+        }
+        if (num_solutions < max_solutions) {
+            SerializedSolution& out = out_solutions[num_solutions++];
+            for (int i = 0; i < N; ++i) {
+                const Player& p = sol.players[i];
+                SerializedSolutionPlayer& sp = out.players[i];
+                sp.initial_character = sol.initial_characters[i];
+                sp.final_character = p.character.type;
+                sp.drunklike_character = p.has_drunklike_char ? p.drunklike_char.type : CHAR_NONE;
+                sp.is_evil = p.is_evil ? 1 : 0;
+                sp.is_dead = p.is_dead ? 1 : 0;
+                sp.droison_count = p.droison_count;
+                sp.vigormortised = p.character.vigormortised ? 1 : 0;
+                sp.self_droison = p.character.self_droison ? 1 : 0;
+                sp.target = p.character.target;
+                sp.aux_target = p.character.aux_target;
+                sp.history_len = p.history_len;
+                for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
+                    sp.target_history[h] = p.target_history[h];
+                }
+            }
+        }
+    }
+};
+
+void execute_step(
     State& state,
     const SimSchedule& sched,
-    int step_idx,
+    const SimStep& step,
     const StartingConfig& config,
-    YieldFn solution_yield
+    YieldFn next_yield,
+    SolveJob* ws,
+    int worker_id
 ) {
-    if (step_idx >= sched.num_steps) {
-        solution_yield(state);
-        return;
-    }
-    auto next = [&](State& substate) {
-        run_schedule(substate, sched, step_idx + 1, config, solution_yield);
-    };
-    YieldFn next_yield = make_yield(next);
-    const SimStep& step = sched.steps[step_idx];
     switch (step.type) {
         case STEP_RUN_NEXT_CHAR:
             run_next_character(state, next_yield);
@@ -4168,8 +4318,53 @@ void run_schedule(
             end_day(state, next_yield);
             break;
         case STEP_ROUND_ROBIN:
-            round_robin(state, config, next_yield);
+            round_robin(state, sched, config, next_yield, ws, worker_id);
             break;
+    }
+}
+
+void run_schedule(
+    State& state,
+    const SimSchedule& sched,
+    int step_idx,
+    const StartingConfig& config,
+    YieldFn solution_yield,
+    SolveJob* ws = nullptr,
+    int worker_id = 0
+) {
+    if (step_idx >= sched.num_steps) {
+        solution_yield(state);
+        return;
+    }
+    const SimStep& step = sched.steps[step_idx];
+    if (ws == nullptr || step_idx + 2 >= sched.num_steps
+        || ws->idle_workers.load(std::memory_order_relaxed) == 0) {
+        auto next = [&](State& substate) {
+            run_schedule(substate, sched, step_idx + 1, config, solution_yield, ws, worker_id);
+        };
+        YieldFn next_yield = make_yield(next);
+        execute_step(state, sched, step, config, next_yield, ws, worker_id);
+        return;
+    }
+
+    // Demand-driven work-stealing split: keep the first child inline so non-branching
+    // steps have zero queue overhead, and offload sibling branches while workers are idle.
+    bool has_first = false;
+    State first_child;
+    auto next = [&](State& substate) {
+        if (!has_first) {
+            first_child = substate;
+            has_first = true;
+        } else if (ws->idle_workers.load(std::memory_order_relaxed) > 0) {
+            ws->push_task(worker_id, substate, config, step_idx + 1);
+        } else {
+            run_schedule(substate, sched, step_idx + 1, config, solution_yield, ws, worker_id);
+        }
+    };
+    YieldFn next_yield = make_yield(next);
+    execute_step(state, sched, step, config, next_yield, ws, worker_id);
+    if (has_first) {
+        run_schedule(first_child, sched, step_idx + 1, config, solution_yield, ws, worker_id);
     }
 }
 
@@ -4213,7 +4408,14 @@ bool begin_game(State& state, bool allow_duplicate_tokens_in_bag) {
     return true;
 }
 
-void world_check(const SerializedPuzzle& puzzle, const StartingConfig& config, YieldFn yield) {
+void world_check_with_sched(
+    const SerializedPuzzle& puzzle,
+    const SimSchedule& sched,
+    const StartingConfig& config,
+    YieldFn yield,
+    SolveJob* ws,
+    int worker_id
+) {
     State world{};
     world.puzzle = &puzzle;
     int N = puzzle.num_players;
@@ -4241,9 +4443,157 @@ void world_check(const SerializedPuzzle& puzzle, const StartingConfig& config, Y
         return;
     }
 
-    SimSchedule sched = build_schedule(puzzle);
-    run_schedule(world, sched, 0, config, yield);
+    run_schedule(world, sched, 0, config, yield, ws, worker_id);
 }
+
+void run_worker(SolveJob& job, int worker_id) {
+    g_current_puzzle = job.puzzle;
+    auto on_sol = [&](State& sol) {
+        job.record_solution(sol);
+    };
+    YieldFn sol_yield = make_yield(on_sol);
+
+    uint32_t rng = 0x9e3779b9u * static_cast<uint32_t>(worker_id + 1);
+    auto next_rng = [&]() -> uint32_t {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        return rng;
+    };
+
+    while (!job.done.load(std::memory_order_acquire)) {
+        SolveTask task;
+        if (job.pop_local(worker_id, task)) {
+            run_schedule(task.state, *job.sched, task.step_idx, task.config, sol_yield, &job, worker_id);
+            job.complete_one();
+            continue;
+        }
+
+        size_t cfg_idx = job.next_config.fetch_add(1, std::memory_order_relaxed);
+        if (cfg_idx < job.configs->size()) {
+            world_check_with_sched(*job.puzzle, *job.sched, (*job.configs)[cfg_idx], sol_yield, &job, worker_id);
+            job.complete_one();
+            continue;
+        }
+
+        job.idle_workers.fetch_add(1, std::memory_order_acq_rel);
+        bool stole = false;
+        for (int attempt = 0; attempt < 32 && !job.done.load(std::memory_order_acquire); ++attempt) {
+            int start = static_cast<int>(next_rng() % static_cast<uint32_t>(job.num_workers));
+            for (int off = 0; off < job.num_workers; ++off) {
+                int victim = (start + off) % job.num_workers;
+                if (victim == worker_id) continue;
+                if (job.steal_from(victim, task)) {
+                    stole = true;
+                    break;
+                }
+            }
+            if (stole) break;
+            std::this_thread::yield();
+        }
+        if (stole) {
+            job.idle_workers.fetch_sub(1, std::memory_order_relaxed);
+            run_schedule(task.state, *job.sched, task.step_idx, task.config, sol_yield, &job, worker_id);
+            job.complete_one();
+            continue;
+        }
+
+        {
+            std::unique_lock<std::mutex> lk(job.wait_mtx);
+            job.wait_cv.wait(lk, [&]() {
+                return job.done.load(std::memory_order_acquire)
+                    || job.pending_stealable.load(std::memory_order_acquire) > 0;
+            });
+        }
+        job.idle_workers.fetch_sub(1, std::memory_order_relaxed);
+    }
+}
+
+class WorkStealingPool {
+public:
+    static WorkStealingPool& get() {
+        static WorkStealingPool instance;
+        return instance;
+    }
+
+    int max_threads() const {
+        return static_cast<int>(workers_.size()) + 1;
+    }
+
+    void run_job(SolveJob& job) {
+        std::lock_guard<std::mutex> run_lk(run_mtx_);
+        int extra = job.num_workers - 1;
+        if (extra > 0) {
+            std::lock_guard<std::mutex> lk(job_mtx_);
+            current_job_ = &job;
+            active_pool_workers_ = extra;
+            ++job_gen_;
+            job_cv_.notify_all();
+        }
+
+        run_worker(job, 0);
+
+        if (extra > 0) {
+            std::unique_lock<std::mutex> lk(job_mtx_);
+            done_cv_.wait(lk, [&]() { return active_pool_workers_ == 0; });
+            current_job_ = nullptr;
+        }
+    }
+
+private:
+    WorkStealingPool() {
+        unsigned int hw = std::thread::hardware_concurrency();
+        int n = (hw > 1) ? static_cast<int>(hw) : 1;
+        workers_.reserve(n - 1);
+        for (int tid = 1; tid < n; ++tid) {
+            workers_.emplace_back([this, tid]() { worker_loop(tid); });
+        }
+    }
+
+    ~WorkStealingPool() {
+        {
+            std::lock_guard<std::mutex> lk(job_mtx_);
+            shutdown_ = true;
+            job_cv_.notify_all();
+        }
+        for (auto& t : workers_) {
+            if (t.joinable()) t.join();
+        }
+    }
+
+    void worker_loop(int tid) {
+        uint64_t my_gen = 0;
+        while (true) {
+            SolveJob* job = nullptr;
+            {
+                std::unique_lock<std::mutex> lk(job_mtx_);
+                job_cv_.wait(lk, [&]() {
+                    return shutdown_ || (job_gen_ != my_gen && current_job_ != nullptr && tid < current_job_->num_workers);
+                });
+                if (shutdown_) return;
+                my_gen = job_gen_;
+                job = current_job_;
+            }
+            run_worker(*job, tid);
+            {
+                std::lock_guard<std::mutex> lk(job_mtx_);
+                if (--active_pool_workers_ == 0) {
+                    done_cv_.notify_one();
+                }
+            }
+        }
+    }
+
+    std::mutex run_mtx_;
+    std::mutex job_mtx_;
+    std::condition_variable job_cv_;
+    std::condition_variable done_cv_;
+    SolveJob* current_job_ = nullptr;
+    uint64_t job_gen_ = 0;
+    int active_pool_workers_ = 0;
+    bool shutdown_ = false;
+    std::vector<std::thread> workers_;
+};
 
 void modify_category_counts(CharacterID type, int16_t bounds[4][2]) {
     switch (type) {
@@ -4385,60 +4735,16 @@ void for_permutations(int n_players, int k, PlayerID* buf, uint16_t used_mask, i
 
 extern "C" {
 
-int solve_puzzle_cpp(
+int solve_puzzle_cpp_mt(
     const clockchecker::SerializedPuzzle* puzzle_ptr,
     clockchecker::SerializedSolution* out_solutions,
-    int max_solutions
+    int max_solutions,
+    int num_threads
 ) {
     using namespace clockchecker;
     const SerializedPuzzle& puzzle = *puzzle_ptr;
     g_current_puzzle = &puzzle;
     const int N = puzzle.num_players;
-
-    int num_solutions = 0;
-    struct SolutionKey {
-        CharacterID chars[MAX_PLAYERS * 2];
-        bool operator==(const SolutionKey& o) const {
-            return std::memcmp(chars, o.chars, sizeof(chars)) == 0;
-        }
-    };
-    std::vector<SolutionKey> seen_keys;
-
-    auto on_solution = [&](State& sol) {
-        if (puzzle.deduplicate_initial_characters) {
-            SolutionKey key{};
-            for (int i = 0; i < N; ++i) {
-                key.chars[i] = sol.initial_characters[i];
-                key.chars[N + i] = sol.players[i].character.type;
-            }
-            for (const auto& k : seen_keys) {
-                if (k == key) return;
-            }
-            seen_keys.push_back(key);
-        }
-        if (num_solutions < max_solutions) {
-            SerializedSolution& out = out_solutions[num_solutions++];
-            for (int i = 0; i < N; ++i) {
-                const Player& p = sol.players[i];
-                SerializedSolutionPlayer& sp = out.players[i];
-                sp.initial_character = sol.initial_characters[i];
-                sp.final_character = p.character.type;
-                sp.drunklike_character = p.has_drunklike_char ? p.drunklike_char.type : CHAR_NONE;
-                sp.is_evil = p.is_evil ? 1 : 0;
-                sp.is_dead = p.is_dead ? 1 : 0;
-                sp.droison_count = p.droison_count;
-                sp.vigormortised = p.character.vigormortised ? 1 : 0;
-                sp.self_droison = p.character.self_droison ? 1 : 0;
-                sp.target = p.character.target;
-                sp.aux_target = p.character.aux_target;
-                sp.history_len = p.history_len;
-                for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
-                    sp.target_history[h] = p.target_history[h];
-                }
-            }
-        }
-    };
-    YieldFn solution_yield = make_yield(on_solution);
 
     int num_minions = puzzle.category_counts[2];
     int num_demons = puzzle.category_counts[3];
@@ -4537,6 +4843,9 @@ int solve_puzzle_cpp(
         return true;
     };
 
+    std::vector<StartingConfig> configs;
+    configs.reserve(256);
+
     for_combination_range(puzzle.demons, puzzle.num_demons, min_demons, num_demons, [&](const CharacterID* demons, int n_d) {
         for_combination_range(puzzle.minions, puzzle.num_minions, num_minions, puzzle.num_minions, [&](const CharacterID* minions, int n_m) {
             for_combination_range(puzzle.hidden_good, puzzle.num_hidden_good, 0, puzzle.num_hidden_good, [&](const CharacterID* hgood, int n_hg) {
@@ -4577,7 +4886,7 @@ int solve_puzzle_cpp(
                             }
 
                             if (check_speculation(config, in_play)) {
-                                world_check(puzzle, config, solution_yield);
+                                configs.push_back(config);
                             }
 
                             int max_extra = std::min<int>(puzzle.max_speculation - (n_se + n_sm), 1);
@@ -4602,7 +4911,7 @@ int solve_puzzle_cpp(
                                         StartingConfig extra_cfg = config;
                                         extra_cfg.speculative_evil_mask |= static_cast<uint16_t>(1u << liar_pos[i]);
                                         if (check_speculation(extra_cfg, in_play)) {
-                                            world_check(puzzle, extra_cfg, solution_yield);
+                                            configs.push_back(extra_cfg);
                                         }
                                     }
                                 }
@@ -4613,6 +4922,27 @@ int solve_puzzle_cpp(
             });
         });
     });
+
+    SimSchedule sched = build_schedule(puzzle);
+    int num_solutions = 0;
+
+    if (!configs.empty()) {
+        int pool_max = WorkStealingPool::get().max_threads();
+        int n_workers = (num_threads <= 0) ? pool_max : std::min(num_threads, pool_max);
+        if (n_workers <= 1) {
+            SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, 1);
+            auto on_sol = [&](State& sol) { job.record_solution(sol); };
+            YieldFn sol_yield = make_yield(on_sol);
+            for (const auto& cfg : configs) {
+                world_check_with_sched(puzzle, sched, cfg, sol_yield, nullptr, 0);
+            }
+            num_solutions = job.num_solutions;
+        } else {
+            SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, n_workers);
+            WorkStealingPool::get().run_job(job);
+            num_solutions = job.num_solutions;
+        }
+    }
 
     if (num_solutions == 0 && max_solutions > 0) {
         bool has_atheist = false;
@@ -4642,6 +4972,14 @@ int solve_puzzle_cpp(
     }
 
     return num_solutions;
+}
+
+int solve_puzzle_cpp(
+    const clockchecker::SerializedPuzzle* puzzle_ptr,
+    clockchecker::SerializedSolution* out_solutions,
+    int max_solutions
+) {
+    return solve_puzzle_cpp_mt(puzzle_ptr, out_solutions, max_solutions, 0);
 }
 
 int get_serialized_puzzle_size() {
