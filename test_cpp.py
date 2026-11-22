@@ -68,6 +68,7 @@ class TestCppPoC(unittest.TestCase):
             "puzzle_NQT47",
             "puzzle_NQT48",
             "puzzle_NQT49",
+            "puzzle_NQT50",
             "puzzle_NQT51",
             "puzzle_NQT53",
             "puzzle_NQT54",
@@ -86,6 +87,27 @@ class TestCppPoC(unittest.TestCase):
             "puzzle_NQT69",
             "puzzle_NQT70",
             "puzzle_NQT71_alt2",
+            "puzzle_NQT73",
+            "puzzle_NQT74",
+            "puzzle_NQT75",
+            "puzzle_NQT77",
+            "puzzle_NQT78",
+            "puzzle_NQT79",
+            "puzzle_NQT80",
+            "puzzle_NQT90",
+            "puzzle_josef_yes_but_dont",
+            "puzzle_josef_lunatic",
+            "puzzle_nikhilvyas27",
+            "puzzle_nikhilvyas28",
+            "puzzle_ali_adversarial1",
+            "puzzle_ali_adversarial2",
+            "puzzle_nqt_sw_test",
+            "puzzle_nqt_snv_test1",
+            "puzzle_nqt_snv_test2",
+            "puzzle_nqt_snv_test3",
+            "puzzle_nqt_snv_test4",
+            "puzzle_nqt_uncommon_vig_solution",
+            "puzzle_emerald_snv",
         ]
         lib = _get_lib()
         print(
@@ -103,19 +125,37 @@ class TestCppPoC(unittest.TestCase):
 
             # Run Python solver (single-process for fair 1-to-1 algorithmic comparison)
             t0 = time.perf_counter()
-            py_worlds = list(solve(pdef_py.puzzle, num_processes=1))
+            if pdef_py.solve_override is not None:
+                orig_solve = puzzles.solve
+                puzzles.solve = lambda p, **kw: orig_solve(p, num_processes=1)
+                try:
+                    py_worlds = list(pdef_py.solve_override)
+                finally:
+                    puzzles.solve = orig_solve
+            else:
+                py_worlds = list(solve(pdef_py.puzzle, num_processes=1))
             t_py = time.perf_counter() - t0
 
             # End-to-end C++ solve from Python Puzzle -> Python State objects
             t0 = time.perf_counter()
-            cpp_worlds = list(solve_cpp(pdef_cpp.puzzle))
+            if pdef_cpp.solve_override is not None:
+                orig_solve = puzzles.solve
+                puzzles.solve = solve_cpp
+                try:
+                    cpp_worlds = list(pdef_cpp.solve_override)
+                finally:
+                    puzzles.solve = orig_solve
+            else:
+                cpp_worlds = list(solve_cpp(pdef_cpp.puzzle))
             t_cpp_e2e = time.perf_counter() - t0
 
             # Pure C++ solver kernel time (excluding Python ctypes serialization & deepcopy reconstruction)
-            cpuzzle = serialize_puzzle(pdef_cpp.puzzle)
+            sub_puzzles = pdef_cpp.puzzle if isinstance(pdef_cpp.puzzle, tuple) else (pdef_cpp.puzzle,)
+            cpuzzles = [serialize_puzzle(sp) for sp in sub_puzzles]
             out_solutions = (CSerializedSolution * MAX_SOLUTIONS)()
             t0 = time.perf_counter()
-            lib.solve_puzzle_cpp(ctypes.byref(cpuzzle), out_solutions, MAX_SOLUTIONS)
+            for cpuzzle in cpuzzles:
+                lib.solve_puzzle_cpp(ctypes.byref(cpuzzle), out_solutions, MAX_SOLUTIONS)
             t_cpp_core = time.perf_counter() - t0
 
             total_py += t_py

@@ -631,6 +631,10 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
         node.type = InfoType.PING_FLOWERGIRL
         node.flag = int(bool(item.demon_voted))
 
+    elif isinstance(item, characters.TownCrier.Ping):
+        node.type = InfoType.PING_TOWN_CRIER
+        node.flag = int(bool(item.minion_nominated))
+
     elif isinstance(item, characters.Balloonist.Ping):
         node.type = InfoType.NOTINFO_BALLOONIST_PING
         node.player1 = item.player
@@ -806,6 +810,12 @@ def serialize_puzzle(puzzle: Puzzle) -> CSerializedPuzzle:
                 cev.player = ev.player
                 cev.count = len(ev.voters)
                 for v_idx, v_pid in enumerate(ev.voters):
+                    cev.players[v_idx] = v_pid
+            elif isinstance(ev, characters.TownCrier.Nominators):
+                cev.type = EventType.EVENT_TOWNCRIER_NOMINATORS
+                cev.player = ev.player
+                cev.count = len(ev.nominators)
+                for v_idx, v_pid in enumerate(ev.nominators):
                     cev.players[v_idx] = v_pid
             else:
                 raise NotImplementedError(f"Unsupported Day Event in C++ serializer: {type(ev)}")

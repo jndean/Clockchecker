@@ -1017,9 +1017,10 @@ STBool eval_info(State& state, int16_t node_idx, PlayerID src) {
             return chose_evil ^ shown_evil;
         }
 
-        case PING_FLOWERGIRL: {
-            const Player& fg = state.players[src];
-            return STBool(node.flag != 0) == fg.saved_day_bool;
+        case PING_FLOWERGIRL:
+        case PING_TOWN_CRIER: {
+            const Player& p = state.players[src];
+            return STBool(node.flag != 0) == p.saved_day_bool;
         }
 
         default:
@@ -1193,6 +1194,7 @@ void activate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
                 demon.boffin_ability = state.players[me].inactive_boffin_ability;
                 demon.has_boffin_ability = true;
                 state.players[me].inactive_boffin_ability.type = CHAR_NONE;
+                update_character_callbacks(state);
                 maybe_activate_effects(state, demon.boffin_ability, ab.target);
             }
             break;
@@ -1310,6 +1312,7 @@ void deactivate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
                 state.players[me].inactive_boffin_ability = demon.boffin_ability;
                 demon.has_boffin_ability = false;
                 demon.boffin_ability.type = CHAR_NONE;
+                update_character_callbacks(state);
             }
             break;
         default:
@@ -2066,39 +2069,42 @@ void run_character_setup(State& state, PlayerID me, YieldFn yield, CharacterID w
         }
 
         case CHAR_Boffin: {
-            maybe_activate_effects(state, ab, me);
-            if (!ab.effects_active) {
-                yield(state);
-                return;
-            }
-            PlayerID demon_id = NONE_PLAYER;
+            PlayerID demon_ids[MAX_PLAYERS];
+            int n_demons = 0;
             for (PlayerID pid = 0; pid < N; ++pid) {
-                if (is_category(state.players[pid].character.type, CAT_DEMON)) {
-                    demon_id = pid;
-                    break;
+                if (eval_is_category(state, pid, CAT_DEMON, false, me).not_false()) {
+                    demon_ids[n_demons++] = pid;
                 }
             }
-            if (demon_id == NONE_PLAYER) {
-                yield(state);
-                return;
-            }
-            CharacterID granted = state.players[demon_id].claim;
-            if (!is_category(granted, CAT_TOWNSFOLK | CAT_OUTSIDER) || granted == CHAR_Drunk) {
-                for (int i = 0; i < state.puzzle->num_script; ++i) {
-                    CharacterID c = state.puzzle->script[i];
-                    if (is_category(c, CAT_TOWNSFOLK | CAT_OUTSIDER) && c != CHAR_Drunk) {
-                        granted = c;
-                        break;
-                    }
+            CharacterID abilities[MAX_SCRIPT];
+            int n_abilities = 0;
+            for (int i = 0; i < state.puzzle->num_script; ++i) {
+                CharacterID c = state.puzzle->script[i];
+                if (is_category(c, CAT_TOWNSFOLK | CAT_OUTSIDER)
+                    && c != CHAR_Drunk && c != CHAR_Politician
+                    && eval_is_in_play(state, c, me).not_true()) {
+                    abilities[n_abilities++] = c;
                 }
             }
             uint8_t next_night = (state.night != 0) ? state.night
                                : (state.day != 0)   ? static_cast<uint8_t>(state.day + 1)
                                                     : static_cast<uint8_t>(1);
-            state.players[demon_id].boffin_ability = make_ability(granted, next_night);
-            state.players[demon_id].has_boffin_ability = true;
-            update_character_callbacks(state);
-            run_character_setup(state, demon_id, yield, granted);
+            for (int di = 0; di < n_demons; ++di) {
+                PlayerID demon_id = demon_ids[di];
+                for (int ai = 0; ai < n_abilities; ++ai) {
+                    CharacterID ability_t = abilities[ai];
+                    State new_state = state;
+                    AbilityInstance& new_boffin = get_ability_ref(new_state, me, ab_type);
+                    new_boffin.target = demon_id;
+                    new_boffin.effects_active = true;
+                    Player& demon = new_state.players[demon_id];
+                    demon.boffin_ability = make_ability(ability_t, next_night);
+                    demon.boffin_ability.ability_src = me;
+                    demon.has_boffin_ability = true;
+                    update_character_callbacks(new_state);
+                    run_character_setup(new_state, demon_id, yield, ability_t);
+                }
+            }
             return;
         }
 
@@ -2739,71 +2745,59 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
                 yield(state);
                 return;
             }
-            PlayerID targets[MAX_PLAYERS];
-            int n_targets = generic_demon_get_targets(state, me, targets);
-            for (int i = 0; i < n_targets; ++i) {
-                PlayerID target = targets[i];
-                if (is_droisoned(state, ab, me)) {
-                    State new_state = state;
-                    if (!state.players[target].is_dead) {
-                        math_misregistration(new_state, me);
-                    }
-                    yield(new_state);
+            bool sunk_a_kill = false;
+            for (PlayerID target = 0; target < N; ++target) {
+                const Player& target_player = state.players[target];
+                if (target_player.is_dead) {
+                    if (sunk_a_kill) continue;
+                    State sink_state = state;
+                    yield(sink_state);
+                    sunk_a_kill = true;
                     continue;
                 }
-                State new_state = state;
-                auto after_attack = [&](State& substate) {
-                    if (!substate.players[target].is_dead) {
-                        yield(substate);
-                        return;
+                if (is_droisoned(state, ab, me)) {
+                    State droison_state = state;
+                    math_misregistration(droison_state, me);
+                    yield(droison_state);
+                    continue;
+                }
+                STBool is_minion = eval_is_category(state, target, CAT_MINION, false, me);
+                if (is_minion.not_true()) {
+                    State kill_state = state;
+                    attacked_at_night(kill_state, target, me, yield);
+                    if (is_minion.is_false()) {
+                        continue;
                     }
-                    STBool target_is_minion = eval_is_category(substate, target, CAT_MINION, false, me);
-                    if (target_is_minion.is_false()) {
-                        yield(substate);
-                        return;
-                    }
-                    if (target_is_minion.is_maybe()) {
-                        State no_vig_state = substate;
-                        if (is_category(no_vig_state.players[target].character.type, CAT_MINION)) {
-                            math_misregistration(no_vig_state, me);
-                        }
-                        yield(no_vig_state);
-                    }
-                    if (!is_category(substate.players[target].character.type, CAT_MINION)) {
-                        math_misregistration(substate, me);
-                    }
-                    PlayerID fwd_tf[MAX_PLAYERS];
-                    PlayerID bkwd_tf[MAX_PLAYERS];
-                    int n_fwd = tf_to_droison_in_direction(substate, target, 1, fwd_tf);
-                    int n_bkwd = tf_to_droison_in_direction(substate, target, -1, bkwd_tf);
-                    PlayerID candidates[MAX_PLAYERS];
-                    int n_cand = 0;
-                    uint16_t cand_mask = 0;
-                    for (int fi = 0; fi < n_fwd; ++fi) {
-                        PlayerID p = fwd_tf[fi];
-                        if (!(cand_mask & (1u << p))) {
-                            cand_mask |= static_cast<uint16_t>(1u << p);
-                            candidates[n_cand++] = p;
-                        }
-                    }
-                    for (int bi = 0; bi < n_bkwd; ++bi) {
-                        PlayerID p = bkwd_tf[bi];
-                        if (!(cand_mask & (1u << p))) {
-                            cand_mask |= static_cast<uint16_t>(1u << p);
-                            candidates[n_cand++] = p;
-                        }
-                    }
+                }
+                State minion_state = state;
+                minion_state.players[target].character.vigormortised = true;
+                if (minion_state.players[target].has_philo_ability) {
+                    minion_state.players[target].philo_ability.vigormortised = true;
+                }
+                PlayerID bkwd_tf[MAX_PLAYERS];
+                PlayerID fwd_tf[MAX_PLAYERS];
+                int n_bkwd = tf_to_droison_in_direction(minion_state, target, -1, bkwd_tf);
+                int n_fwd = tf_to_droison_in_direction(minion_state, target, 1, fwd_tf);
+                PlayerID candidates[MAX_PLAYERS * 2];
+                int n_cand = 0;
+                for (int bi = 0; bi < n_bkwd; ++bi) candidates[n_cand++] = bkwd_tf[bi];
+                for (int fi = 0; fi < n_fwd; ++fi) candidates[n_cand++] = fwd_tf[fi];
+
+                auto after_attack = [&](State& ss1) {
                     for (int ci = 0; ci < n_cand; ++ci) {
-                        State vig_state = substate;
-                        AbilityInstance& vig_ab = get_ability_ref(vig_state, me, ab_type);
-                        vig_ab.aux_mask |= static_cast<uint16_t>(1u << target);
-                        vig_ab.vig_poisoned_mask |= static_cast<uint16_t>(1u << candidates[ci]);
-                        vig_ab.effects_active = false;
-                        maybe_activate_effects(vig_state, vig_ab, me);
-                        yield(vig_state);
+                        PlayerID poison_candidate = candidates[ci];
+                        State ss2 = ss1;
+                        AbilityInstance& new_vig = get_ability_ref(ss2, me, ab_type);
+                        maybe_activate_effects(ss2, new_vig, me);
+                        new_vig.aux_mask |= static_cast<uint16_t>(1u << target);
+                        new_vig.vig_poisoned_mask |= static_cast<uint16_t>(1u << poison_candidate);
+                        if (new_vig.effects_active) {
+                            droison_player(ss2, poison_candidate, me);
+                        }
+                        yield(ss2);
                     }
                 };
-                attacked_at_night(new_state, target, me, make_yield(after_attack));
+                attacked_at_night(minion_state, target, me, make_yield(after_attack));
             }
             return;
         }
@@ -3997,6 +3991,18 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
             Player& fg = state.players[ev.player];
             fg.saved_day_bool = demon_voted;
             fg.saved_day_num = state.day;
+            yield(state);
+            return;
+        }
+
+        case EVENT_TOWNCRIER_NOMINATORS: {
+            STBool minion_nominated = STBoolVal::FALSE;
+            for (int i = 0; i < ev.count; ++i) {
+                minion_nominated |= eval_is_category(state, ev.players[i], CAT_MINION, false, ev.player);
+            }
+            Player& tc = state.players[ev.player];
+            tc.saved_day_bool = minion_nominated;
+            tc.saved_day_num = state.day;
             yield(state);
             return;
         }
