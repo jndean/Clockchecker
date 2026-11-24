@@ -221,6 +221,162 @@ class TestCppPoC(unittest.TestCase):
             f"{sp_1t:6.1f}x / {sp_mt:7.1f}x | (e2e: {sp_e2e:.1f}x)"
         )
 
+    def test_pithag_cerenovus_monk_hermit_and_player_attr_eq(self):
+        import tests as py_tests
+        from clockchecker import (
+            Puzzle, Player, set_fast_backend, solve, solve_cpp,
+            Artist, Baron, Butler, Cerenovus, Dreamer, Empath, Golem, Hermit,
+            Imp, Leviathan, Lunatic, Monk, Mutant, PitHag, Politician,
+            Puzzlemaster, Saint, Sweetheart,
+            IsCharacter, PlayerAttrEq, UneventfulNomination,
+        )
+
+        # 1. Run all TestPitHag and TestCerenovus unit tests on the C++ backend
+        loader = unittest.TestLoader()
+        suite = unittest.TestSuite([
+            loader.loadTestsFromTestCase(py_tests.TestPitHag),
+            loader.loadTestsFromTestCase(py_tests.TestCerenovus),
+        ])
+        set_fast_backend(True)
+        try:
+            result = unittest.TestResult()
+            suite.run(result)
+            self.assertTrue(
+                result.wasSuccessful(),
+                f"PitHag/Cerenovus C++ failures: {result.failures} errors: {result.errors}",
+            )
+        finally:
+            set_fast_backend(False)
+
+        def assert_py_cpp_match(puzzle, label):
+            py_sols = sorted({
+                (
+                    tuple(c.__name__ for c in w.initial_characters),
+                    tuple(type(p.character).__name__ for p in w.players),
+                )
+                for w in solve(puzzle, num_processes=1, fast=False)
+            })
+            cpp_sols = sorted({
+                (
+                    tuple(c.__name__ for c in w.initial_characters),
+                    tuple(type(p.character).__name__ for p in w.players),
+                )
+                for w in solve_cpp(puzzle, num_threads=1)
+            })
+            self.assertEqual(cpp_sols, py_sols, f"{label}: mismatch between C++ and Python")
+            self.assertGreater(len(cpp_sols), 0, f"{label}: expected at least 1 solution")
+
+        # 2. Monk protects Imp's target on N2 (preventing death) + PlayerAttrEq inside Artist.Ping
+        You, B, C, D = range(4)
+        monk_puzzle = Puzzle(
+            players=[
+                Player("You", claim=Monk, night_info={2: Monk.Choice(B)}),
+                Player("B", claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(C, Imp)
+                        & PlayerAttrEq(C, "is_evil", True)
+                        & PlayerAttrEq(B, "is_dead", False)
+                    ),
+                }),
+                Player("C", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("D", claim=Empath, night_info={1: Empath.Ping(1), 2: Empath.Ping(1)}),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp],
+            hidden_self=[],
+            category_counts=(3, 0, 0, 1),
+        )
+        assert_py_cpp_match(monk_puzzle, "Monk + PlayerAttrEq")
+
+        # 3. Hermit with Lunatic + Politician
+        Hermit.set_outsiders(Lunatic, Politician)
+        hermit_lp = Puzzle(
+            players=[
+                Player("You", claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(B, Imp) & IsCharacter(C, Hermit)),
+                }),
+                Player("B", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("C", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("D", claim=Empath, night_info={1: Empath.Ping(0)}),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Imp, Hermit],
+            hidden_self=[],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_py_cpp_match(hermit_lp, "Hermit(Lunatic, Politician)")
+
+        # 4. Hermit with Puzzlemaster + Sweetheart + Golem (no field collisions)
+        Hermit.set_outsiders(Puzzlemaster, Sweetheart, Golem)
+        hermit_psg = Puzzle(
+            players=[
+                Player("You", claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(B, Leviathan) & IsCharacter(C, Hermit)),
+                }),
+                Player("B", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("C", claim=Hermit, day_info={1: Puzzlemaster.Ping(D, B)}),
+                Player("D", claim=Empath, night_info={1: Empath.Ping(0)}),
+            ],
+            day_events={1: [UneventfulNomination(player=B, nominator=C)]},
+            night_deaths={},
+            hidden_characters=[Leviathan],
+            hidden_self=[],
+            also_on_script=[Puzzlemaster, Sweetheart, Golem],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_py_cpp_match(hermit_psg, "Hermit(Puzzlemaster, Sweetheart, Golem)")
+
+        # 5. Hermit with Mutant + Puzzlemaster + Butler
+        Hermit.set_outsiders(Mutant, Puzzlemaster, Butler)
+        hermit_mpb = Puzzle(
+            players=[
+                Player("You", claim=Artist, day_info={
+                    1: Artist.Ping(IsCharacter(B, Leviathan) & IsCharacter(C, Hermit)),
+                }),
+                Player("B", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("C", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("D", claim=Empath, night_info={1: Empath.Ping(0)}),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, Hermit],
+            hidden_self=[],
+            also_on_script=[Mutant, Puzzlemaster, Butler],
+            category_counts=(2, 1, 0, 1),
+        )
+        assert_py_cpp_match(hermit_mpb, "Hermit(Mutant, Puzzlemaster, Butler)")
+
+        # 6. Verify PitHag world-string formatting (target_history & character_history) matches Python
+        pithag_str_puzzle = Puzzle(
+            players=[
+                Player("You", claim=Artist, day_info={
+                    1: Artist.Ping(
+                        IsCharacter(B, Leviathan)
+                        & IsCharacter(C, PitHag)
+                        & IsCharacter(D, Dreamer)
+                    ),
+                }),
+                Player("B", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("C", claim=Empath, night_info={1: Empath.Ping(0)}),
+                Player("D", claim=Dreamer, night_info={
+                    1: Dreamer.Ping(B, Leviathan, Empath),
+                    2: Dreamer.Ping(B, Imp, Empath),
+                }),
+            ],
+            day_events={},
+            night_deaths={},
+            hidden_characters=[Leviathan, PitHag, Baron, Imp],
+            hidden_self=[],
+            category_counts=(2, 0, 1, 1),
+        )
+        py_world_str = str(next(solve(pithag_str_puzzle, num_processes=1, fast=False)))
+        cpp_world_str = str(next(solve_cpp(pithag_str_puzzle, num_threads=1)))
+        self.assertEqual(cpp_world_str, py_world_str)
+        self.assertIn("PitHag (Changed B into Imp)", cpp_world_str)
+        self.assertIn("Leviathan -[N2]-> Imp", cpp_world_str)
+
 
 if __name__ == "__main__":
     unittest.main()

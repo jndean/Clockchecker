@@ -14,6 +14,7 @@ constexpr int MAX_DEATHS_PER_NIGHT = 16;
 constexpr int MAX_EXTERNAL_PER_SLOT = 16;
 constexpr int MAX_STEPS = 256;
 constexpr int MAX_SOLUTIONS = 4096;
+constexpr int MAX_CHAR_CHANGES = 16;
 
 using PlayerID = int8_t;
 constexpr PlayerID NONE_PLAYER = -1;
@@ -235,6 +236,14 @@ enum AttrID : uint8_t {
     ATTR_TARGET,
     ATTR_PUZZLE_DRUNK,
     ATTR_SPENT,
+    ATTR_CEREMAD,
+    ATTR_IS_EVIL,
+    ATTR_IS_DEAD,
+    ATTR_DROISON_COUNT,
+    ATTR_WOKE_TONIGHT,
+    ATTR_SAFE_FROM_DEMON_COUNT,
+    ATTR_SAFE_FROM_EXECUTION,
+    ATTR_EXORCISED_COUNT,
 };
 
 enum InfoType : uint8_t {
@@ -445,7 +454,14 @@ struct AbilityInstance {
     uint16_t vig_poisoned_mask = 0;
 };
 
-struct Player {
+struct CharChangeEntry {
+    PlayerID pid;
+    CharacterID prev_char;
+    uint8_t phase_and_round; // high 2 bits: Phase, low 6 bits: round
+};
+
+template <int MAX_P>
+struct PlayerT {
     PlayerID id = 0;
     CharacterID claim = CHAR_NONE;
     AbilityInstance character;
@@ -481,16 +497,18 @@ struct Player {
     STBool saved_day_bool;
     int8_t saved_day_num = -1;
 
-    uint8_t protection_map[MAX_PLAYERS];
+    uint8_t protection_map[MAX_P];
 
     uint8_t history_len = 0;
     PlayerID target_history[MAX_NIGHTS];
+    CharacterID target_char_history[MAX_NIGHTS];
 };
 
-struct State {
+template <int MAX_P>
+struct StateT {
     const SerializedPuzzle* puzzle = nullptr;
-    Player players[MAX_PLAYERS];
-    CharacterID initial_characters[MAX_PLAYERS];
+    PlayerT<MAX_P> players[MAX_P];
+    CharacterID initial_characters[MAX_P];
 
     Phase current_phase = PHASE_SETUP;
     uint8_t phase_order_index = 0;
@@ -499,7 +517,7 @@ struct State {
 
     CharacterID currently_acting_character = CHAR_NONE;
     uint8_t num_players_still_to_act = 0;
-    PlayerID players_still_to_act[MAX_PLAYERS];
+    PlayerID players_still_to_act[MAX_P];
 
     uint16_t previously_alive_mask = 0;
     int16_t math_misreg_bounds[2] = {0, 0};
@@ -516,6 +534,9 @@ struct State {
     PlayerID pithag_preventing_kills = NONE_PLAYER;
     PlayerID pithag_kills_at_night_end = NONE_PLAYER;
     int8_t widow_pinged_night = -1;
+
+    uint8_t num_char_changes = 0;
+    CharChangeEntry char_changes[MAX_CHAR_CHANGES];
 };
 
 struct SerializedSolutionPlayer {
@@ -525,12 +546,18 @@ struct SerializedSolutionPlayer {
     uint8_t is_evil;
     uint8_t is_dead;
     int8_t droison_count;
+    uint8_t ceremad;
     uint8_t vigormortised;
     uint8_t self_droison;
     PlayerID target;
     PlayerID aux_target;
     uint8_t history_len;
     PlayerID target_history[MAX_NIGHTS];
+    CharacterID target_char_history[MAX_NIGHTS];
+    uint8_t char_history_len;
+    CharacterID char_history[MAX_NIGHTS];
+    uint8_t char_history_phase[MAX_NIGHTS];
+    int8_t char_history_round[MAX_NIGHTS];
 };
 
 struct SerializedSolution {

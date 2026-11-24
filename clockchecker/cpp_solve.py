@@ -147,6 +147,14 @@ class AttrID(enum.IntEnum):
     ATTR_TARGET = enum.auto()
     ATTR_PUZZLE_DRUNK = enum.auto()
     ATTR_SPENT = enum.auto()
+    ATTR_CEREMAD = enum.auto()
+    ATTR_IS_EVIL = enum.auto()
+    ATTR_IS_DEAD = enum.auto()
+    ATTR_DROISON_COUNT = enum.auto()
+    ATTR_WOKE_TONIGHT = enum.auto()
+    ATTR_SAFE_FROM_DEMON_COUNT = enum.auto()
+    ATTR_SAFE_FROM_EXECUTION = enum.auto()
+    ATTR_EXORCISED_COUNT = enum.auto()
 
 
 class InfoType(enum.IntEnum):
@@ -328,12 +336,18 @@ class CSerializedSolutionPlayer(Structure):
         ("is_evil", c_uint8),
         ("is_dead", c_uint8),
         ("droison_count", c_int8),
+        ("ceremad", c_uint8),
         ("vigormortised", c_uint8),
         ("self_droison", c_uint8),
         ("target", c_int8),
         ("aux_target", c_int8),
         ("history_len", c_uint8),
         ("target_history", c_int8 * MAX_NIGHTS),
+        ("target_char_history", c_uint8 * MAX_NIGHTS),
+        ("char_history_len", c_uint8),
+        ("char_history", c_uint8 * MAX_NIGHTS),
+        ("char_history_phase", c_uint8 * MAX_NIGHTS),
+        ("char_history_round", c_int8 * MAX_NIGHTS),
     ]
 
 
@@ -510,6 +524,24 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
         else:
             node.player2 = NONE_PLAYER if item.value is None else int(item.value)
 
+    elif isinstance(item, info.PlayerAttrEq):
+        node.type = InfoType.INFO_PLAYER_ATTR_EQ
+        node.player1 = item.player
+        player_attr_map = {
+            "ceremad": AttrID.ATTR_CEREMAD,
+            "is_evil": AttrID.ATTR_IS_EVIL,
+            "is_dead": AttrID.ATTR_IS_DEAD,
+            "droison_count": AttrID.ATTR_DROISON_COUNT,
+            "woke_tonight": AttrID.ATTR_WOKE_TONIGHT,
+            "safe_from_demon_count": AttrID.ATTR_SAFE_FROM_DEMON_COUNT,
+            "safe_from_execution": AttrID.ATTR_SAFE_FROM_EXECUTION,
+            "exorcised_count": AttrID.ATTR_EXORCISED_COUNT,
+        }
+        if item.attr not in player_attr_map:
+            raise NotImplementedError(f"Unsupported PlayerAttrEq attr: {item.attr}")
+        node.category = player_attr_map[item.attr]
+        node.count = int(item.value)
+
     elif isinstance(item, characters.Artist.Ping):
         node.type = InfoType.PING_ARTIST
         node.child_a = _serialize_info_node(cpuzzle, item.statement)
@@ -678,6 +710,10 @@ def _serialize_info_node(cpuzzle: CSerializedPuzzle, item) -> int:
     elif isinstance(item, characters.NightWatchman.Choice):
         node.type = InfoType.NOTINFO_NIGHTWATCHMAN_CHOICE
         node.player1 = item.player
+
+    elif isinstance(item, characters.Cerenovus.Mad):
+        node.type = InfoType.EXTINFO_CERENOVUS_MAD
+        node.character1 = 0 if item.character is None else CHAR_TO_ID[item.character]
 
     elif isinstance(item, characters.EvilTwin.Is):
         node.type = InfoType.EXTINFO_EVILTWIN_IS
@@ -861,6 +897,8 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
         p.is_evil = bool(sp.is_evil)
         p.is_dead = bool(sp.is_dead)
         p.droison_count = int(sp.droison_count)
+        if sp.ceremad > 0:
+            p.ceremad = int(sp.ceremad)
         if sp.vigormortised:
             p.character.vigormortised = True
         if sp.self_droison and hasattr(p.character, "self_droison"):
@@ -879,10 +917,12 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
             p.character.red_herring = int(sp.target)
         elif isinstance(p.character, characters.Puzzlemaster) and sp.target != NONE_PLAYER:
             p.character.puzzle_drunk = int(sp.target)
-        elif isinstance(p.character, characters.Hermit) and sp.target != NONE_PLAYER:
+        elif isinstance(p.character, characters.Hermit):
             for ab in p.character.active_abilities:
-                if isinstance(ab, characters.Puzzlemaster):
+                if isinstance(ab, characters.Puzzlemaster) and sp.target != NONE_PLAYER:
                     ab.puzzle_drunk = int(sp.target)
+                elif isinstance(ab, characters.Sweetheart) and sp.aux_target != NONE_PLAYER:
+                    ab.target = int(sp.aux_target)
         elif isinstance(p.character, characters.EvilTwin) and sp.target != NONE_PLAYER:
             p.character.twin = int(sp.target)
         elif isinstance(p.character, characters.NoDashii):
@@ -891,9 +931,30 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
         elif hasattr(p.character, "target"):
             p.character.target = None if sp.target == NONE_PLAYER else int(sp.target)
         if hasattr(p.character, "target_history") and sp.history_len > 0:
-            p.character.target_history = [
-                int(sp.target_history[h]) for h in range(sp.history_len)
-            ]
+            if isinstance(p.character, characters.PitHag):
+                p.character.target_history = [
+                    (None, None)
+                    if sp.target_history[h] == NONE_PLAYER
+                    else (int(sp.target_history[h]), CHARACTER_LIST[sp.target_char_history[h]])
+                    for h in range(sp.history_len)
+                ]
+            else:
+                p.character.target_history = [
+                    int(sp.target_history[h]) for h in range(sp.history_len)
+                ]
+        if sp.char_history_len > 0:
+            p.character_history = []
+            for h in range(sp.char_history_len):
+                prev_cls = CHARACTER_LIST[sp.char_history[h]]
+                p.character_history.append(prev_cls.__name__)
+                phase = sp.char_history_phase[h]
+                rnd = sp.char_history_round[h]
+                if phase == 2:
+                    p.character_history.append(f"-[D{rnd}]->")
+                elif phase == 1:
+                    p.character_history.append(f"-[N{rnd}]->")
+                else:
+                    p.character_history.append("-->")
     return world
 
 

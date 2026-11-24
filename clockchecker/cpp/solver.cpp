@@ -121,38 +121,6 @@ static constexpr CharMeta CHAR_META[CHAR_COUNT] = {
     /* CHAR_Zombuul */        make_meta(CAT_DEMON, WAKE_MANUAL),
 };
 
-// Lightweight zero-allocation continuation callback (replaces Python yield / yield from)
-struct YieldFn {
-    void (*fn)(State&, void*);
-    void* ctx;
-    inline void operator()(State& s) const {
-        if (!s.cull_branch) {
-            fn(s, ctx);
-        }
-    }
-};
-
-template <typename F>
-inline YieldFn make_yield(F& lambda) {
-    return YieldFn{
-        [](State& s, void* ctx) { (*static_cast<F*>(ctx))(s); },
-        static_cast<void*>(&lambda)
-    };
-}
-
-// Helper for chaining a generator across a sequence [0..count-1] (replaces core.apply_all loop)
-template <typename StepFn>
-void apply_seq(State& state, int idx, int count, StepFn& step_fn, YieldFn yield) {
-    if (idx >= count) {
-        yield(state);
-        return;
-    }
-    auto next = [&](State& substate) {
-        apply_seq(substate, idx + 1, count, step_fn, yield);
-    };
-    step_fn(state, idx, make_yield(next));
-}
-
 thread_local const SerializedPuzzle* g_current_puzzle = nullptr;
 
 inline bool hermit_has_outsider(CharacterID out_id) {
@@ -190,6 +158,208 @@ inline Category get_category(CharacterID type) {
 
 inline bool is_category(CharacterID type, uint8_t cat_mask) {
     return (CHAR_META[type].category & cat_mask) != 0;
+}
+
+// Starting configuration & schedule types (independent of MAX_P)
+struct StartingConfig {
+    uint8_t num_liars = 0;
+    CharacterID liar_characters[MAX_PLAYERS];
+    PlayerID liar_positions[MAX_PLAYERS];
+
+    uint16_t speculative_evil_mask = 0;
+    uint16_t speculative_good_mask = 0;
+    uint16_t speculative_ceremad_mask = 0;
+};
+
+enum SimStepType : uint8_t {
+    STEP_RUN_NEXT_CHAR = 0,
+    STEP_END_SETUP,
+    STEP_END_NIGHT,
+    STEP_RUN_EVENT,
+    STEP_END_DAY,
+    STEP_ROUND_ROBIN,
+};
+
+struct SimStep {
+    SimStepType type;
+    uint8_t round;
+    uint8_t event_idx;
+};
+
+struct SimSchedule {
+    int num_steps = 0;
+    SimStep steps[MAX_STEPS];
+};
+
+SimSchedule build_schedule(const SerializedPuzzle& puzzle) {
+    SimSchedule sched{};
+    auto push = [&](SimStepType t, uint8_t r = 0, uint8_t e = 0) {
+        sched.steps[sched.num_steps++] = SimStep{t, r, e};
+    };
+
+    for (int i = 0; i < puzzle.num_setup_order; ++i) {
+        push(STEP_RUN_NEXT_CHAR);
+    }
+    push(STEP_END_SETUP);
+
+    for (uint8_t round = 1; round <= puzzle.max_night; ++round) {
+        for (int i = 0; i < puzzle.num_night_order; ++i) {
+            push(STEP_RUN_NEXT_CHAR);
+        }
+        push(STEP_END_NIGHT);
+        if (round <= puzzle.max_day) {
+            for (int i = 0; i < puzzle.num_day_order; ++i) {
+                push(STEP_RUN_NEXT_CHAR);
+            }
+            for (uint8_t ev = 0; ev < puzzle.day_event_counts[round]; ++ev) {
+                push(STEP_RUN_EVENT, round, ev);
+            }
+            if (round < puzzle.max_day || puzzle.finish_final_day) {
+                push(STEP_END_DAY);
+            }
+        }
+    }
+    push(STEP_ROUND_ROBIN);
+    return sched;
+}
+
+struct SolutionKey {
+    CharacterID chars[MAX_PLAYERS * 2];
+    bool operator==(const SolutionKey& o) const {
+        return std::memcmp(chars, o.chars, sizeof(chars)) == 0;
+    }
+};
+
+class WorkStealingPool {
+public:
+    using WorkerFn = void (*)(void*, int);
+
+    static WorkStealingPool& get() {
+        static WorkStealingPool instance;
+        return instance;
+    }
+
+    int max_threads() const {
+        return static_cast<int>(workers_.size()) + 1;
+    }
+
+    void run_job(void* ctx, WorkerFn fn, int num_workers) {
+        std::lock_guard<std::mutex> run_lk(run_mtx_);
+        int extra = num_workers - 1;
+        if (extra > 0) {
+            std::lock_guard<std::mutex> lk(job_mtx_);
+            current_ctx_ = ctx;
+            current_fn_ = fn;
+            current_num_workers_ = num_workers;
+            active_pool_workers_ = extra;
+            ++job_gen_;
+            job_cv_.notify_all();
+        }
+
+        fn(ctx, 0);
+
+        if (extra > 0) {
+            std::unique_lock<std::mutex> lk(job_mtx_);
+            done_cv_.wait(lk, [&]() { return active_pool_workers_ == 0; });
+            current_ctx_ = nullptr;
+            current_fn_ = nullptr;
+        }
+    }
+
+private:
+    WorkStealingPool() {
+        unsigned int hw = std::thread::hardware_concurrency();
+        int n = (hw > 1) ? static_cast<int>(hw) : 1;
+        workers_.reserve(n - 1);
+        for (int tid = 1; tid < n; ++tid) {
+            workers_.emplace_back([this, tid]() { worker_loop(tid); });
+        }
+    }
+
+    ~WorkStealingPool() {
+        {
+            std::lock_guard<std::mutex> lk(job_mtx_);
+            shutdown_ = true;
+            job_cv_.notify_all();
+        }
+        for (auto& t : workers_) {
+            if (t.joinable()) t.join();
+        }
+    }
+
+    void worker_loop(int tid) {
+        uint64_t my_gen = 0;
+        while (true) {
+            void* ctx = nullptr;
+            WorkerFn fn = nullptr;
+            {
+                std::unique_lock<std::mutex> lk(job_mtx_);
+                job_cv_.wait(lk, [&]() {
+                    return shutdown_ || (job_gen_ != my_gen && current_ctx_ != nullptr && tid < current_num_workers_);
+                });
+                if (shutdown_) return;
+                my_gen = job_gen_;
+                ctx = current_ctx_;
+                fn = current_fn_;
+            }
+            fn(ctx, tid);
+            {
+                std::lock_guard<std::mutex> lk(job_mtx_);
+                if (--active_pool_workers_ == 0) {
+                    done_cv_.notify_one();
+                }
+            }
+        }
+    }
+
+    std::mutex run_mtx_;
+    std::mutex job_mtx_;
+    std::condition_variable job_cv_;
+    std::condition_variable done_cv_;
+    void* current_ctx_ = nullptr;
+    WorkerFn current_fn_ = nullptr;
+    int current_num_workers_ = 0;
+    uint64_t job_gen_ = 0;
+    int active_pool_workers_ = 0;
+    bool shutdown_ = false;
+    std::vector<std::thread> workers_;
+};
+
+template <int MAX_P>
+struct SolverEngine {
+    using Player = PlayerT<MAX_P>;
+    using State = StateT<MAX_P>;
+
+// Lightweight zero-allocation continuation callback (replaces Python yield / yield from)
+struct YieldFn {
+    void (*fn)(State&, void*);
+    void* ctx;
+    inline void operator()(State& s) const {
+        if (!s.cull_branch) {
+            fn(s, ctx);
+        }
+    }
+};
+
+template <typename F>
+static inline YieldFn make_yield(F& lambda) {
+    return YieldFn{
+        [](State& s, void* ctx) { (*static_cast<F*>(ctx))(s); },
+        static_cast<void*>(&lambda)
+    };
+}
+
+// Helper for chaining a generator across a sequence [0..count-1] (replaces core.apply_all loop)
+template <typename StepFn>
+void apply_seq(State& state, int idx, int count, StepFn& step_fn, YieldFn yield) {
+    if (idx >= count) {
+        yield(state);
+        return;
+    }
+    auto next = [&](State& substate) {
+        apply_seq(substate, idx + 1, count, step_fn, yield);
+    };
+    step_fn(state, idx, make_yield(next));
 }
 
 inline AbilityInstance* get_ability(Player& p, CharacterID type) {
@@ -377,12 +547,6 @@ inline int circle_distance(PlayerID a, PlayerID b, int n_players) {
     }
     return std::min<int>(b - a, n_players + a - b);
 }
-
-// Forward declarations for character effects and callbacks
-void maybe_activate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason = REASON_NONE);
-void maybe_deactivate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason = REASON_NONE);
-void update_character_callbacks(State& state);
-STBool eval_info(State& state, int16_t node_idx, PlayerID src);
 
 inline void droison_player(State& state, PlayerID target, PlayerID) {
     Player& p = state.players[target];
@@ -663,8 +827,29 @@ STBool eval_info(State& state, int16_t node_idx, PlayerID src) {
             }
             return STBoolVal::FALSE;
         }
-        case INFO_PLAYER_ATTR_EQ:
-            return STBoolVal::FALSE;
+        case INFO_PLAYER_ATTR_EQ: {
+            const Player& pl = state.players[node.player1];
+            switch (static_cast<AttrID>(node.category)) {
+                case ATTR_CEREMAD:
+                    return STBool(pl.ceremad > 0 && pl.ceremad == node.count);
+                case ATTR_IS_EVIL:
+                    return STBool(static_cast<int>(pl.is_evil) == node.count);
+                case ATTR_IS_DEAD:
+                    return STBool(static_cast<int>(pl.is_dead) == node.count);
+                case ATTR_DROISON_COUNT:
+                    return STBool(pl.droison_count == node.count);
+                case ATTR_WOKE_TONIGHT:
+                    return STBool(static_cast<int>(pl.woke_tonight) == node.count);
+                case ATTR_SAFE_FROM_DEMON_COUNT:
+                    return STBool(pl.safe_from_demon_count > 0 && pl.safe_from_demon_count == node.count);
+                case ATTR_SAFE_FROM_EXECUTION:
+                    return STBool(pl.safe_from_execution > 0 && pl.safe_from_execution == node.count);
+                case ATTR_EXORCISED_COUNT:
+                    return STBool(pl.exorcised_count > 0 && pl.exorcised_count == node.count);
+                default:
+                    return STBoolVal::FALSE;
+            }
+        }
         case INFO_IS_IN_PLAY:
             return eval_is_in_play(state, node.character1, src);
         case INFO_EXACTLY_N: {
@@ -1040,11 +1225,12 @@ bool default_info_check(
     bool even_if_dead = false,
     bool even_if_droisoned = false
 ) {
+    CharacterID lookup_type = (ab.type == CHAR_Hermit) ? state.currently_acting_character : ab.type;
     int16_t ping_idx = -1;
     if (state.current_phase == PHASE_NIGHT) {
-        ping_idx = get_night_info(state, ab.type, me, state.night);
+        ping_idx = get_night_info(state, lookup_type, me, state.night);
     } else if (state.current_phase == PHASE_DAY) {
-        ping_idx = get_day_info(state, ab.type, me);
+        ping_idx = get_day_info(state, lookup_type, me);
     }
 
     Player& player = state.players[me];
@@ -1054,7 +1240,8 @@ bool default_info_check(
     if (player.is_dead && !even_if_dead) {
         return false;
     }
-    if (ab.has_spent_attr) {
+    bool has_spent = (ab.type == CHAR_Hermit) ? CHAR_META[lookup_type].has_spent : ab.has_spent_attr;
+    if (has_spent) {
         if (ab.spent) {
             return false;
         }
@@ -1092,6 +1279,11 @@ void activate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
         case CHAR_Monk:
             if (ab.target != NONE_PLAYER) {
                 state.players[ab.target].safe_from_demon_count += 1;
+            }
+            break;
+        case CHAR_Cerenovus:
+            if (ab.target != NONE_PLAYER) {
+                state.players[ab.target].ceremad += 1;
             }
             break;
         case CHAR_Soldier:
@@ -1223,6 +1415,11 @@ void deactivate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
                 state.players[ab.target].safe_from_demon_count -= 1;
             }
             break;
+        case CHAR_Cerenovus:
+            if (ab.target != NONE_PLAYER) {
+                state.players[ab.target].ceremad -= 1;
+            }
+            break;
         case CHAR_Soldier:
             state.players[me].safe_from_demon_count -= 1;
             break;
@@ -1290,7 +1487,7 @@ void deactivate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
         case CHAR_Vigormortis:
             for (PlayerID pid = 0; pid < state.puzzle->num_players; ++pid) {
                 if (ab.vig_poisoned_mask & (1u << pid)) {
-                    droison_player(state, pid, me);
+                    undroison_player(state, pid, me);
                 }
                 if (ab.aux_mask & (1u << pid)) {
                     state.players[pid].character.vigormortised = false;
@@ -1325,18 +1522,33 @@ void deactivate_effects_impl(State& state, AbilityInstance& ab, PlayerID me) {
     }
 }
 
-void maybe_activate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason) {
-    if (ab.type == CHAR_Puzzlemaster || (ab.type == CHAR_Hermit && hermit_has_outsider(CHAR_Puzzlemaster))) {
+void maybe_activate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason = REASON_NONE) {
+    if (ab.type == CHAR_Puzzlemaster) {
         if (!ab.effects_active && !is_droisoned(state, ab, me) && reason != REASON_RESURRECTION) {
             ab.effects_active = true;
             droison_player(state, ab.target, me);
         }
         return;
     }
-    if (ab.type == CHAR_Sweetheart || (ab.type == CHAR_Hermit && hermit_has_outsider(CHAR_Sweetheart))) {
+    if (ab.type == CHAR_Sweetheart) {
         if (!ab.effects_active && !is_droisoned(state, ab, me) && ab.target != NONE_PLAYER && reason != REASON_RESURRECTION) {
             ab.effects_active = true;
             droison_player(state, ab.target, me);
+        }
+        return;
+    }
+    if (ab.type == CHAR_Hermit) {
+        if (hermit_has_outsider(CHAR_Puzzlemaster)) {
+            if (!ab.effects_active && !is_droisoned(state, ab, me) && ab.target != NONE_PLAYER && reason != REASON_RESURRECTION) {
+                ab.effects_active = true;
+                droison_player(state, ab.target, me);
+            }
+        }
+        if (hermit_has_outsider(CHAR_Sweetheart)) {
+            if (!(ab.aux_mask & 1u) && !is_droisoned(state, ab, me) && ab.aux_target != NONE_PLAYER && reason != REASON_RESURRECTION) {
+                ab.aux_mask |= 1u;
+                droison_player(state, ab.aux_target, me);
+            }
         }
         return;
     }
@@ -1347,12 +1559,26 @@ void maybe_activate_effects(State& state, AbilityInstance& ab, PlayerID me, Reas
     }
 }
 
-void maybe_deactivate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason) {
-    if (ab.type == CHAR_Puzzlemaster || ab.type == CHAR_Sweetheart
-        || (ab.type == CHAR_Hermit && (hermit_has_outsider(CHAR_Puzzlemaster) || hermit_has_outsider(CHAR_Sweetheart)))) {
+void maybe_deactivate_effects(State& state, AbilityInstance& ab, PlayerID me, Reason reason = REASON_NONE) {
+    if (ab.type == CHAR_Puzzlemaster || ab.type == CHAR_Sweetheart) {
         if (ab.effects_active && reason != REASON_DEATH && ab.target != me) {
             ab.effects_active = false;
             undroison_player(state, ab.target, me);
+        }
+        return;
+    }
+    if (ab.type == CHAR_Hermit) {
+        if (hermit_has_outsider(CHAR_Puzzlemaster)) {
+            if (ab.effects_active && reason != REASON_DEATH && ab.target != me && ab.target != NONE_PLAYER) {
+                ab.effects_active = false;
+                undroison_player(state, ab.target, me);
+            }
+        }
+        if (hermit_has_outsider(CHAR_Sweetheart)) {
+            if ((ab.aux_mask & 1u) && reason != REASON_DEATH && ab.aux_target != me && ab.aux_target != NONE_PLAYER) {
+                ab.aux_mask &= ~static_cast<uint16_t>(1u);
+                undroison_player(state, ab.aux_target, me);
+            }
         }
         return;
     }
@@ -1402,19 +1628,6 @@ bool check_game_over(const State& state) {
     }
     return all_demons_dead && no_evil_twin;
 }
-
-// Forward declarations for character lifecycle methods
-void run_character_setup(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE);
-void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE);
-void run_character_day(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE);
-void run_character_end_night(State& state, PlayerID me, YieldFn yield);
-void run_character_end_day(State& state, PlayerID me, YieldFn yield);
-void trigger_callback(State& state, CallbackType cb, PlayerID arg, YieldFn yield);
-void change_character(State& state, PlayerID pid, CharacterID new_char, YieldFn yield);
-void apply_death(State& state, PlayerID me, PlayerID src, YieldFn yield);
-void attacked_at_night(State& state, PlayerID me, PlayerID src, YieldFn yield);
-void char_killed(State& state, PlayerID me, PlayerID src, YieldFn yield);
-void char_executed(State& state, PlayerID me, bool died, YieldFn yield);
 
 // ScarletWoman helper
 struct SWCatchResult {
@@ -1615,7 +1828,11 @@ void apply_death(State& state, PlayerID me, PlayerID src, YieldFn yield) {
             for (PlayerID pid = 0; pid < N; ++pid) {
                 State new_state = state;
                 AbilityInstance* new_sh = get_ability(new_state.players[me], CHAR_Sweetheart);
-                new_sh->target = pid;
+                if (new_sh->type == CHAR_Hermit) {
+                    new_sh->aux_target = pid;
+                } else {
+                    new_sh->target = pid;
+                }
                 maybe_activate_effects(new_state, *new_sh, me, REASON_DEATH);
                 base_apply_death(new_state, me, src, yield);
             }
@@ -1685,6 +1902,16 @@ void char_executed(State& state, PlayerID me, bool died, YieldFn yield) {
 
 void change_character(State& state, PlayerID pid, CharacterID new_char, YieldFn yield) {
     Player& player = state.players[pid];
+    if (state.num_char_changes < MAX_CHAR_CHANGES) {
+        uint8_t rnd = (state.current_phase == PHASE_NIGHT) ? static_cast<uint8_t>(state.night)
+                    : (state.current_phase == PHASE_DAY)   ? static_cast<uint8_t>(state.day)
+                                                           : 0;
+        state.char_changes[state.num_char_changes++] = CharChangeEntry{
+            pid,
+            player.character.type,
+            static_cast<uint8_t>((static_cast<uint8_t>(state.current_phase) << 6) | (rnd & 0x3Fu))
+        };
+    }
     maybe_deactivate_effects(state, player.character, pid, REASON_CHARACTER_CHANGE);
 
     // Remove pid from players_still_to_act if present
@@ -1996,7 +2223,7 @@ void philo_choose_ability(State& state, PlayerID me, CharacterID char_t, YieldFn
     run_character_setup(state, me, make_yield(after_sub_setup), char_t);
 }
 
-void run_character_setup(State& state, PlayerID me, YieldFn yield, CharacterID which_ability) {
+void run_character_setup(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE) {
     Player& player = state.players[me];
     AbilityInstance& ab = get_ability_ref(state, me, which_ability);
     CharacterID ab_type = ab.type;
@@ -2050,26 +2277,39 @@ void run_character_setup(State& state, PlayerID me, YieldFn yield, CharacterID w
         }
 
         case CHAR_Hermit: {
-            if (hermit_has_outsider(CHAR_Drunk)) {
-                if (!is_category(player.claim, CAT_TOWNSFOLK)) {
-                    return;
+            int n_outs = state.puzzle->num_hermit_outsiders;
+            auto step = [&](State& s, int idx, YieldFn y) {
+                CharacterID out_id = s.puzzle->hermit_outsiders[idx];
+                Player& sp = s.players[me];
+                AbilityInstance& sab = get_ability_ref(s, me, ab_type);
+                if (out_id == CHAR_Drunk) {
+                    if (!is_category(sp.claim, CAT_TOWNSFOLK)) {
+                        return;
+                    }
+                    sp.drunklike_char = make_ability(sp.claim, sab.first_night);
+                    sp.has_drunklike_char = true;
+                    drunklike_run_simulation(s, me, y);
+                } else if (out_id == CHAR_Lunatic) {
+                    for (int di = 0; di < s.puzzle->num_demons; ++di) {
+                        State substate = s;
+                        Player& subp = substate.players[me];
+                        subp.drunklike_char = make_ability(s.puzzle->demons[di], sab.first_night);
+                        subp.has_drunklike_char = true;
+                        drunklike_run_simulation(substate, me, y);
+                    }
+                } else if (out_id == CHAR_Puzzlemaster) {
+                    for (PlayerID pid = 0; pid < N; ++pid) {
+                        State new_state = s;
+                        AbilityInstance& pm = get_ability_ref(new_state, me, ab_type);
+                        pm.target = pid;
+                        maybe_activate_effects(new_state, pm, me, REASON_SETUP);
+                        y(new_state);
+                    }
+                } else {
+                    y(s);
                 }
-                player.drunklike_char = make_ability(player.claim, ab.first_night);
-                player.has_drunklike_char = true;
-                drunklike_run_simulation(state, me, yield);
-                return;
-            }
-            if (hermit_has_outsider(CHAR_Puzzlemaster)) {
-                for (PlayerID pid = 0; pid < N; ++pid) {
-                    State new_state = state;
-                    AbilityInstance& pm = get_ability_ref(new_state, me, ab_type);
-                    pm.target = pid;
-                    maybe_activate_effects(new_state, pm, me, REASON_SETUP);
-                    yield(new_state);
-                }
-                return;
-            }
-            yield(state);
+            };
+            apply_seq(state, 0, n_outs, step, yield);
             return;
         }
 
@@ -2373,7 +2613,44 @@ void pukka_do_kill(State& state, PlayerID me, PlayerID target, YieldFn yield) {
     attacked_at_night(state, target, me, make_yield(after_attack));
 }
 
-void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID which_ability) {
+inline bool pithag_can_register_as_demon(CharacterID c) {
+    return is_category(c, CAT_DEMON) || ((CHAR_META[c].misregister_categories & CAT_DEMON) != 0);
+}
+
+void pithag_kill_all_remaining_deaths(State& state, PlayerID me, YieldFn yield) {
+    PlayerID deaths[MAX_DEATHS_PER_NIGHT];
+    int n_deaths = 0;
+    uint8_t nd_count = state.puzzle->night_death_counts[state.night];
+    const NightDeathNode* nds = state.puzzle->night_deaths[state.night];
+    for (uint8_t i = 0; i < nd_count; ++i) {
+        if (!nds[i].is_resurrection && eval_is_alive(state, nds[i].player, me).is_true()) {
+            deaths[n_deaths++] = nds[i].player;
+        }
+    }
+    auto step = [&](State& s, int idx, YieldFn y) {
+        attacked_at_night(s, deaths[idx], me, y);
+    };
+    apply_seq(state, 0, n_deaths, step, yield);
+}
+
+void pithag_arbitrary_deaths(State& state, PlayerID me, YieldFn yield) {
+    if (state.pithag_preventing_kills == me) {
+        state.pithag_kills_at_night_end = me;
+        yield(state);
+        return;
+    }
+    State later_state = state;
+    later_state.pithag_kills_at_night_end = me;
+    yield(later_state);
+
+    auto after_kills = [&](State& substate) {
+        substate.pithag_preventing_kills = me;
+        yield(substate);
+    };
+    pithag_kill_all_remaining_deaths(state, me, make_yield(after_kills));
+}
+
+void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE) {
     Player& player = state.players[me];
     AbilityInstance& ab = get_ability_ref(state, me, which_ability);
     CharacterID ab_type = ab.type;
@@ -2418,8 +2695,33 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
         return;
     }
 
-    if (ab_type == CHAR_Hermit && hermit_has_outsider(CHAR_Drunk)) {
-        drunklike_run_simulation(state, me, yield);
+    if (ab_type == CHAR_Hermit) {
+        if (hermit_has_outsider(CHAR_Lunatic)
+            && (state.currently_acting_character == CHAR_Lunatic
+                || (player.has_drunklike_char && state.currently_acting_character == player.drunklike_char.type))) {
+            if (is_droisoned(state, ab, me) && state.night == ab.first_night) {
+                math_misregistration(state, me);
+            }
+            auto on_lunatic = [&](State& substate) {
+                Player& lunatic = substate.players[me];
+                if (lunatic.woke_tonight && is_droisoned(substate, lunatic.character, me)) {
+                    STBool tm = STBoolVal::TRUE_MAYBE;
+                    math_misregistration(substate, me, &tm);
+                }
+                yield(substate);
+            };
+            drunklike_run_simulation(state, me, make_yield(on_lunatic));
+            return;
+        }
+        if (hermit_has_outsider(CHAR_Drunk)
+            && (state.currently_acting_character == CHAR_Drunk
+                || (player.has_drunklike_char && state.currently_acting_character == player.drunklike_char.type))) {
+            drunklike_run_simulation(state, me, yield);
+            return;
+        }
+        if (default_info_check(state, ab, me, false, false)) {
+            yield(state);
+        }
         return;
     }
 
@@ -3291,6 +3593,200 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
             return;
         }
 
+        case CHAR_Monk: {
+            if (state.night == 1) {
+                yield(state);
+                return;
+            }
+            PlayerID targets[MAX_PLAYERS];
+            int n_targets = 0;
+            if (lies_about_info(state, me)) {
+                if (player.is_dead) {
+                    yield(state);
+                    return;
+                }
+                for (PlayerID p = 0; p < N; ++p) {
+                    if (p != me) targets[n_targets++] = p;
+                }
+            } else {
+                int16_t choice_idx = get_night_info(state, CHAR_Monk, me, state.night);
+                if (choice_idx == -1) {
+                    yield(state);
+                    return;
+                }
+                if (player.is_dead) {
+                    return;
+                }
+                PlayerID chosen = state.puzzle->info_nodes[choice_idx].player1;
+                if (chosen == me) {
+                    return;
+                }
+                targets[n_targets++] = chosen;
+            }
+            for (int i = 0; i < n_targets; ++i) {
+                PlayerID target = targets[i];
+                State new_state = state;
+                Player& np = new_state.players[me];
+                AbilityInstance& new_monk = get_ability_ref(new_state, me, ab_type);
+                maybe_deactivate_effects(new_state, new_monk, me);
+                new_monk.target = target;
+                if (np.history_len < MAX_NIGHTS) {
+                    np.target_history[np.history_len++] = target;
+                }
+                maybe_activate_effects(new_state, new_monk, me);
+                yield(new_state);
+            }
+            return;
+        }
+
+        case CHAR_Cerenovus: {
+            if (player.is_dead && !ab.vigormortised) {
+                yield(state);
+                return;
+            }
+            if (is_droisoned(state, ab, me)) {
+                math_misregistration(state, me);
+                ab.target = NONE_PLAYER;
+                yield(state);
+                return;
+            }
+            uint16_t target_mask = 0;
+            PlayerID first_evil = NONE_PLAYER;
+            for (PlayerID pid = 0; pid < N; ++pid) {
+                if (behaves_evil(state, pid)) {
+                    if (first_evil == NONE_PLAYER) first_evil = pid;
+                }
+                if (state.players[pid].speculative_ceremad) {
+                    target_mask |= static_cast<uint16_t>(1u << pid);
+                }
+            }
+            uint8_t ext_count = state.puzzle->external_info_count[state.night][CHAR_Cerenovus];
+            const ExternalInfoEntry* ext_entries = state.puzzle->external_info[state.night][CHAR_Cerenovus];
+            for (uint8_t i = 0; i < ext_count; ++i) {
+                PlayerID pid = ext_entries[i].player_id;
+                if (!behaves_evil(state, pid)) {
+                    target_mask |= static_cast<uint16_t>(1u << pid);
+                }
+            }
+            if (state.night + 1 < MAX_NIGHTS) {
+                int ev_count = state.puzzle->day_event_counts[state.night + 1];
+                const EventNode* evs = state.puzzle->day_events[state.night + 1];
+                for (int i = 0; i < ev_count; ++i) {
+                    if (evs[i].player >= 0 && evs[i].player < N) {
+                        target_mask |= static_cast<uint16_t>(1u << evs[i].player);
+                    }
+                }
+            }
+            if (first_evil != NONE_PLAYER) {
+                target_mask |= static_cast<uint16_t>(1u << first_evil);
+            }
+            for (PlayerID target = 0; target < N; ++target) {
+                if (!(target_mask & (1u << target))) continue;
+                State new_state = state;
+                Player& np = new_state.players[me];
+                AbilityInstance& new_cere = get_ability_ref(new_state, me, ab_type);
+                new_cere.target = target;
+                if (np.history_len < MAX_NIGHTS) {
+                    np.target_history[np.history_len++] = target;
+                }
+                maybe_activate_effects(new_state, new_cere, me);
+                change_claim_if_claimed_change_tonight(new_state, target);
+                yield(new_state);
+            }
+            return;
+        }
+
+        case CHAR_PitHag: {
+            if (state.night == 1 || (player.is_dead && !ab.vigormortised)) {
+                yield(state);
+                return;
+            }
+            if (is_droisoned(state, ab, me)) {
+                STBool fm = STBoolVal::FALSE_MAYBE;
+                math_misregistration(state, me, &fm);
+                yield(state);
+                return;
+            }
+            CharacterID not_in_play[MAX_SCRIPT];
+            int n_nip = 0;
+            CharacterID lying_chars[MAX_SCRIPT];
+            int n_lying = 0;
+            for (int i = 0; i < state.puzzle->num_script; ++i) {
+                CharacterID c = state.puzzle->script[i];
+                if (eval_is_in_play(state, c, me).not_true()) {
+                    not_in_play[n_nip++] = c;
+                    if (CHAR_META[c].lies_about_character_and_info) {
+                        lying_chars[n_lying++] = c;
+                    }
+                }
+            }
+            CharacterID evil_targets[MAX_SCRIPT];
+            int n_evil_targets = 0;
+            if (state.pithag_preventing_kills == me) {
+                for (int i = 0; i < n_nip; ++i) {
+                    if (pithag_can_register_as_demon(not_in_play[i])) {
+                        evil_targets[n_evil_targets++] = not_in_play[i];
+                    }
+                }
+            } else {
+                for (int i = 0; i < n_nip; ++i) {
+                    evil_targets[n_evil_targets++] = not_in_play[i];
+                }
+            }
+
+            for (PlayerID target = 0; target < N; ++target) {
+                CharacterID cands[MAX_SCRIPT];
+                int n_cands = 0;
+                if (lies_about_character(state, target)) {
+                    for (int i = 0; i < n_evil_targets; ++i) {
+                        cands[n_cands++] = evil_targets[i];
+                    }
+                } else {
+                    for (int i = 0; i < n_lying; ++i) {
+                        cands[n_cands++] = lying_chars[i];
+                    }
+                    int16_t cc_idx = get_night_info(state, CHAR_NONE, target, state.night);
+                    if (cc_idx != -1) {
+                        const InfoNode& cc = state.puzzle->info_nodes[cc_idx];
+                        if (cc.type == NOTINFO_CHARACTER_CHANGE) {
+                            bool already = false;
+                            for (int i = 0; i < n_cands; ++i) {
+                                if (cands[i] == cc.character1) { already = true; break; }
+                            }
+                            if (!already) cands[n_cands++] = cc.character1;
+                        }
+                    }
+                }
+                for (int ci = 0; ci < n_cands; ++ci) {
+                    CharacterID char_t = cands[ci];
+                    State new_state = state;
+                    Player& np = new_state.players[me];
+                    if (np.history_len < MAX_NIGHTS) {
+                        np.target_history[np.history_len] = target;
+                        np.target_char_history[np.history_len] = char_t;
+                        np.history_len++;
+                    }
+                    auto after_change = [&](State& substate) {
+                        if (pithag_can_register_as_demon(char_t)) {
+                            pithag_arbitrary_deaths(substate, me, yield);
+                        } else {
+                            yield(substate);
+                        }
+                    };
+                    change_character(new_state, target, char_t, make_yield(after_change));
+                }
+            }
+            if (state.pithag_preventing_kills != me) {
+                if (player.history_len < MAX_NIGHTS) {
+                    player.target_history[player.history_len] = NONE_PLAYER;
+                    player.target_char_history[player.history_len] = CHAR_NONE;
+                    player.history_len++;
+                }
+                yield(state);
+            }
+            return;
+        }
+
         case CHAR_Ravenkeeper:
         case CHAR_Sage: {
             if (default_info_check(state, ab, me, true, true)) {
@@ -3308,7 +3804,7 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
     }
 }
 
-void run_character_day(State& state, PlayerID me, YieldFn yield, CharacterID which_ability) {
+void run_character_day(State& state, PlayerID me, YieldFn yield, CharacterID which_ability = CHAR_NONE) {
     Player& player = state.players[me];
     AbilityInstance& ab = get_ability_ref(state, me, which_ability);
     CharacterID ab_type = ab.type;
@@ -3407,7 +3903,30 @@ void run_character_day(State& state, PlayerID me, YieldFn yield, CharacterID whi
         return;
     }
 
-    if (ab_type == CHAR_Mutant || (ab_type == CHAR_Hermit && hermit_has_outsider(CHAR_Mutant))) {
+    if (ab_type == CHAR_Hermit) {
+        if (state.currently_acting_character == CHAR_Mutant && hermit_has_outsider(CHAR_Mutant)) {
+            if (player.is_dead || state.day != state.puzzle->max_day) {
+                yield(state);
+            } else if (!is_category(player.claim, CAT_OUTSIDER)) {
+                yield(state);
+            } else if (is_droisoned(state, ab, me)) {
+                STBool fm = STBoolVal::FALSE_MAYBE;
+                math_misregistration(state, me, &fm);
+                yield(state);
+            }
+            return;
+        }
+        if (state.currently_acting_character == CHAR_Puzzlemaster && hermit_has_outsider(CHAR_Puzzlemaster)) {
+            if (default_info_check(state, ab, me, false, false)) {
+                yield(state);
+            }
+            return;
+        }
+        yield(state);
+        return;
+    }
+
+    if (ab_type == CHAR_Mutant) {
         if (player.is_dead || state.day != state.puzzle->max_day) {
             yield(state);
         } else if (!is_category(player.claim, CAT_OUTSIDER)) {
@@ -3456,6 +3975,15 @@ void run_ability_end_night(State& state, PlayerID me, AbilityInstance& ab, Yield
             ab.target = NONE_PLAYER;
             yield(state);
             return;
+        case CHAR_PitHag:
+            state.pithag_preventing_kills = NONE_PLAYER;
+            if (state.pithag_kills_at_night_end != NONE_PLAYER) {
+                state.pithag_kills_at_night_end = NONE_PLAYER;
+                pithag_kill_all_remaining_deaths(state, me, yield);
+            } else {
+                yield(state);
+            }
+            return;
         default:
             yield(state);
             return;
@@ -3482,6 +4010,29 @@ void run_ability_end_day(State& state, PlayerID me, AbilityInstance& ab, YieldFn
             ab.target = NONE_PLAYER;
             yield(state);
             return;
+        case CHAR_PitHag: {
+            if (state.day == state.puzzle->max_night) {
+                yield(state);
+                return;
+            }
+            bool can_make_demon = false;
+            for (int i = 0; i < state.puzzle->num_script; ++i) {
+                CharacterID c = state.puzzle->script[i];
+                if (pithag_can_register_as_demon(c) && eval_is_in_play(state, c, me).not_true()) {
+                    can_make_demon = true;
+                    break;
+                }
+            }
+            if (!can_make_demon) {
+                yield(state);
+                return;
+            }
+            State arb_state = state;
+            arb_state.pithag_preventing_kills = me;
+            yield(arb_state);
+            yield(state);
+            return;
+        }
         case CHAR_Courtier:
             if (ab.target != NONE_PLAYER && (state.day - ab.choice_night) >= 2) {
                 maybe_deactivate_effects(state, ab, me);
@@ -3549,6 +4100,25 @@ bool global_end_night_check(const State& state, CharacterID char_t) {
                 if (!behaves_evil(state, ext_entries[i].player_id)) {
                     return false;
                 }
+            }
+        }
+    } else if (char_t == CHAR_Cerenovus) {
+        if (state.night == state.puzzle->max_night) {
+            return true;
+        }
+        uint16_t claiming_mask = 0;
+        uint8_t ext_count = state.puzzle->external_info_count[state.night][CHAR_Cerenovus];
+        const ExternalInfoEntry* ext_entries = state.puzzle->external_info[state.night][CHAR_Cerenovus];
+        for (uint8_t i = 0; i < ext_count; ++i) {
+            claiming_mask |= static_cast<uint16_t>(1u << ext_entries[i].player_id);
+        }
+        for (PlayerID pid = 0; pid < state.puzzle->num_players; ++pid) {
+            const Player& p = state.players[pid];
+            if (p.ceremad > 0
+                && !(claiming_mask & (1u << pid))
+                && !p.speculative_ceremad
+                && !behaves_evil(state, pid)) {
+                return false;
             }
         }
     }
@@ -3619,6 +4189,22 @@ bool check_external_night_info(State& state, CharacterID char_t, int8_t night) {
             case EXTINFO_EVILTWIN_IS: {
                 const AbilityInstance* et = get_ability(state.players[node.player1], CHAR_EvilTwin);
                 ok = (et != nullptr && et->target == pid);
+                break;
+            }
+            case EXTINFO_CERENOVUS_MAD: {
+                if (state.players[pid].ceremad == 0) {
+                    ok = false;
+                    break;
+                }
+                bool found = false;
+                for (PlayerID p = 0; p < state.puzzle->num_players; ++p) {
+                    const AbilityInstance* c = get_ability(state.players[p], CHAR_Cerenovus);
+                    if (c != nullptr && c->target == pid) {
+                        found = true;
+                        break;
+                    }
+                }
+                ok = found;
                 break;
             }
             case EXTINFO_NIGHTWATCHMAN_PING: {
@@ -3848,7 +4434,11 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
                 }
             }
             if (AbilityInstance* golem = get_ability(state.players[nominator], CHAR_Golem)) {
-                golem->spent = true;
+                if (golem->type == CHAR_Hermit) {
+                    golem->aux_bool = true;
+                } else {
+                    golem->spent = true;
+                }
                 STBool is_demon = eval_is_category(state, nominee, CAT_DEMON, false, nominator);
                 if (is_demon.is_false() && is_droisoned(state, *golem, nominator)) {
                     math_misregistration(state, nominator);
@@ -3917,7 +4507,11 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
                         }
                     }
                 } else if (AbilityInstance* golem = get_ability(state.players[nominator], CHAR_Golem)) {
-                    golem->spent = true;
+                    if (golem->type == CHAR_Hermit) {
+                        golem->aux_bool = true;
+                    } else {
+                        golem->spent = true;
+                    }
                     STBool is_demon = eval_is_category(state, ev.player, CAT_DEMON, false, nominator);
                     if (!is_droisoned(state, *golem, nominator) && is_demon.not_true()) {
                         if (is_category(state.players[ev.player].character.type, CAT_DEMON)) {
@@ -4037,28 +4631,7 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
     }
 }
 
-// Starting configuration & speculation logic (matches solve.py)
-struct StartingConfig {
-    uint8_t num_liars = 0;
-    CharacterID liar_characters[MAX_PLAYERS];
-    PlayerID liar_positions[MAX_PLAYERS];
-
-    uint16_t speculative_evil_mask = 0;
-    uint16_t speculative_good_mask = 0;
-    uint16_t speculative_ceremad_mask = 0;
-};
-
-struct SimSchedule;
 struct SolveJob;
-
-void world_check_with_sched(
-    const SerializedPuzzle& puzzle,
-    const SimSchedule& sched,
-    const StartingConfig& config,
-    YieldFn yield,
-    SolveJob* ws = nullptr,
-    int worker_id = 0
-);
 
 void round_robin(
     State& state,
@@ -4105,69 +4678,10 @@ void round_robin(
     yield(state);
 }
 
-enum SimStepType : uint8_t {
-    STEP_RUN_NEXT_CHAR = 0,
-    STEP_END_SETUP,
-    STEP_END_NIGHT,
-    STEP_RUN_EVENT,
-    STEP_END_DAY,
-    STEP_ROUND_ROBIN,
-};
-
-struct SimStep {
-    SimStepType type;
-    uint8_t round;
-    uint8_t event_idx;
-};
-
-struct SimSchedule {
-    int num_steps = 0;
-    SimStep steps[MAX_STEPS];
-};
-
-SimSchedule build_schedule(const SerializedPuzzle& puzzle) {
-    SimSchedule sched{};
-    auto push = [&](SimStepType t, uint8_t r = 0, uint8_t e = 0) {
-        sched.steps[sched.num_steps++] = SimStep{t, r, e};
-    };
-
-    for (int i = 0; i < puzzle.num_setup_order; ++i) {
-        push(STEP_RUN_NEXT_CHAR);
-    }
-    push(STEP_END_SETUP);
-
-    for (uint8_t round = 1; round <= puzzle.max_night; ++round) {
-        for (int i = 0; i < puzzle.num_night_order; ++i) {
-            push(STEP_RUN_NEXT_CHAR);
-        }
-        push(STEP_END_NIGHT);
-        if (round <= puzzle.max_day) {
-            for (int i = 0; i < puzzle.num_day_order; ++i) {
-                push(STEP_RUN_NEXT_CHAR);
-            }
-            for (uint8_t ev = 0; ev < puzzle.day_event_counts[round]; ++ev) {
-                push(STEP_RUN_EVENT, round, ev);
-            }
-            if (round < puzzle.max_day || puzzle.finish_final_day) {
-                push(STEP_END_DAY);
-            }
-        }
-    }
-    push(STEP_ROUND_ROBIN);
-    return sched;
-}
-
 struct SolveTask {
     State state;
     StartingConfig config;
     int step_idx;
-};
-
-struct SolutionKey {
-    CharacterID chars[MAX_PLAYERS * 2];
-    bool operator==(const SolutionKey& o) const {
-        return std::memcmp(chars, o.chars, sizeof(chars)) == 0;
-    }
 };
 
 struct alignas(64) WorkerQueue {
@@ -4279,6 +4793,7 @@ struct SolveJob {
                 sp.is_evil = p.is_evil ? 1 : 0;
                 sp.is_dead = p.is_dead ? 1 : 0;
                 sp.droison_count = p.droison_count;
+                sp.ceremad = p.ceremad;
                 sp.vigormortised = p.character.vigormortised ? 1 : 0;
                 sp.self_droison = p.character.self_droison ? 1 : 0;
                 sp.target = p.character.target;
@@ -4286,6 +4801,20 @@ struct SolveJob {
                 sp.history_len = p.history_len;
                 for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
                     sp.target_history[h] = p.target_history[h];
+                    sp.target_char_history[h] = p.target_char_history[h];
+                }
+                sp.char_history_len = 0;
+            }
+            for (uint8_t c = 0; c < sol.num_char_changes; ++c) {
+                const CharChangeEntry& e = sol.char_changes[c];
+                if (e.pid >= 0 && e.pid < N) {
+                    SerializedSolutionPlayer& sp = out.players[e.pid];
+                    if (sp.char_history_len < MAX_NIGHTS) {
+                        uint8_t h = sp.char_history_len++;
+                        sp.char_history[h] = e.prev_char;
+                        sp.char_history_phase[h] = static_cast<uint8_t>(e.phase_and_round >> 6);
+                        sp.char_history_round[h] = static_cast<int8_t>(e.phase_and_round & 0x3Fu);
+                    }
                 }
             }
         }
@@ -4413,8 +4942,8 @@ void world_check_with_sched(
     const SimSchedule& sched,
     const StartingConfig& config,
     YieldFn yield,
-    SolveJob* ws,
-    int worker_id
+    SolveJob* ws = nullptr,
+    int worker_id = 0
 ) {
     State world{};
     world.puzzle = &puzzle;
@@ -4509,91 +5038,37 @@ void run_worker(SolveJob& job, int worker_id) {
     }
 }
 
-class WorkStealingPool {
-public:
-    static WorkStealingPool& get() {
-        static WorkStealingPool instance;
-        return instance;
-    }
+static void worker_trampoline(void* ctx, int worker_id) {
+    SolverEngine<MAX_P>{}.run_worker(*static_cast<SolveJob*>(ctx), worker_id);
+}
 
-    int max_threads() const {
-        return static_cast<int>(workers_.size()) + 1;
-    }
-
-    void run_job(SolveJob& job) {
-        std::lock_guard<std::mutex> run_lk(run_mtx_);
-        int extra = job.num_workers - 1;
-        if (extra > 0) {
-            std::lock_guard<std::mutex> lk(job_mtx_);
-            current_job_ = &job;
-            active_pool_workers_ = extra;
-            ++job_gen_;
-            job_cv_.notify_all();
+static int run_solve(
+    const SerializedPuzzle& puzzle,
+    const SimSchedule& sched,
+    const std::vector<StartingConfig>& configs,
+    SerializedSolution* out_solutions,
+    int max_solutions,
+    int num_threads
+) {
+    int pool_max = WorkStealingPool::get().max_threads();
+    int n_workers = (num_threads <= 0) ? pool_max : std::min(num_threads, pool_max);
+    if (n_workers <= 1) {
+        SolverEngine<MAX_P> engine{};
+        SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, 1);
+        auto on_sol = [&](State& sol) { job.record_solution(sol); };
+        YieldFn sol_yield = make_yield(on_sol);
+        for (const auto& cfg : configs) {
+            engine.world_check_with_sched(puzzle, sched, cfg, sol_yield, nullptr, 0);
         }
-
-        run_worker(job, 0);
-
-        if (extra > 0) {
-            std::unique_lock<std::mutex> lk(job_mtx_);
-            done_cv_.wait(lk, [&]() { return active_pool_workers_ == 0; });
-            current_job_ = nullptr;
-        }
+        return job.num_solutions;
+    } else {
+        SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, n_workers);
+        WorkStealingPool::get().run_job(&job, &SolverEngine<MAX_P>::worker_trampoline, n_workers);
+        return job.num_solutions;
     }
+}
 
-private:
-    WorkStealingPool() {
-        unsigned int hw = std::thread::hardware_concurrency();
-        int n = (hw > 1) ? static_cast<int>(hw) : 1;
-        workers_.reserve(n - 1);
-        for (int tid = 1; tid < n; ++tid) {
-            workers_.emplace_back([this, tid]() { worker_loop(tid); });
-        }
-    }
-
-    ~WorkStealingPool() {
-        {
-            std::lock_guard<std::mutex> lk(job_mtx_);
-            shutdown_ = true;
-            job_cv_.notify_all();
-        }
-        for (auto& t : workers_) {
-            if (t.joinable()) t.join();
-        }
-    }
-
-    void worker_loop(int tid) {
-        uint64_t my_gen = 0;
-        while (true) {
-            SolveJob* job = nullptr;
-            {
-                std::unique_lock<std::mutex> lk(job_mtx_);
-                job_cv_.wait(lk, [&]() {
-                    return shutdown_ || (job_gen_ != my_gen && current_job_ != nullptr && tid < current_job_->num_workers);
-                });
-                if (shutdown_) return;
-                my_gen = job_gen_;
-                job = current_job_;
-            }
-            run_worker(*job, tid);
-            {
-                std::lock_guard<std::mutex> lk(job_mtx_);
-                if (--active_pool_workers_ == 0) {
-                    done_cv_.notify_one();
-                }
-            }
-        }
-    }
-
-    std::mutex run_mtx_;
-    std::mutex job_mtx_;
-    std::condition_variable job_cv_;
-    std::condition_variable done_cv_;
-    SolveJob* current_job_ = nullptr;
-    uint64_t job_gen_ = 0;
-    int active_pool_workers_ = 0;
-    bool shutdown_ = false;
-    std::vector<std::thread> workers_;
-};
+}; // struct SolverEngine
 
 void modify_category_counts(CharacterID type, int16_t bounds[4][2]) {
     switch (type) {
@@ -4927,20 +5402,14 @@ int solve_puzzle_cpp_mt(
     int num_solutions = 0;
 
     if (!configs.empty()) {
-        int pool_max = WorkStealingPool::get().max_threads();
-        int n_workers = (num_threads <= 0) ? pool_max : std::min(num_threads, pool_max);
-        if (n_workers <= 1) {
-            SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, 1);
-            auto on_sol = [&](State& sol) { job.record_solution(sol); };
-            YieldFn sol_yield = make_yield(on_sol);
-            for (const auto& cfg : configs) {
-                world_check_with_sched(puzzle, sched, cfg, sol_yield, nullptr, 0);
-            }
-            num_solutions = job.num_solutions;
+        if (N <= 8) {
+            num_solutions = SolverEngine<8>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+        } else if (N <= 9) {
+            num_solutions = SolverEngine<9>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+        } else if (N <= 12) {
+            num_solutions = SolverEngine<12>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
         } else {
-            SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, n_workers);
-            WorkStealingPool::get().run_job(job);
-            num_solutions = job.num_solutions;
+            num_solutions = SolverEngine<16>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
         }
     }
 
@@ -4962,11 +5431,13 @@ int solve_puzzle_cpp_mt(
                 sp.is_evil = 0;
                 sp.is_dead = 0;
                 sp.droison_count = 0;
+                sp.ceremad = 0;
                 sp.vigormortised = 0;
                 sp.self_droison = 0;
                 sp.target = NONE_PLAYER;
                 sp.aux_target = NONE_PLAYER;
                 sp.history_len = 0;
+                sp.char_history_len = 0;
             }
         }
     }
