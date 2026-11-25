@@ -558,6 +558,9 @@ struct SerializedSolutionPlayer {
     CharacterID initial_character;
     CharacterID final_character;
     CharacterID drunklike_character;
+    CharacterID boffin_ability;
+    CharacterID inactive_boffin_ability;
+    CharacterID philo_ability;
     uint8_t is_evil;
     uint8_t is_dead;
     int8_t droison_count;
@@ -567,6 +570,8 @@ struct SerializedSolutionPlayer {
     uint8_t self_droison;
     PlayerID target;
     PlayerID aux_target;
+    int8_t choice_night;
+    uint16_t vig_poisoned_mask;
     uint8_t history_len;
     PlayerID target_history[MAX_NIGHTS];
     CharacterID target_char_history[MAX_NIGHTS];

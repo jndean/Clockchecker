@@ -417,6 +417,27 @@ class TestCppPoC(unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertEqual(count, 1)
 
+    def test_all_puzzles_world_str(self):
+        import puzzles
+        from clockchecker import set_fast_backend, solve
+        from clockchecker.core import Puzzle
+
+        set_fast_backend(True)
+        try:
+            for name in sorted(k for k in dir(puzzles) if k.startswith("puzzle_")):
+                pdef = getattr(puzzles, name)()
+                worlds = (
+                    list(pdef.solve_override() if callable(pdef.solve_override) else pdef.solve_override)
+                    if pdef.solve_override is not None
+                    else list(solve(pdef.puzzle))
+                )
+                self.assertGreater(len(worlds), 0, f"{name}: no solutions")
+                for w in worlds:
+                    s = str(w)
+                    self.assertIn("World(", s, f"{name}: invalid world string")
+        finally:
+            set_fast_backend(False)
+
 
 if __name__ == "__main__":
     unittest.main()

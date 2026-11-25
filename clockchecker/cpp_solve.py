@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import c_int8, c_uint8, c_int16, c_int, c_void_p, Structure, POINTER, byref
+from ctypes import c_int8, c_uint8, c_int16, c_uint16, c_int, c_void_p, Structure, POINTER, byref
 import enum
 import os
 import subprocess
@@ -333,6 +333,9 @@ class CSerializedSolutionPlayer(Structure):
         ("initial_character", c_uint8),
         ("final_character", c_uint8),
         ("drunklike_character", c_uint8),
+        ("boffin_ability", c_uint8),
+        ("inactive_boffin_ability", c_uint8),
+        ("philo_ability", c_uint8),
         ("is_evil", c_uint8),
         ("is_dead", c_uint8),
         ("droison_count", c_int8),
@@ -342,6 +345,8 @@ class CSerializedSolutionPlayer(Structure):
         ("self_droison", c_uint8),
         ("target", c_int8),
         ("aux_target", c_int8),
+        ("choice_night", c_int8),
+        ("vig_poisoned_mask", c_uint16),
         ("history_len", c_uint8),
         ("target_history", c_int8 * MAX_NIGHTS),
         ("target_char_history", c_uint8 * MAX_NIGHTS),
@@ -940,9 +945,15 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
             p.character.vigormortised = True
         if sp.self_droison and hasattr(p.character, "self_droison"):
             p.character.self_droison = True
+        if sp.boffin_ability != 0:
+            p.boffin_ability = CHARACTER_LIST[sp.boffin_ability]()
+        if sp.philo_ability != 0 and isinstance(p.character, characters.Philosopher):
+            p.character.active_ability = CHARACTER_LIST[sp.philo_ability]()
         if sp.drunklike_character != 0:
             if isinstance(p.character, characters.Philosopher):
-                p.character.philo_ability = CHARACTER_LIST[sp.drunklike_character]()
+                p.character.active_ability = characters.Drunklike(
+                    drunklike_character=CHARACTER_LIST[sp.drunklike_character]()
+                )
                 p.character.droisoned_philo_choice = True
             elif isinstance(p.character, characters.Hermit):
                 for ab in p.character.active_abilities:
@@ -950,7 +961,11 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
                         ab.drunklike_character = CHARACTER_LIST[sp.drunklike_character]()
             else:
                 p.character.drunklike_character = CHARACTER_LIST[sp.drunklike_character]()
-        if isinstance(p.character, characters.FortuneTeller) and sp.target != NONE_PLAYER:
+        if isinstance(p.character, characters.Boffin):
+            p.character.target_demon = None if sp.target == NONE_PLAYER else int(sp.target)
+            if sp.inactive_boffin_ability != 0:
+                p.character.inactive_ability = CHARACTER_LIST[sp.inactive_boffin_ability]()
+        elif isinstance(p.character, characters.FortuneTeller) and sp.target != NONE_PLAYER:
             p.character.red_herring = int(sp.target)
         elif isinstance(p.character, characters.Puzzlemaster) and sp.target != NONE_PLAYER:
             p.character.puzzle_drunk = int(sp.target)
@@ -965,6 +980,12 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
         elif isinstance(p.character, characters.NoDashii):
             p.character.tf_neighbour_fwd = None if sp.target == NONE_PLAYER else int(sp.target)
             p.character.tf_neighbour_bkwd = None if sp.aux_target == NONE_PLAYER else int(sp.aux_target)
+        elif isinstance(p.character, characters.Vigormortis):
+            p.character.poisoned_tf = [
+                pid for pid in range(N) if sp.vig_poisoned_mask & (1 << pid)
+            ]
+        elif isinstance(p.character, characters.Xaan):
+            p.character.X = int(sp.choice_night)
         elif hasattr(p.character, "target"):
             p.character.target = None if sp.target == NONE_PLAYER else int(sp.target)
         if hasattr(p.character, "target_history") and sp.history_len > 0:
@@ -977,7 +998,8 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
                 ]
             else:
                 p.character.target_history = [
-                    int(sp.target_history[h]) for h in range(sp.history_len)
+                    None if sp.target_history[h] == NONE_PLAYER else int(sp.target_history[h])
+                    for h in range(sp.history_len)
                 ]
         if sp.char_history_len > 0:
             p.character_history = []

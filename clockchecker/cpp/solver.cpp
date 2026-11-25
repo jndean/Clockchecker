@@ -2874,8 +2874,12 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
             for (PlayerID target = 0; target < N; ++target) {
                 if (target != prev_target && target != executed_today && !state.players[target].is_dead) {
                     State new_state = state;
+                    Player& np = new_state.players[me];
                     AbilityInstance& new_da = get_ability_ref(new_state, me, ab_type);
                     new_da.target = target;
+                    if (np.history_len < MAX_NIGHTS) {
+                        np.target_history[np.history_len++] = NONE_PLAYER;
+                    }
                     maybe_activate_effects(new_state, new_da, me);
                     yield(new_state);
                     break;
@@ -2883,6 +2887,9 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
             }
             if (executed_today != NONE_PLAYER && executed_today != prev_target) {
                 ab.target = executed_today;
+                if (player.history_len < MAX_NIGHTS) {
+                    player.target_history[player.history_len++] = executed_today;
+                }
                 maybe_activate_effects(state, ab, me);
                 yield(state);
             }
@@ -4837,6 +4844,9 @@ struct SolveJob {
             sp.initial_character = sol.initial_characters[i];
             sp.final_character = p.character.type;
             sp.drunklike_character = p.has_drunklike_char ? p.drunklike_char.type : CHAR_NONE;
+            sp.boffin_ability = p.has_boffin_ability ? p.boffin_ability.type : CHAR_NONE;
+            sp.inactive_boffin_ability = p.inactive_boffin_ability.type;
+            sp.philo_ability = p.has_philo_ability ? p.philo_ability.type : CHAR_NONE;
             sp.is_evil = p.is_evil ? 1 : 0;
             sp.is_dead = p.is_dead ? 1 : 0;
             sp.droison_count = p.droison_count;
@@ -4846,6 +4856,8 @@ struct SolveJob {
             sp.self_droison = p.character.self_droison ? 1 : 0;
             sp.target = p.character.target;
             sp.aux_target = p.character.aux_target;
+            sp.choice_night = p.character.choice_night;
+            sp.vig_poisoned_mask = p.character.vig_poisoned_mask;
             sp.history_len = p.history_len;
             for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
                 sp.target_history[h] = p.target_history[h];
@@ -5509,6 +5521,9 @@ int solve_puzzle_cpp_stream_internal(
                 sp.initial_character = puzzle.player_claims[i];
                 sp.final_character = puzzle.player_claims[i];
                 sp.drunklike_character = CHAR_NONE;
+                sp.boffin_ability = CHAR_NONE;
+                sp.inactive_boffin_ability = CHAR_NONE;
+                sp.philo_ability = CHAR_NONE;
                 sp.is_evil = 0;
                 sp.is_dead = 0;
                 sp.droison_count = 0;
@@ -5518,6 +5533,8 @@ int solve_puzzle_cpp_stream_internal(
                 sp.self_droison = 0;
                 sp.target = NONE_PLAYER;
                 sp.aux_target = NONE_PLAYER;
+                sp.choice_night = -1;
+                sp.vig_poisoned_mask = 0;
                 sp.history_len = 0;
                 sp.char_history_len = 0;
             }
