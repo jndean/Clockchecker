@@ -1,11 +1,13 @@
 #include "clockchecker.hpp"
 #include <algorithm>
 #include <atomic>
-#include <condition_variable>
 #include <deque>
+#include <vector>
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+#include <condition_variable>
 #include <mutex>
 #include <thread>
-#include <vector>
+#endif
 
 namespace clockchecker {
 
@@ -230,6 +232,7 @@ struct SolutionKey {
     }
 };
 
+#ifndef CLOCKCHECKER_SINGLE_THREADED
 class WorkStealingPool {
 public:
     using WorkerFn = void (*)(void*, int);
@@ -324,11 +327,13 @@ private:
     bool shutdown_ = false;
     std::vector<std::thread> workers_;
 };
+#endif // !CLOCKCHECKER_SINGLE_THREADED
 
 template <int MAX_P>
 struct SolverEngine {
     using Player = PlayerT<MAX_P>;
     using State = StateT<MAX_P>;
+    const std::atomic<bool>* cancel_flag = nullptr;
 
 // Lightweight zero-allocation continuation callback (replaces Python yield / yield from)
 struct YieldFn {
@@ -4684,18 +4689,23 @@ struct SolveTask {
     int step_idx;
 };
 
+#ifndef CLOCKCHECKER_SINGLE_THREADED
 struct alignas(64) WorkerQueue {
     std::mutex mtx;
     std::deque<SolveTask> q;
 };
+#endif
 
 struct SolveJob {
     const SerializedPuzzle* puzzle = nullptr;
     const SimSchedule* sched = nullptr;
     const std::vector<StartingConfig>* configs = nullptr;
-    SerializedSolution* out_solutions = nullptr;
-    int max_solutions = 0;
+    SolutionCallback sink_fn = nullptr;
+    void* sink_ctx = nullptr;
     int num_workers = 1;
+
+    std::atomic<bool> local_cancelled{false};
+    std::atomic<bool>* cancel_ptr = nullptr;
 
     std::atomic<size_t> next_config{0};
     std::atomic<int64_t> in_flight{0};
@@ -4703,11 +4713,12 @@ struct SolveJob {
     std::atomic<int> idle_workers{0};
     std::atomic<bool> done{false};
 
+#ifndef CLOCKCHECKER_SINGLE_THREADED
     std::mutex wait_mtx;
     std::condition_variable wait_cv;
     std::deque<WorkerQueue> queues;
-
     std::mutex sol_mtx;
+#endif
     int num_solutions = 0;
     std::vector<SolutionKey> seen_keys;
 
@@ -4715,16 +4726,38 @@ struct SolveJob {
         const SerializedPuzzle* p,
         const SimSchedule* s,
         const std::vector<StartingConfig>* cfgs,
-        SerializedSolution* out,
-        int max_sols,
-        int workers
-    ) : puzzle(p), sched(s), configs(cfgs), out_solutions(out), max_solutions(max_sols), num_workers(workers) {
+        SolutionCallback cb,
+        void* cb_ctx,
+        int workers,
+        std::atomic<bool>* ext_cancel = nullptr
+    ) : puzzle(p), sched(s), configs(cfgs), sink_fn(cb), sink_ctx(cb_ctx), num_workers(workers),
+        cancel_ptr(ext_cancel ? ext_cancel : &local_cancelled) {
         in_flight.store(static_cast<int64_t>(cfgs->size()), std::memory_order_relaxed);
+#ifndef CLOCKCHECKER_SINGLE_THREADED
         for (int i = 0; i < workers; ++i) {
             queues.emplace_back();
         }
+#endif
     }
 
+    inline bool is_cancelled() const {
+        return cancel_ptr->load(std::memory_order_relaxed);
+    }
+
+    void signal_stop() {
+        cancel_ptr->store(true, std::memory_order_release);
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+        {
+            std::lock_guard<std::mutex> lk(wait_mtx);
+            done.store(true, std::memory_order_release);
+        }
+        wait_cv.notify_all();
+#else
+        done.store(true, std::memory_order_release);
+#endif
+    }
+
+#ifndef CLOCKCHECKER_SINGLE_THREADED
     void push_task(int worker_id, const State& st, const StartingConfig& cfg, int step_idx) {
         in_flight.fetch_add(1, std::memory_order_relaxed);
         {
@@ -4767,9 +4800,13 @@ struct SolveJob {
             wait_cv.notify_all();
         }
     }
+#endif
 
     void record_solution(const State& sol) {
+#ifndef CLOCKCHECKER_SINGLE_THREADED
         std::lock_guard<std::mutex> lk(sol_mtx);
+#endif
+        if (is_cancelled()) return;
         int N = puzzle->num_players;
         if (puzzle->deduplicate_initial_characters) {
             SolutionKey key{};
@@ -4782,41 +4819,43 @@ struct SolveJob {
             }
             seen_keys.push_back(key);
         }
-        if (num_solutions < max_solutions) {
-            SerializedSolution& out = out_solutions[num_solutions++];
-            for (int i = 0; i < N; ++i) {
-                const Player& p = sol.players[i];
-                SerializedSolutionPlayer& sp = out.players[i];
-                sp.initial_character = sol.initial_characters[i];
-                sp.final_character = p.character.type;
-                sp.drunklike_character = p.has_drunklike_char ? p.drunklike_char.type : CHAR_NONE;
-                sp.is_evil = p.is_evil ? 1 : 0;
-                sp.is_dead = p.is_dead ? 1 : 0;
-                sp.droison_count = p.droison_count;
-                sp.ceremad = p.ceremad;
-                sp.vigormortised = p.character.vigormortised ? 1 : 0;
-                sp.self_droison = p.character.self_droison ? 1 : 0;
-                sp.target = p.character.target;
-                sp.aux_target = p.character.aux_target;
-                sp.history_len = p.history_len;
-                for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
-                    sp.target_history[h] = p.target_history[h];
-                    sp.target_char_history[h] = p.target_char_history[h];
-                }
-                sp.char_history_len = 0;
+        SerializedSolution out{};
+        for (int i = 0; i < N; ++i) {
+            const Player& p = sol.players[i];
+            SerializedSolutionPlayer& sp = out.players[i];
+            sp.initial_character = sol.initial_characters[i];
+            sp.final_character = p.character.type;
+            sp.drunklike_character = p.has_drunklike_char ? p.drunklike_char.type : CHAR_NONE;
+            sp.is_evil = p.is_evil ? 1 : 0;
+            sp.is_dead = p.is_dead ? 1 : 0;
+            sp.droison_count = p.droison_count;
+            sp.ceremad = p.ceremad;
+            sp.vigormortised = p.character.vigormortised ? 1 : 0;
+            sp.self_droison = p.character.self_droison ? 1 : 0;
+            sp.target = p.character.target;
+            sp.aux_target = p.character.aux_target;
+            sp.history_len = p.history_len;
+            for (int h = 0; h < p.history_len && h < MAX_NIGHTS; ++h) {
+                sp.target_history[h] = p.target_history[h];
+                sp.target_char_history[h] = p.target_char_history[h];
             }
-            for (uint8_t c = 0; c < sol.num_char_changes; ++c) {
-                const CharChangeEntry& e = sol.char_changes[c];
-                if (e.pid >= 0 && e.pid < N) {
-                    SerializedSolutionPlayer& sp = out.players[e.pid];
-                    if (sp.char_history_len < MAX_NIGHTS) {
-                        uint8_t h = sp.char_history_len++;
-                        sp.char_history[h] = e.prev_char;
-                        sp.char_history_phase[h] = static_cast<uint8_t>(e.phase_and_round >> 6);
-                        sp.char_history_round[h] = static_cast<int8_t>(e.phase_and_round & 0x3Fu);
-                    }
+            sp.char_history_len = 0;
+        }
+        for (uint8_t c = 0; c < sol.num_char_changes; ++c) {
+            const CharChangeEntry& e = sol.char_changes[c];
+            if (e.pid >= 0 && e.pid < N) {
+                SerializedSolutionPlayer& sp = out.players[e.pid];
+                if (sp.char_history_len < MAX_NIGHTS) {
+                    uint8_t h = sp.char_history_len++;
+                    sp.char_history[h] = e.prev_char;
+                    sp.char_history_phase[h] = static_cast<uint8_t>(e.phase_and_round >> 6);
+                    sp.char_history_round[h] = static_cast<int8_t>(e.phase_and_round & 0x3Fu);
                 }
             }
+        }
+        num_solutions += 1;
+        if (sink_fn != nullptr && !sink_fn(&out, sink_ctx)) {
+            signal_stop();
         }
     }
 };
@@ -4861,11 +4900,15 @@ void run_schedule(
     SolveJob* ws = nullptr,
     int worker_id = 0
 ) {
+    if (cancel_flag != nullptr && cancel_flag->load(std::memory_order_relaxed)) {
+        return;
+    }
     if (step_idx >= sched.num_steps) {
         solution_yield(state);
         return;
     }
     const SimStep& step = sched.steps[step_idx];
+#ifndef CLOCKCHECKER_SINGLE_THREADED
     if (ws == nullptr || step_idx + 2 >= sched.num_steps
         || ws->idle_workers.load(std::memory_order_relaxed) == 0) {
         auto next = [&](State& substate) {
@@ -4881,6 +4924,9 @@ void run_schedule(
     bool has_first = false;
     State first_child;
     auto next = [&](State& substate) {
+        if (cancel_flag != nullptr && cancel_flag->load(std::memory_order_relaxed)) {
+            return;
+        }
         if (!has_first) {
             first_child = substate;
             has_first = true;
@@ -4895,6 +4941,13 @@ void run_schedule(
     if (has_first) {
         run_schedule(first_child, sched, step_idx + 1, config, solution_yield, ws, worker_id);
     }
+#else
+    auto next = [&](State& substate) {
+        run_schedule(substate, sched, step_idx + 1, config, solution_yield, ws, worker_id);
+    };
+    YieldFn next_yield = make_yield(next);
+    execute_step(state, sched, step, config, next_yield, ws, worker_id);
+#endif
 }
 
 bool begin_game(State& state, bool allow_duplicate_tokens_in_bag) {
@@ -4975,8 +5028,10 @@ void world_check_with_sched(
     run_schedule(world, sched, 0, config, yield, ws, worker_id);
 }
 
+#ifndef CLOCKCHECKER_SINGLE_THREADED
 void run_worker(SolveJob& job, int worker_id) {
     g_current_puzzle = job.puzzle;
+    cancel_flag = job.cancel_ptr;
     auto on_sol = [&](State& sol) {
         job.record_solution(sol);
     };
@@ -4991,6 +5046,10 @@ void run_worker(SolveJob& job, int worker_id) {
     };
 
     while (!job.done.load(std::memory_order_acquire)) {
+        if (job.is_cancelled()) {
+            job.signal_stop();
+            break;
+        }
         SolveTask task;
         if (job.pop_local(worker_id, task)) {
             run_schedule(task.state, *job.sched, task.step_idx, task.config, sol_yield, &job, worker_id);
@@ -5041,30 +5100,43 @@ void run_worker(SolveJob& job, int worker_id) {
 static void worker_trampoline(void* ctx, int worker_id) {
     SolverEngine<MAX_P>{}.run_worker(*static_cast<SolveJob*>(ctx), worker_id);
 }
+#endif // !CLOCKCHECKER_SINGLE_THREADED
 
 static int run_solve(
     const SerializedPuzzle& puzzle,
     const SimSchedule& sched,
     const std::vector<StartingConfig>& configs,
-    SerializedSolution* out_solutions,
-    int max_solutions,
-    int num_threads
+    SolutionCallback on_solution,
+    void* user_ctx,
+    int num_threads,
+    std::atomic<bool>* ext_cancel = nullptr
 ) {
+#ifndef CLOCKCHECKER_SINGLE_THREADED
     int pool_max = WorkStealingPool::get().max_threads();
     int n_workers = (num_threads <= 0) ? pool_max : std::min(num_threads, pool_max);
+#else
+    (void)num_threads;
+    int n_workers = 1;
+#endif
     if (n_workers <= 1) {
+        SolveJob job(&puzzle, &sched, &configs, on_solution, user_ctx, 1, ext_cancel);
         SolverEngine<MAX_P> engine{};
-        SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, 1);
+        engine.cancel_flag = job.cancel_ptr;
         auto on_sol = [&](State& sol) { job.record_solution(sol); };
         YieldFn sol_yield = make_yield(on_sol);
         for (const auto& cfg : configs) {
+            if (job.is_cancelled()) break;
             engine.world_check_with_sched(puzzle, sched, cfg, sol_yield, nullptr, 0);
         }
         return job.num_solutions;
     } else {
-        SolveJob job(&puzzle, &sched, &configs, out_solutions, max_solutions, n_workers);
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+        SolveJob job(&puzzle, &sched, &configs, on_solution, user_ctx, n_workers, ext_cancel);
         WorkStealingPool::get().run_job(&job, &SolverEngine<MAX_P>::worker_trampoline, n_workers);
         return job.num_solutions;
+#else
+        return 0;
+#endif
     }
 }
 
@@ -5206,17 +5278,13 @@ void for_permutations(int n_players, int k, PlayerID* buf, uint16_t used_mask, i
     }
 }
 
-} // namespace clockchecker
-
-extern "C" {
-
-int solve_puzzle_cpp_mt(
-    const clockchecker::SerializedPuzzle* puzzle_ptr,
-    clockchecker::SerializedSolution* out_solutions,
-    int max_solutions,
-    int num_threads
+int solve_puzzle_cpp_stream_internal(
+    const SerializedPuzzle* puzzle_ptr,
+    int num_threads,
+    SolutionCallback on_solution,
+    void* user_ctx,
+    std::atomic<bool>* ext_cancel
 ) {
-    using namespace clockchecker;
     const SerializedPuzzle& puzzle = *puzzle_ptr;
     g_current_puzzle = &puzzle;
     const int N = puzzle.num_players;
@@ -5403,17 +5471,18 @@ int solve_puzzle_cpp_mt(
 
     if (!configs.empty()) {
         if (N <= 8) {
-            num_solutions = SolverEngine<8>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+            num_solutions = SolverEngine<8>::run_solve(puzzle, sched, configs, on_solution, user_ctx, num_threads, ext_cancel);
         } else if (N <= 9) {
-            num_solutions = SolverEngine<9>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+            num_solutions = SolverEngine<9>::run_solve(puzzle, sched, configs, on_solution, user_ctx, num_threads, ext_cancel);
         } else if (N <= 12) {
-            num_solutions = SolverEngine<12>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+            num_solutions = SolverEngine<12>::run_solve(puzzle, sched, configs, on_solution, user_ctx, num_threads, ext_cancel);
         } else {
-            num_solutions = SolverEngine<16>::run_solve(puzzle, sched, configs, out_solutions, max_solutions, num_threads);
+            num_solutions = SolverEngine<16>::run_solve(puzzle, sched, configs, on_solution, user_ctx, num_threads, ext_cancel);
         }
     }
 
-    if (num_solutions == 0 && max_solutions > 0) {
+    bool cancelled_now = (ext_cancel != nullptr && ext_cancel->load(std::memory_order_relaxed));
+    if (num_solutions == 0 && !cancelled_now) {
         bool has_atheist = false;
         for (int i = 0; i < N; ++i) {
             if (puzzle.player_claims[i] == CHAR_Atheist) {
@@ -5422,7 +5491,7 @@ int solve_puzzle_cpp_mt(
             }
         }
         if (has_atheist) {
-            SerializedSolution& out = out_solutions[num_solutions++];
+            SerializedSolution out{};
             for (int i = 0; i < N; ++i) {
                 SerializedSolutionPlayer& sp = out.players[i];
                 sp.initial_character = puzzle.player_claims[i];
@@ -5439,10 +5508,77 @@ int solve_puzzle_cpp_mt(
                 sp.history_len = 0;
                 sp.char_history_len = 0;
             }
+            num_solutions = 1;
+            if (on_solution != nullptr) {
+                on_solution(&out, user_ctx);
+            }
         }
     }
 
     return num_solutions;
+}
+
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+struct StreamHandle {
+    SerializedPuzzle puzzle_copy;
+    int num_threads = 0;
+    std::mutex mtx;
+    std::condition_variable cv;
+    std::deque<SerializedSolution> queue;
+    std::atomic<bool> cancelled{false};
+    bool finished = false;
+    std::thread producer;
+};
+
+static bool stream_handle_sink(const SerializedSolution* sol, void* ctx) {
+    auto* h = static_cast<StreamHandle*>(ctx);
+    std::lock_guard<std::mutex> lk(h->mtx);
+    if (h->cancelled.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    h->queue.push_back(*sol);
+    h->cv.notify_one();
+    return true;
+}
+#endif // !CLOCKCHECKER_SINGLE_THREADED
+
+} // namespace clockchecker
+
+extern "C" {
+
+int solve_puzzle_cpp_stream(
+    const clockchecker::SerializedPuzzle* puzzle_ptr,
+    int num_threads,
+    SolutionCallback on_solution,
+    void* user_ctx
+) {
+    return clockchecker::solve_puzzle_cpp_stream_internal(
+        puzzle_ptr, num_threads, on_solution, user_ctx, nullptr
+    );
+}
+
+int solve_puzzle_cpp_mt(
+    const clockchecker::SerializedPuzzle* puzzle_ptr,
+    clockchecker::SerializedSolution* out_solutions,
+    int max_solutions,
+    int num_threads
+) {
+    if (max_solutions <= 0) return 0;
+    struct BatchCtx {
+        clockchecker::SerializedSolution* out;
+        int max_sols;
+        int count;
+    };
+    BatchCtx ctx{out_solutions, max_solutions, 0};
+    auto sink = [](const clockchecker::SerializedSolution* sol, void* raw) -> bool {
+        auto* b = static_cast<BatchCtx*>(raw);
+        if (b->count < b->max_sols) {
+            b->out[b->count++] = *sol;
+        }
+        return b->count < b->max_sols;
+    };
+    clockchecker::solve_puzzle_cpp_stream_internal(puzzle_ptr, num_threads, sink, &ctx, nullptr);
+    return ctx.count;
 }
 
 int solve_puzzle_cpp(
@@ -5452,6 +5588,57 @@ int solve_puzzle_cpp(
 ) {
     return solve_puzzle_cpp_mt(puzzle_ptr, out_solutions, max_solutions, 0);
 }
+
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+void* solver_start(
+    const clockchecker::SerializedPuzzle* puzzle_ptr,
+    int num_threads
+) {
+    auto* h = new clockchecker::StreamHandle();
+    h->puzzle_copy = *puzzle_ptr;
+    h->num_threads = num_threads;
+    h->producer = std::thread([h]() {
+        clockchecker::solve_puzzle_cpp_stream_internal(
+            &h->puzzle_copy,
+            h->num_threads,
+            &clockchecker::stream_handle_sink,
+            h,
+            &h->cancelled
+        );
+        {
+            std::lock_guard<std::mutex> lk(h->mtx);
+            h->finished = true;
+        }
+        h->cv.notify_all();
+    });
+    return static_cast<void*>(h);
+}
+
+int solver_next(
+    void* raw_handle,
+    clockchecker::SerializedSolution* out_solution
+) {
+    auto* h = static_cast<clockchecker::StreamHandle*>(raw_handle);
+    std::unique_lock<std::mutex> lk(h->mtx);
+    h->cv.wait(lk, [&]() { return !h->queue.empty() || h->finished; });
+    if (!h->queue.empty()) {
+        *out_solution = h->queue.front();
+        h->queue.pop_front();
+        return 1;
+    }
+    return 0;
+}
+
+void solver_stop(void* raw_handle) {
+    if (raw_handle == nullptr) return;
+    auto* h = static_cast<clockchecker::StreamHandle*>(raw_handle);
+    h->cancelled.store(true, std::memory_order_release);
+    if (h->producer.joinable()) {
+        h->producer.join();
+    }
+    delete h;
+}
+#endif // !CLOCKCHECKER_SINGLE_THREADED
 
 int get_serialized_puzzle_size() {
     return static_cast<int>(sizeof(clockchecker::SerializedPuzzle));

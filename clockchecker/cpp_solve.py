@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ctypes
-from ctypes import c_int8, c_uint8, c_int16, c_int, Structure, POINTER, byref
+from ctypes import c_int8, c_uint8, c_int16, c_int, c_void_p, Structure, POINTER, byref
 import enum
 import os
 import subprocess
@@ -407,6 +407,18 @@ def _get_lib():
         c_int,
     ]
     lib.solve_puzzle_cpp_mt.restype = c_int
+    lib.solver_start.argtypes = [
+        POINTER(CSerializedPuzzle),
+        c_int,
+    ]
+    lib.solver_start.restype = c_void_p
+    lib.solver_next.argtypes = [
+        c_void_p,
+        POINTER(CSerializedSolution),
+    ]
+    lib.solver_next.restype = c_int
+    lib.solver_stop.argtypes = [c_void_p]
+    lib.solver_stop.restype = None
     _LIB = lib
     return _LIB
 
@@ -961,12 +973,15 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
 def solve_cpp(puzzle: Puzzle, num_threads: int | None = None) -> StateGen:
     lib = _get_lib()
     cpuzzle = serialize_puzzle(puzzle)
-    out_solutions = (CSerializedSolution * MAX_SOLUTIONS)()
     if num_threads is None:
         env_np = os.environ.get("NUM_PROC")
         threads = int(env_np) if env_np is not None else 0
     else:
         threads = int(num_threads)
-    count = lib.solve_puzzle_cpp_mt(byref(cpuzzle), out_solutions, MAX_SOLUTIONS, threads)
-    for i in range(count):
-        yield _reconstruct_state(puzzle, out_solutions[i])
+    handle = lib.solver_start(byref(cpuzzle), threads)
+    try:
+        out = CSerializedSolution()
+        while lib.solver_next(handle, byref(out)):
+            yield _reconstruct_state(puzzle, out)
+    finally:
+        lib.solver_stop(handle)

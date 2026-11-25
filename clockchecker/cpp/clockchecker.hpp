@@ -567,11 +567,36 @@ struct SerializedSolution {
 } // namespace clockchecker
 
 extern "C" {
+    using SolutionCallback = bool (*)(const clockchecker::SerializedSolution*, void*);
+
+    int solve_puzzle_cpp_stream(
+        const clockchecker::SerializedPuzzle* puzzle,
+        int num_threads,
+        SolutionCallback on_solution,
+        void* user_ctx
+    );
+    int solve_puzzle_cpp_mt(
+        const clockchecker::SerializedPuzzle* puzzle,
+        clockchecker::SerializedSolution* out_solutions,
+        int max_solutions,
+        int num_threads
+    );
     int solve_puzzle_cpp(
         const clockchecker::SerializedPuzzle* puzzle,
         clockchecker::SerializedSolution* out_solutions,
         int max_solutions
     );
+#ifndef CLOCKCHECKER_SINGLE_THREADED
+    void* solver_start(
+        const clockchecker::SerializedPuzzle* puzzle,
+        int num_threads
+    );
+    int solver_next(
+        void* handle,
+        clockchecker::SerializedSolution* out_solution
+    );
+    void solver_stop(void* handle);
+#endif
     int get_serialized_puzzle_size();
     int get_serialized_solution_size();
 }

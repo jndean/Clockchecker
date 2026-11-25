@@ -377,6 +377,46 @@ class TestCppPoC(unittest.TestCase):
         self.assertIn("PitHag (Changed B into Imp)", cpp_world_str)
         self.assertIn("Leviathan -[N2]-> Imp", cpp_world_str)
 
+    def test_streaming_and_early_stop(self):
+        import ctypes
+        import puzzles
+        from clockchecker.cpp_solve import (
+            solve_cpp,
+            serialize_puzzle,
+            _get_lib,
+            CSerializedSolution,
+        )
+
+        # 1. Early stop on a multi-solution puzzle via Python generator (pull API)
+        p = puzzles._puzzle_emerald_tb().puzzle
+        gen = solve_cpp(p, num_threads=4)
+        first = next(gen)
+        self.assertIsNotNone(first)
+        gen.close()  # triggers solver_stop() and cancels remaining search
+
+        # 2. Push-callback API (solve_puzzle_cpp_stream) with early stop after 1 solution
+        lib = _get_lib()
+        CALLBACK_T = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(CSerializedSolution), ctypes.c_void_p)
+        lib.solve_puzzle_cpp_stream.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            CALLBACK_T,
+            ctypes.c_void_p,
+        ]
+        lib.solve_puzzle_cpp_stream.restype = ctypes.c_int
+
+        cp = serialize_puzzle(p)
+        seen = []
+
+        @CALLBACK_T
+        def on_sol(sol_ptr, _ctx):
+            seen.append(sol_ptr.contents.players[0].initial_character)
+            return False  # stop after first solution
+
+        count = lib.solve_puzzle_cpp_stream(ctypes.byref(cp), 1, on_sol, None)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
