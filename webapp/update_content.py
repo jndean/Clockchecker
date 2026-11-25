@@ -129,6 +129,7 @@ if __name__ == '__main__':
 	mv('events')
 	mv('info')
 	mv('solve')
+	mv('cpp_solve')
 
 	print(f'Update Complete: {len(puzzles)} puzzles')
 

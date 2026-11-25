@@ -1,10 +1,25 @@
+import json
 import traceback
 
+import js
 from pyscript import window, document, display
 from pyscript.ffi import create_proxy
 
 from clockchecker import *
+from clockchecker.cpp_solve import set_wasm_bridge, solve_cpp_stream
 from render_puzzle import render_puzzle
+
+
+_wasm_ready = False
+try:
+    _bridge_url = js.URL.new("wasm_bridge.js", window.location.href).href
+    _wasm_bridge = await js.eval(f"import({json.dumps(_bridge_url)})")
+    await _wasm_bridge.initWasm()
+    set_wasm_bridge(_wasm_bridge)
+    set_fast_backend(True)
+    _wasm_ready = True
+except Exception:
+    js.console.warn("WASM solver unavailable; falling back to Python:\n" + traceback.format_exc())
 
 
 global_env = {}
@@ -19,12 +34,37 @@ def _stream_solve_to_output(puzzle, solve_override):
 
     try:
         world_count = 0
-        world_gen = solve(puzzle) if solve_override is None else solve_override()
-        for world in world_gen:
-            world_count += 1
-            window.GUI_worldFound(format_world(world), render_puzzle(world))
-            if window.stopRequested:
-                raise InterruptedError()
+        if solve_override is None and _wasm_ready:
+            stopped = False
+
+            def _on_world(world):
+                nonlocal world_count, stopped
+                world_count += 1
+                window.GUI_worldFound(format_world(world), render_puzzle(world))
+                if window.stopRequested:
+                    stopped = True
+                    return False
+                return True
+
+            try:
+                solve_cpp_stream(puzzle, _on_world)
+                if stopped:
+                    raise InterruptedError()
+            except NotImplementedError:
+                # Fall back to Python solver for unsupported features (e.g. CustomInfo)
+                world_count = 0
+                for world in solve(puzzle, fast=False):
+                    world_count += 1
+                    window.GUI_worldFound(format_world(world), render_puzzle(world))
+                    if window.stopRequested:
+                        raise InterruptedError()
+        else:
+            world_gen = solve(puzzle) if solve_override is None else solve_override()
+            for world in world_gen:
+                world_count += 1
+                window.GUI_worldFound(format_world(world), render_puzzle(world))
+                if window.stopRequested:
+                    raise InterruptedError()
         if world_count == 0:
             window.GUI_returnError('No Solutions Found\n')
     except InterruptedError:

@@ -359,6 +359,15 @@ class CSerializedSolution(Structure):
 
 
 _LIB = None
+_WASM_BRIDGE = None
+_WASM_SIZES_CHECKED = False
+
+
+def set_wasm_bridge(bridge) -> None:
+    """Register a JS/WASM bridge module (used when running in Pyodide/PyScript)."""
+    global _WASM_BRIDGE, _WASM_SIZES_CHECKED
+    _WASM_BRIDGE = bridge
+    _WASM_SIZES_CHECKED = False
 
 
 def _get_lib():
@@ -986,7 +995,66 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
     return world
 
 
+def _check_wasm_sizes() -> None:
+    global _WASM_SIZES_CHECKED
+    if _WASM_SIZES_CHECKED:
+        return
+    p_size = int(_WASM_BRIDGE.getPuzzleSize())
+    s_size = int(_WASM_BRIDGE.getSolutionSize())
+    assert ctypes.sizeof(CSerializedPuzzle) == p_size, (
+        f"WASM puzzle struct size mismatch: Python={ctypes.sizeof(CSerializedPuzzle)} vs WASM={p_size}"
+    )
+    assert ctypes.sizeof(CSerializedSolution) == s_size, (
+        f"WASM solution struct size mismatch: Python={ctypes.sizeof(CSerializedSolution)} vs WASM={s_size}"
+    )
+    _WASM_SIZES_CHECKED = True
+
+
+def solve_cpp_stream(puzzle: Puzzle, on_solution, num_threads: int | None = None) -> int:
+    """
+    Solve `puzzle` using the C++/WASM backend and invoke `on_solution(state)` for
+    each solution as it is found. Returning False from `on_solution` stops early.
+    """
+    if _WASM_BRIDGE is not None:
+        import js
+        from pyodide.ffi import create_proxy
+
+        _check_wasm_sizes()
+        cpuzzle = serialize_puzzle(puzzle)
+        js_bytes = js.Uint8Array.new(bytes(cpuzzle))
+        count = 0
+
+        def _on_raw_sol(sol_u8):
+            nonlocal count
+            csol = CSerializedSolution.from_buffer_copy(bytes(sol_u8.to_py()))
+            state = _reconstruct_state(puzzle, csol)
+            count += 1
+            res = on_solution(state)
+            return True if res is None else bool(res)
+
+        proxy = create_proxy(_on_raw_sol)
+        try:
+            _WASM_BRIDGE.solveStream(js_bytes, proxy)
+        finally:
+            proxy.destroy()
+        return count
+
+    count = 0
+    for state in solve_cpp(puzzle, num_threads=num_threads):
+        count += 1
+        res = on_solution(state)
+        if res is False:
+            break
+    return count
+
+
 def solve_cpp(puzzle: Puzzle, num_threads: int | None = None) -> StateGen:
+    if _WASM_BRIDGE is not None:
+        results: list[State] = []
+        solve_cpp_stream(puzzle, lambda s: (results.append(s), True)[1])
+        yield from results
+        return
+
     lib = _get_lib()
     cpuzzle = serialize_puzzle(puzzle)
     if num_threads is None:

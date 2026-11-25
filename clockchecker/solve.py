@@ -570,8 +570,11 @@ def solve(
 
     if _USE_CPP_BACKEND if fast is None else fast:
         from .cpp_solve import solve_cpp
-        yield from solve_cpp(puzzle, num_threads=num_processes)
-        return
+        try:
+            yield from solve_cpp(puzzle, num_threads=num_processes)
+            return
+        except NotImplementedError:
+            pass  # Fall back to Python solver (e.g. CustomInfo)
 
     if num_processes == 1 or not MULTIPROCESSING_AVAILABLE:
         # Non-parallel version just runs everything in one process.
