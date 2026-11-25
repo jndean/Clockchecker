@@ -1866,6 +1866,7 @@ void attacked_at_night(State& state, PlayerID me, PlayerID src, YieldFn yield) {
         }
     }
     if (safe.not_true()) {
+        state.players[me].death_info = encode_death_info(DEATH_KILLED_BY, src);
         apply_death(state, me, src, yield);
     }
 }
@@ -1884,6 +1885,7 @@ void default_executed(State& state, PlayerID me, bool died, YieldFn yield) {
     }
     STBool cd = cant_die(state, me);
     if (died && cd.not_true()) {
+        player.death_info = encode_death_info(DEATH_EXECUTED);
         char_killed(state, me, NONE_PLAYER, yield);
     } else if (!died && (cd.not_false() || player.safe_from_execution > 0)) {
         yield(state);
@@ -1932,6 +1934,7 @@ void change_character(State& state, PlayerID pid, CharacterID new_char, YieldFn 
 
     uint8_t next_night = (state.night != 0) ? state.night : static_cast<uint8_t>(state.day + 1);
     player.character = make_ability(new_char, next_night);
+    player.death_info = 0;
     player.has_drunklike_char = false;
     player.has_philo_ability = false;
     update_character_callbacks(state);
@@ -2967,6 +2970,7 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
             for (int i = 0; i < n_catchers; ++i) {
                 PlayerID minion = catchers[i];
                 State new_state = state;
+                new_state.players[me].death_info = encode_death_info(DEATH_STARPASSED, state.night);
                 if (n_sw > 0) {
                     new_state.players[minion].woke_tonight = true;
                 }
@@ -2977,6 +2981,7 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
             }
             if (n_catchers == 0) {
                 State new_state = state;
+                new_state.players[me].death_info = encode_death_info(DEATH_STARPASSED, state.night);
                 apply_death(new_state, me, me, yield);
             }
             return;
@@ -3042,6 +3047,7 @@ void run_character_night(State& state, PlayerID me, YieldFn yield, CharacterID w
                     }
                     auto after_char = [&](State& ss_) {
                         auto after_align = [&](State& ss) {
+                            ss.players[me].death_info = encode_death_info(DEATH_JUMPED, ss.night);
                             apply_death(ss, me, me, yield);
                         };
                         change_alignment(ss_, target, true, make_yield(after_align));
@@ -4416,7 +4422,11 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
                     if (!tf_nom.truth()) {
                         math_misregistration(state, ev.target);
                     }
-                    char_executed(state, ev.player, ev.flag != 0, yield);
+                    auto after_exec = [&](State& ss) {
+                        ss.players[ev.player].death_info = encode_death_info(DEATH_NOMINATED_VIRGIN);
+                        yield(ss);
+                    };
+                    char_executed(state, ev.player, ev.flag != 0, make_yield(after_exec));
                 }
             }
             return;
@@ -4490,6 +4500,7 @@ void run_event(State& state, int round, int event_idx, YieldFn yield) {
                 Player& dying = state.players[ev.player];
                 PlayerID wid = dying.witch_cursed;
                 if (wid != NONE_PLAYER) {
+                    dying.death_info = encode_death_info(DEATH_CURSED_BY, wid);
                     char_killed(state, ev.player, wid, yield);
                 }
             } else if (ev.target != NONE_PLAYER) {
@@ -4830,6 +4841,7 @@ struct SolveJob {
             sp.is_dead = p.is_dead ? 1 : 0;
             sp.droison_count = p.droison_count;
             sp.ceremad = p.ceremad;
+            sp.death_info = p.death_info;
             sp.vigormortised = p.character.vigormortised ? 1 : 0;
             sp.self_droison = p.character.self_droison ? 1 : 0;
             sp.target = p.character.target;
@@ -5501,6 +5513,7 @@ int solve_puzzle_cpp_stream_internal(
                 sp.is_dead = 0;
                 sp.droison_count = 0;
                 sp.ceremad = 0;
+                sp.death_info = 0;
                 sp.vigormortised = 0;
                 sp.self_droison = 0;
                 sp.target = NONE_PLAYER;

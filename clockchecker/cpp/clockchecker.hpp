@@ -454,6 +454,20 @@ struct AbilityInstance {
     uint16_t vig_poisoned_mask = 0;
 };
 
+enum DeathReason : uint8_t {
+    DEATH_NONE = 0,
+    DEATH_EXECUTED = 1,
+    DEATH_NOMINATED_VIRGIN = 2,
+    DEATH_KILLED_BY = 3,
+    DEATH_CURSED_BY = 4,
+    DEATH_STARPASSED = 5,
+    DEATH_JUMPED = 6,
+};
+
+inline constexpr uint8_t encode_death_info(DeathReason reason, int arg = 0) {
+    return static_cast<uint8_t>((static_cast<uint8_t>(reason) << 5) | (arg & 0x1F));
+}
+
 struct CharChangeEntry {
     PlayerID pid;
     CharacterID prev_char;
@@ -489,6 +503,7 @@ struct PlayerT {
     uint8_t safe_from_execution = 0;
     uint8_t exorcised_count = 0;
     uint8_t ceremad = 0;
+    uint8_t death_info = 0;
     PlayerID witch_cursed = NONE_PLAYER;
 
     uint8_t num_juggles = 0;
@@ -547,6 +562,7 @@ struct SerializedSolutionPlayer {
     uint8_t is_dead;
     int8_t droison_count;
     uint8_t ceremad;
+    uint8_t death_info;
     uint8_t vigormortised;
     uint8_t self_droison;
     PlayerID target;

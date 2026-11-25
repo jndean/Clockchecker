@@ -337,6 +337,7 @@ class CSerializedSolutionPlayer(Structure):
         ("is_dead", c_uint8),
         ("droison_count", c_int8),
         ("ceremad", c_uint8),
+        ("death_info", c_uint8),
         ("vigormortised", c_uint8),
         ("self_droison", c_uint8),
         ("target", c_int8),
@@ -911,6 +912,21 @@ def _reconstruct_state(puzzle: Puzzle, csol: CSerializedSolution) -> State:
         p.droison_count = int(sp.droison_count)
         if sp.ceremad > 0:
             p.ceremad = int(sp.ceremad)
+        if sp.death_info != 0:
+            d_reason = sp.death_info >> 5
+            d_arg = sp.death_info & 0x1F
+            if d_reason == 1:
+                p.character.death_explanation = "executed"
+            elif d_reason == 2:
+                p.character.death_explanation = "nominated Virgin"
+            elif d_reason == 3:
+                p.character.death_explanation = f"killed by {world.players[d_arg].name}"
+            elif d_reason == 4:
+                p.character.death_explanation = f"cursed by {world.players[d_arg].name}"
+            elif d_reason == 5:
+                p.character.death_explanation = f"Starpassed N{d_arg}"
+            elif d_reason == 6:
+                p.character.death_explanation = f"Jumped N{d_arg}"
         if sp.vigormortised:
             p.character.vigormortised = True
         if sp.self_droison and hasattr(p.character, "self_droison"):
